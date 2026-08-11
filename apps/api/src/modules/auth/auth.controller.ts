@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from "express";
+import { AppError } from "../../errors/app-error";
 
-
-// get authenticated User details not application layer user details
+// GET /auth/me
+// Returns the authenticated Supabase user.
+// This is authentication-layer data not the application profile
 export async function getMe(
   req: Request,
   res: Response,
@@ -9,10 +11,13 @@ export async function getMe(
 ) {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        status: "error",
-        message: "Authentication required",
-      });
+      throw new AppError(
+        401,
+        "Authentication required",
+        {
+          code: "AUTHENTICATION_REQUIRED",
+        }
+      );
     }
 
     return res.status(200).json({

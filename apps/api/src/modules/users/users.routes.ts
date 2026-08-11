@@ -8,4 +8,5 @@ router.get("/me", authMiddleware, getMyProfile);
 router.patch("/me", authMiddleware, updateMyProfile);
 router.get("/:id", getPublicProfile);
 
+
 export default router;

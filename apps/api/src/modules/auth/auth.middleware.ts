@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { supabase } from "../../lib/supabase";
+import { AppError } from "../../errors/app-error";
 
 export async function authMiddleware(
   req: Request,
@@ -11,40 +12,58 @@ export async function authMiddleware(
 
     // Authorization header is required
     if (!authHeader) {
-      return res.status(401).json({
-        status: "error",
-        message: "Authorization required",
-      });
+      throw new AppError(
+        401,
+        "Authorization required",
+        {
+          code: "AUTHORIZATION_REQUIRED",
+        }
+      );
     }
 
     // Authorization header must use Bearer scheme
     if (!authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        status: "error",
-        message: "Invalid authorization header format",
-      });
+      throw new AppError(
+        401,
+        "Invalid authorization header format",
+        {
+          code: "INVALID_AUTHORIZATION_HEADER",
+        }
+      );
     }
 
     const token = authHeader.substring(7).trim();
 
     if (!token) {
-      return res.status(401).json({
-        status: "error",
-        message: "Authentication token is missing",
-      });
+      throw new AppError(
+        401,
+        "Authentication token is missing",
+        {
+          code: "AUTHENTICATION_TOKEN_MISSING",
+        }
+      );
     }
 
     // Supabase verifies the access token and returns the authenticated user
+    const authStart = performance.now();
+
     const {
       data: { user },
       error,
     } = await supabase.auth.getUser(token);
 
+    console.log(
+      `auth.getUser: ${(performance.now() - authStart).toFixed(2)}ms`
+    );
+
     if (error || !user) {
-      return res.status(401).json({
-        status: "error",
-        message: "Invalid or expired authentication token",
-      });
+      throw new AppError(
+        401,
+        "Invalid or expired authentication token",
+        {
+          code: "INVALID_OR_EXPIRED_TOKEN",
+        }
+      );
     }
 
     // Attach authenticated Supabase user to request
@@ -54,9 +73,6 @@ export async function authMiddleware(
   } catch (error) {
     console.error("Authentication middleware error:", error);
 
-    return res.status(500).json({
-      status: "error",
-      message: "Authentication service unavailable",
-    });
+    next(error);
   }
 }

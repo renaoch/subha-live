@@ -1,13 +1,17 @@
 import { supabase } from "../../lib/supabase";
 import type { Database } from "../../types/database.types";
+import { AppError } from "../../errors/app-error";
 
 type ProfileUpdate =
   Database["public"]["Tables"]["profiles"]["Update"];
+
 type UserId =
   Database["public"]["Tables"]["profiles"]["Row"]["id"];
 
-//get current application layer user details from supabase profiles table
+// current user : application level
 export async function getCurrentUser(userId: UserId) {
+  const profileStart = performance.now();
+
   const { data, error } = await supabase
     .from("profiles")
     .select(`
@@ -34,14 +38,31 @@ export async function getCurrentUser(userId: UserId) {
     .eq("id", userId)
     .single();
 
+  console.log(
+    `profiles query: ${(performance.now() - profileStart).toFixed(2)}ms`
+  );
+
   if (error) {
+    // User authenticated successfully but their application
+    // profile does not exist.
+    if (error.code === "PGRST116") {
+      throw new AppError(
+        404,
+        "User profile not found",
+        {
+          code: "PROFILE_NOT_FOUND",
+        }
+      );
+    }
+
+    // Unexpected database/infrastructure error.
     throw error;
   }
 
   return data;
 }
-//get user by id: 
-//TODO: LATER I NEED TO MAKE A NEW SCHEMA WHERE THE VIEW PROFILE ARE PUBLIC AND OTEHER INFO IS PROVATE OFR NOW THIS IS GOOD
+
+//user profile details : only public view
 export async function getUserById(userId: UserId) {
   const { data, error } = await supabase
     .from("profiles")
@@ -66,12 +87,23 @@ export async function getUserById(userId: UserId) {
     .single();
 
   if (error) {
+    if (error.code === "PGRST116") {
+      throw new AppError(
+        404,
+        "User not found",
+        {
+          code: "USER_NOT_FOUND",
+        }
+      );
+    }
+
     throw error;
   }
 
   return data;
 }
 
+//update current user only - not sensitive imfo tho
 export async function updateCurrentUser(
   userId: UserId,
   updates: ProfileUpdate
@@ -94,8 +126,30 @@ export async function updateCurrentUser(
     .single();
 
   if (error) {
+    if (error.code === "PGRST116") {
+      throw new AppError(
+        404,
+        "User profile not found",
+        {
+          code: "PROFILE_NOT_FOUND",
+        }
+      );
+    }
+
+    // Example: handle/username unique constraint.
+    if (error.code === "23505") {
+      throw new AppError(
+        409,
+        "Username or handle is already in use",
+        {
+          code: "PROFILE_FIELD_ALREADY_EXISTS",
+        }
+      );
+    }
+
     throw error;
   }
 
   return data;
 }
+

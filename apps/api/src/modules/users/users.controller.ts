@@ -1,8 +1,14 @@
 import { Request, Response, NextFunction } from "express";
-import { getCurrentUser, getUserById, updateCurrentUser } from "./users.service";
+import {
+  getCurrentUser,
+  getUserById,
+  updateCurrentUser
+} from "./users.service";
 import { updateMyProfileSchema } from "./users.schema";
+import { AppError } from "../../errors/app-error";
 
 
+// get user
 export async function getMyProfile(
   req: Request,
   res: Response,
@@ -10,10 +16,13 @@ export async function getMyProfile(
 ) {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        status: "error",
-        message: "Authentication required",
-      });
+      throw new AppError(
+        401,
+        "Authentication required",
+        {
+          code: "AUTHENTICATION_REQUIRED",
+        }
+      );
     }
 
     const user = await getCurrentUser(req.user.id);
@@ -27,6 +36,7 @@ export async function getMyProfile(
   }
 }
 
+// get user by id
 export async function getPublicProfile(
   req: Request<{ id: string }>,
   res: Response,
@@ -46,6 +56,7 @@ export async function getPublicProfile(
   }
 }
 
+// cahnge current user details
 export async function updateMyProfile(
   req: Request,
   res: Response,
@@ -53,20 +64,26 @@ export async function updateMyProfile(
 ) {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        status: "error",
-        message: "Authentication required",
-      });
+      throw new AppError(
+        401,
+        "Authentication required",
+        {
+          code: "AUTHENTICATION_REQUIRED",
+        }
+      );
     }
 
     const result = updateMyProfileSchema.safeParse(req.body);
 
     if (!result.success) {
-      return res.status(400).json({
-        status: "error",
-        message: "Invalid profile data",
-        errors: result.error.flatten().fieldErrors,
-      });
+      throw new AppError(
+        400,
+        "Invalid profile data",
+        {
+          code: "INVALID_PROFILE_DATA",
+          details: result.error.flatten().fieldErrors,
+        }
+      );
     }
 
     const user = await updateCurrentUser(
@@ -82,3 +99,4 @@ export async function updateMyProfile(
     next(error);
   }
 }
+
