@@ -1224,14 +1224,19 @@ The goal is not to deploy multiple distributed systems before they are necessary
 
 ## Phase 2 - Social Graph
 
-- [x] Follow user
-- [x] Unfollow user
-- [ ] Followers list
-- [ ] Following list
-- [ ] Follow state
-- [ ] Block user
-- [ ] Mute user
-- [ ] Social graph optimization
+- [x] Follow
+- [x] Unfollow
+- [x] Follow status
+- [x] Followers + cursor pagination
+- [x] Following + cursor pagination
+- [x] Block
+- [x] Unblock
+- [x] Block status
+- [x] Mute
+- [x] Unmute
+- [x] Mute status
+- [x] Social graph indexes
+- [x] Block-aware follow
 
 ---
 

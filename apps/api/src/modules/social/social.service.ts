@@ -5,7 +5,7 @@ import { AppError } from "../../errors/app-error";
 
 type UserId =
   Database["public"]["Tables"]["profiles"]["Row"]["id"];
-  
+
 // follow a user
 export async function followUser(
   followerId: UserId,
@@ -18,6 +18,30 @@ export async function followUser(
       "You cannot follow yourself",
       {
         code: "SELF_FOLLOW",
+      }
+    );
+  }
+
+  // Prevent following when either user has blocked the other.
+  const { data: blockRelationship, error: blockError } =
+    await supabase
+      .from("blocks")
+      .select("blocker_id, blocked_id")
+      .or(
+        `and(blocker_id.eq.${followerId},blocked_id.eq.${followingId}),and(blocker_id.eq.${followingId},blocked_id.eq.${followerId})`
+      )
+      .maybeSingle();
+
+  if (blockError) {
+    throw blockError;
+  }
+
+  if (blockRelationship) {
+    throw new AppError(
+      403,
+      "You cannot follow this user",
+      {
+        code: "FOLLOW_BLOCKED",
       }
     );
   }
@@ -87,13 +111,12 @@ export async function followUser(
   return data;
 }
 
-
 // unfollow a user
 export async function unfollowUser(
   followerId: UserId,
   followingId: UserId
 ) {
-  // if user wants to unfollow itself dont let them.
+  // Prevent self-unfollow.
   if (followerId === followingId) {
     throw new AppError(
       400,
@@ -216,7 +239,6 @@ export async function getFollowers(
 }
 
 // get users that a user is following
-// get users that a user is following
 export async function getFollowing(
   userId: UserId,
   limit: number,
@@ -296,6 +318,7 @@ export async function getFollowing(
     next_cursor: nextCursor,
   };
 }
+
 // get follow status between two users
 export async function getFollowStatus(
   followerId: UserId,
@@ -314,5 +337,325 @@ export async function getFollowStatus(
 
   return {
     following: !!data,
+  };
+}
+
+// block a user
+export async function blockUser(
+  blockerId: UserId,
+  blockedId: UserId
+) {
+  // Prevent blocking yourself.
+  if (blockerId === blockedId) {
+    throw new AppError(
+      400,
+      "You cannot block yourself",
+      {
+        code: "SELF_BLOCK",
+      }
+    );
+  }
+
+  // Make sure the target user exists.
+  const { data: targetUser, error: targetError } =
+    await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", blockedId)
+      .single();
+
+  if (targetError) {
+    if (targetError.code === "PGRST116") {
+      throw new AppError(
+        404,
+        "User not found",
+        {
+          code: "USER_NOT_FOUND",
+        }
+      );
+    }
+
+    throw targetError;
+  }
+
+  if (!targetUser) {
+    throw new AppError(
+      404,
+      "User not found",
+      {
+        code: "USER_NOT_FOUND",
+      }
+    );
+  }
+
+  // Create the block relationship.
+  const { data, error } = await supabase
+    .from("blocks")
+    .insert({
+      blocker_id: blockerId,
+      blocked_id: blockedId,
+    })
+    .select(`
+      blocker_id,
+      blocked_id,
+      created_at
+    `)
+    .single();
+
+  if (error) {
+    // PostgreSQL unique violation.
+    // This means the user is already blocked.
+    if (error.code === "23505") {
+      throw new AppError(
+        409,
+        "You have already blocked this user",
+        {
+          code: "ALREADY_BLOCKED",
+        }
+      );
+    }
+
+    throw error;
+  }
+
+  // Remove follow relationship from blocker -> blocked.
+  const { error: removeOutgoingFollowError } =
+    await supabase
+      .from("follows")
+      .delete()
+      .eq("follower_id", blockerId)
+      .eq("following_id", blockedId);
+
+  if (removeOutgoingFollowError) {
+    throw removeOutgoingFollowError;
+  }
+
+  // Remove follow relationship from blocked -> blocker.
+  const { error: removeIncomingFollowError } =
+    await supabase
+      .from("follows")
+      .delete()
+      .eq("follower_id", blockedId)
+      .eq("following_id", blockerId);
+
+  if (removeIncomingFollowError) {
+    throw removeIncomingFollowError;
+  }
+
+  return data;
+}
+
+// unblock a user
+export async function unblockUser(
+  blockerId: UserId,
+  blockedId: UserId
+) {
+  // Prevent trying to unblock yourself.
+  if (blockerId === blockedId) {
+    throw new AppError(
+      400,
+      "You cannot unblock yourself",
+      {
+        code: "SELF_UNBLOCK",
+      }
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("blocks")
+    .delete()
+    .eq("blocker_id", blockerId)
+    .eq("blocked_id", blockedId)
+    .select(`
+      blocker_id,
+      blocked_id,
+      created_at
+    `)
+    .single();
+
+  if (error) {
+    // No block relationship exists.
+    if (error.code === "PGRST116") {
+      throw new AppError(
+        409,
+        "You have not blocked this user",
+        {
+          code: "NOT_BLOCKED",
+        }
+      );
+    }
+
+    throw error;
+  }
+
+  return data;
+}
+
+// get block status between two users
+export async function getBlockStatus(
+  blockerId: UserId,
+  blockedId: UserId
+) {
+  const { data, error } = await supabase
+    .from("blocks")
+    .select("blocker_id")
+    .eq("blocker_id", blockerId)
+    .eq("blocked_id", blockedId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    blocked: !!data,
+  };
+}
+
+// mute a user
+export async function muteUser(
+  muterId: UserId,
+  mutedId: UserId
+) {
+  // Prevent muting yourself.
+  if (muterId === mutedId) {
+    throw new AppError(
+      400,
+      "You cannot mute yourself",
+      {
+        code: "SELF_MUTE",
+      }
+    );
+  }
+
+  // Make sure the target user exists.
+  const { data: targetUser, error: targetError } =
+    await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", mutedId)
+      .single();
+
+  if (targetError) {
+    if (targetError.code === "PGRST116") {
+      throw new AppError(
+        404,
+        "User not found",
+        {
+          code: "USER_NOT_FOUND",
+        }
+      );
+    }
+
+    throw targetError;
+  }
+
+  if (!targetUser) {
+    throw new AppError(
+      404,
+      "User not found",
+      {
+        code: "USER_NOT_FOUND",
+      }
+    );
+  }
+
+  // Create the mute relationship.
+  const { data, error } = await supabase
+    .from("mutes")
+    .insert({
+      muter_id: muterId,
+      muted_id: mutedId,
+    })
+    .select(`
+      muter_id,
+      muted_id,
+      created_at
+    `)
+    .single();
+
+  if (error) {
+    // PostgreSQL unique violation.
+    // This means the user is already muted.
+    if (error.code === "23505") {
+      throw new AppError(
+        409,
+        "You have already muted this user",
+        {
+          code: "ALREADY_MUTED",
+        }
+      );
+    }
+
+    throw error;
+  }
+
+  return data;
+}
+
+// unmute a user
+export async function unmuteUser(
+  muterId: UserId,
+  mutedId: UserId
+) {
+  // Prevent trying to unmute yourself.
+  if (muterId === mutedId) {
+    throw new AppError(
+      400,
+      "You cannot unmute yourself",
+      {
+        code: "SELF_UNMUTE",
+      }
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("mutes")
+    .delete()
+    .eq("muter_id", muterId)
+    .eq("muted_id", mutedId)
+    .select(`
+      muter_id,
+      muted_id,
+      created_at
+    `)
+    .single();
+
+  if (error) {
+    // No mute relationship exists.
+    if (error.code === "PGRST116") {
+      throw new AppError(
+        409,
+        "You have not muted this user",
+        {
+          code: "NOT_MUTED",
+        }
+      );
+    }
+
+    throw error;
+  }
+
+  return data;
+}
+
+// get mute status between two users
+export async function getMuteStatus(
+  muterId: UserId,
+  mutedId: UserId
+) {
+  const { data, error } = await supabase
+    .from("mutes")
+    .select("muter_id")
+    .eq("muter_id", muterId)
+    .eq("muted_id", mutedId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    muted: !!data,
   };
 }
