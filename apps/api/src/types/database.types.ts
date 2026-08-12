@@ -708,6 +708,149 @@ export type Database = {
         }
         Relationships: []
       }
+      room_join_requests: {
+        Row: {
+          created_at: string
+          id: string
+          responded_at: string | null
+          room_id: string
+          status: Database["public"]["Enums"]["room_request_status"]
+          type: Database["public"]["Enums"]["room_request_type"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          responded_at?: string | null
+          room_id: string
+          status?: Database["public"]["Enums"]["room_request_status"]
+          type: Database["public"]["Enums"]["room_request_type"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          responded_at?: string | null
+          room_id?: string
+          status?: Database["public"]["Enums"]["room_request_status"]
+          type?: Database["public"]["Enums"]["room_request_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_join_requests_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_join_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_participants: {
+        Row: {
+          id: string
+          joined_at: string
+          left_at: string | null
+          role: Database["public"]["Enums"]["room_participant_role"]
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          left_at?: string | null
+          role: Database["public"]["Enums"]["room_participant_role"]
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          left_at?: string | null
+          role?: Database["public"]["Enums"]["room_participant_role"]
+          room_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_participants_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rooms: {
+        Row: {
+          category: string | null
+          cover: string | null
+          created_at: string
+          description: string | null
+          ended_at: string | null
+          host_id: string
+          id: string
+          livekit_room_name: string
+          max_guest_slots: number
+          playback_url: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["room_status"]
+          title: string
+        }
+        Insert: {
+          category?: string | null
+          cover?: string | null
+          created_at?: string
+          description?: string | null
+          ended_at?: string | null
+          host_id: string
+          id?: string
+          livekit_room_name: string
+          max_guest_slots?: number
+          playback_url?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["room_status"]
+          title: string
+        }
+        Update: {
+          category?: string | null
+          cover?: string | null
+          created_at?: string
+          description?: string | null
+          ended_at?: string | null
+          host_id?: string
+          id?: string
+          livekit_room_name?: string
+          max_guest_slots?: number
+          playback_url?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["room_status"]
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rooms_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_items: {
         Row: {
           category: string
@@ -1257,6 +1400,10 @@ export type Database = {
       reset_weekly_tasks: { Args: never; Returns: undefined }
     }
     Enums: {
+      room_participant_role: "host" | "moderator" | "speaker" | "audience"
+      room_request_status: "pending" | "accepted" | "rejected" | "cancelled"
+      room_request_type: "audio"
+      room_status: "created" | "live" | "ending" | "ended"
       user_role:
         | "user"
         | "agency_agent"
@@ -1391,6 +1538,10 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      room_participant_role: ["host", "moderator", "speaker", "audience"],
+      room_request_status: ["pending", "accepted", "rejected", "cancelled"],
+      room_request_type: ["audio"],
+      room_status: ["created", "live", "ending", "ended"],
       user_role: [
         "user",
         "agency_agent",
