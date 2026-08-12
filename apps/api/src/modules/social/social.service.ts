@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase";
+import { encodeCursor, decodeCursor } from "../../lib/cursor";
 import type { Database } from "../../types/database.types";
 import { AppError } from "../../errors/app-error";
 
@@ -131,4 +132,187 @@ export async function unfollowUser(
   }
 
   return data;
+}
+
+// get followers of a user
+export async function getFollowers(
+  userId: UserId,
+  limit: number,
+  cursor?: string
+) {
+  const decodedCursor = cursor
+    ? decodeCursor(cursor)
+    : null;
+
+  if (cursor && !decodedCursor) {
+    throw new AppError(
+      400,
+      "Invalid pagination cursor",
+      {
+        code: "INVALID_CURSOR",
+      }
+    );
+  }
+
+  let query = supabase
+    .from("follows")
+    .select(`
+      follower_id,
+      created_at,
+      follower:profiles!follows_follower_id_fkey (
+        id,
+        name,
+        handle,
+        avatar,
+        bio,
+        country,
+        country_flag,
+        level,
+        vip_level,
+        svip,
+        is_verified
+      )
+    `)
+    .eq("following_id", userId)
+    .order("created_at", { ascending: false })
+    .order("follower_id", { ascending: false })
+    .limit(limit + 1);
+
+  if (decodedCursor) {
+    query = query.or(
+      `created_at.lt.${decodedCursor.created_at},and(created_at.eq.${decodedCursor.created_at},follower_id.lt.${decodedCursor.id})`
+    );
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  const hasMore = data.length > limit;
+
+  const followers = hasMore
+    ? data.slice(0, limit)
+    : data;
+
+  const lastFollower =
+    followers.length > 0
+      ? followers[followers.length - 1]
+      : null;
+
+  const nextCursor =
+    hasMore && lastFollower
+      ? encodeCursor({
+          created_at: lastFollower.created_at,
+          id: lastFollower.follower_id,
+        })
+      : null;
+
+  return {
+    followers,
+    next_cursor: nextCursor,
+  };
+}
+
+// get users that a user is following
+// get users that a user is following
+export async function getFollowing(
+  userId: UserId,
+  limit: number,
+  cursor?: string
+) {
+  const decodedCursor = cursor
+    ? decodeCursor(cursor)
+    : null;
+
+  if (cursor && !decodedCursor) {
+    throw new AppError(
+      400,
+      "Invalid pagination cursor",
+      {
+        code: "INVALID_CURSOR",
+      }
+    );
+  }
+
+  let query = supabase
+    .from("follows")
+    .select(`
+      following_id,
+      created_at,
+      following:profiles!follows_following_id_fkey (
+        id,
+        name,
+        handle,
+        avatar,
+        bio,
+        country,
+        country_flag,
+        level,
+        vip_level,
+        svip,
+        is_verified
+      )
+    `)
+    .eq("follower_id", userId)
+    .order("created_at", { ascending: false })
+    .order("following_id", { ascending: false })
+    .limit(limit + 1);
+
+  if (decodedCursor) {
+    query = query.or(
+      `created_at.lt.${decodedCursor.created_at},and(created_at.eq.${decodedCursor.created_at},following_id.lt.${decodedCursor.id})`
+    );
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  const hasMore = data.length > limit;
+
+  const following = hasMore
+    ? data.slice(0, limit)
+    : data;
+
+  const lastFollowing =
+    following.length > 0
+      ? following[following.length - 1]
+      : null;
+
+  const nextCursor =
+    hasMore && lastFollowing
+      ? encodeCursor({
+          created_at: lastFollowing.created_at,
+          id: lastFollowing.following_id,
+        })
+      : null;
+
+  return {
+    following,
+    next_cursor: nextCursor,
+  };
+}
+// get follow status between two users
+export async function getFollowStatus(
+  followerId: UserId,
+  followingId: UserId
+) {
+  const { data, error } = await supabase
+    .from("follows")
+    .select("follower_id")
+    .eq("follower_id", followerId)
+    .eq("following_id", followingId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    following: !!data,
+  };
 }
