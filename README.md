@@ -1266,27 +1266,27 @@ The goal is not to deploy multiple distributed systems before they are necessary
 
 ## Phase 5 - Redis
 
-- [ ] Redis connection
-- [ ] Redis key conventions
-- [ ] TTL strategy
+- [x] Redis connection
+- [x] Redis key conventions
+- [x] TTL strategy
 - [ ] Realtime presence
 - [ ] Stream viewer state
 - [ ] Hot counters
 - [ ] Cache invalidation
-- [ ] Redis monitoring
+- [x] Redis monitoring
 
 ---
 
 ## Phase 6 - Realtime Streaming
 
-- [ ] Live rooms
-- [ ] Viewer presence
+- [x] Live rooms
+- [x] Viewer presence
 - [ ] Heartbeats
-- [ ] Room state
+- [x] Room state
 - [ ] Viewer counters
-- [ ] Stream lifecycle
+- [x] Stream lifecycle
 - [ ] Stream statistics
-- [ ] Stream cleanup
+- [x] Stream cleanup
 
 ---
 
