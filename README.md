@@ -1269,10 +1269,10 @@ The goal is not to deploy multiple distributed systems before they are necessary
 - [x] Redis connection
 - [x] Redis key conventions
 - [x] TTL strategy
-- [ ] Realtime presence
-- [ ] Stream viewer state
-- [ ] Hot counters
-- [ ] Cache invalidation
+- [x] Realtime presence
+- [x] Stream viewer state
+- [x] Hot counters
+- [x] Cache invalidation
 - [x] Redis monitoring
 
 ---
@@ -1281,11 +1281,11 @@ The goal is not to deploy multiple distributed systems before they are necessary
 
 - [x] Live rooms
 - [x] Viewer presence
-- [ ] Heartbeats
+- [x] Heartbeats
 - [x] Room state
-- [ ] Viewer counters
+- [x] Viewer counters
 - [x] Stream lifecycle
-- [ ] Stream statistics
+- [x] Stream statistics
 - [x] Stream cleanup
 
 ---
