@@ -32,7 +32,7 @@ jobs:
         with:
           version: 9.0.0
 
-      - name: Install dependencies
+      - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build API
@@ -41,11 +41,12 @@ jobs:
       - name: Create production deployment
         run: pnpm --filter=api deploy --prod ./deploy
 
-      - name: Reinstall production dependencies with hoisted node_modules
+      - name: Replace pnpm node_modules with npm production node_modules
         working-directory: deploy
         run: |
           rm -rf node_modules
-          pnpm install --prod --node-linker=hoisted --frozen-lockfile
+
+          npm install --omit=dev --no-package-lock
 
       - name: Inspect deployment package
         working-directory: deploy
@@ -58,7 +59,11 @@ jobs:
           node -e "const p=require('./package.json'); console.log(p.dependencies)"
 
           echo ""
-          echo "=== dotenv ==="
+          echo "=== node_modules ==="
+          ls -la node_modules | head -30
+
+          echo ""
+          echo "=== dotenv installation ==="
           ls -la node_modules/dotenv
 
           echo ""
