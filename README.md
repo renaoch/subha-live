@@ -1242,23 +1242,23 @@ The goal is not to deploy multiple distributed systems before they are necessary
 
 ## Phase 3 - Content
 
-- [ ] Create posts
-- [ ] Update posts
-- [ ] Delete posts
-- [ ] Fetch posts
-- [ ] Feed
-- [ ] Comments
-- [ ] Likes
-- [ ] Post engagement
-- [ ] Media handling
+- [x] Create posts
+- [x] Update posts
+- [x] Delete posts
+- [x] Fetch posts
+- [x] Feed
+- [x] Comments
+- [x] Likes
+- [x] Post engagement
+- [x] Media handling
 
 ---
 
 ## Phase 4 - Notifications
 
 - [x] Notification service
-- [ ] Notification persistence
-- [ ] Unread counters
+- [x] Notification persistence
+- [x] Unread counters
 - [x] Realtime notifications
 - [x] Notification preferences
 
@@ -1292,13 +1292,13 @@ The goal is not to deploy multiple distributed systems before they are necessary
 
 ## Phase 7 - Event Processing
 
-- [ ] Durable event stream
-- [ ] Background workers
-- [ ] Batched writes
-- [ ] Event retries
-- [ ] Dead-letter handling
-- [ ] Idempotent processing
-- [ ] Event monitoring
+- [x] Durable event stream
+- [x] Background workers
+- [x] Batched writes
+- [x] Event retries
+- [x] Dead-letter handling
+- [x] Idempotent processing
+- [x] Event monitoring
 
 ---
 
