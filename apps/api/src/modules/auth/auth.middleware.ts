@@ -56,15 +56,22 @@ export async function authMiddleware(
       `auth.getUser: ${(performance.now() - authStart).toFixed(2)}ms`
     );
 
-    if (error || !user) {
-      throw new AppError(
-        401,
-        "Invalid or expired authentication token",
-        {
-          code: "INVALID_OR_EXPIRED_TOKEN",
-        }
-      );
+if (error || !user) {
+  console.error("Supabase auth.getUser error:", {
+    name: error?.name,
+    message: error?.message,
+    status: error?.status,
+    code: error?.code,
+  });
+
+  throw new AppError(
+    401,
+    "Invalid or expired authentication token",
+    {
+      code: "INVALID_OR_EXPIRED_TOKEN",
     }
+  );
+}
 
     // Attach authenticated Supabase user to request
     req.user = user;
