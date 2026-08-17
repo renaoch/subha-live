@@ -41,10 +41,15 @@ jobs:
       - name: Create production deployment
         run: pnpm --filter=api deploy --prod ./deploy
 
-      - name: Inspect deployment package
+      - name: Reinstall production dependencies with hoisted node_modules
+        working-directory: deploy
         run: |
-          cd deploy
+          rm -rf node_modules
+          pnpm install --prod --node-linker=hoisted --frozen-lockfile
 
+      - name: Inspect deployment package
+        working-directory: deploy
+        run: |
           echo "=== package.json ==="
           cat package.json
 
@@ -53,7 +58,7 @@ jobs:
           node -e "const p=require('./package.json'); console.log(p.dependencies)"
 
           echo ""
-          echo "=== dotenv installation ==="
+          echo "=== dotenv ==="
           ls -la node_modules/dotenv
 
           echo ""
@@ -73,23 +78,25 @@ jobs:
           node -p "require.resolve('@supabase/supabase-js')"
 
       - name: Sanity-check production dependencies
+        working-directory: deploy
         run: |
-          cd deploy
-
           node -e "require('dotenv/config'); console.log('DOTENV LOADED OK')"
           node -e "require('express'); console.log('EXPRESS LOADED OK')"
           node -e "require('redis'); console.log('REDIS LOADED OK')"
           node -e "require('@supabase/supabase-js'); console.log('SUPABASE LOADED OK')"
 
       - name: Verify production build
+        working-directory: deploy
         run: |
-          cd deploy
-
           test -f dist/server.js
           test -f package.json
           test -d node_modules
+          test -d node_modules/dotenv
+          test -d node_modules/express
+          test -d node_modules/redis
+          test -d node_modules/@supabase/supabase-js
 
-          echo "Production build verified."
+          echo "Production deployment package verified."
 
       - name: Login to Azure
         uses: azure/login@v2
