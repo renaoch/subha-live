@@ -41,10 +41,55 @@ jobs:
       - name: Create production deployment
         run: pnpm --filter=api deploy --prod ./deploy
 
-      - name: Sanity-check express loads
+      - name: Inspect deployment package
         run: |
           cd deploy
+
+          echo "=== package.json ==="
+          cat package.json
+
+          echo ""
+          echo "=== Production dependencies ==="
+          node -e "const p=require('./package.json'); console.log(p.dependencies)"
+
+          echo ""
+          echo "=== dotenv installation ==="
+          ls -la node_modules/dotenv
+
+          echo ""
+          echo "=== dotenv resolution ==="
+          node -p "require.resolve('dotenv/config')"
+
+          echo ""
+          echo "=== express resolution ==="
+          node -p "require.resolve('express')"
+
+          echo ""
+          echo "=== redis resolution ==="
+          node -p "require.resolve('redis')"
+
+          echo ""
+          echo "=== supabase resolution ==="
+          node -p "require.resolve('@supabase/supabase-js')"
+
+      - name: Sanity-check production dependencies
+        run: |
+          cd deploy
+
+          node -e "require('dotenv/config'); console.log('DOTENV LOADED OK')"
           node -e "require('express'); console.log('EXPRESS LOADED OK')"
+          node -e "require('redis'); console.log('REDIS LOADED OK')"
+          node -e "require('@supabase/supabase-js'); console.log('SUPABASE LOADED OK')"
+
+      - name: Verify production build
+        run: |
+          cd deploy
+
+          test -f dist/server.js
+          test -f package.json
+          test -d node_modules
+
+          echo "Production build verified."
 
       - name: Login to Azure
         uses: azure/login@v2
