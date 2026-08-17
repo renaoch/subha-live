@@ -4,7 +4,7 @@ const redis = createClient({
   url: process.env.REDIS_URL,
 });
 
-redis.on("error", (error) => {
+redis.on("error", (error: Error) => {
   console.error("Redis Client Error:", error);
 });
 
