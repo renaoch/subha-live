@@ -41,10 +41,10 @@ jobs:
       - name: Create production deployment
         run: pnpm --filter=api deploy --prod ./deploy
 
-      - name: Sanity-check body-parser resolution
+      - name: Sanity-check express loads
         run: |
           cd deploy
-          node -e "console.log(require.resolve('express')); console.log(require.resolve('body-parser'))"
+          node -e "require('express'); console.log('EXPRESS LOADED OK')"
 
       - name: Login to Azure
         uses: azure/login@v2
