@@ -146,7 +146,7 @@ export function AuthScreen() {
 
             {/* Facebook */}
             <SocialButton
-              icon={<FacebookIcon />}
+   icon={<FacebookIcon color="#fff" />}
               label="Continue with Facebook"
               variant="solid"
               className="h-[54px] shadow-sm transition-all hover:shadow-md"
