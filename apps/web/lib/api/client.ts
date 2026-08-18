@@ -3,9 +3,7 @@ import { createClient } from "@/lib/supabase/client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 if (!API_URL) {
-  throw new Error(
-    "Missing NEXT_PUBLIC_API_URL",
-  );
+  throw new Error("Missing NEXT_PUBLIC_API_URL");
 }
 
 export async function apiFetch<T>(
@@ -23,14 +21,9 @@ export async function apiFetch<T>(
     throw error;
   }
 
-  const headers = new Headers(
-    options.headers,
-  );
+  const headers = new Headers(options.headers);
 
-  headers.set(
-    "Content-Type",
-    "application/json",
-  );
+  headers.set("Content-Type", "application/json");
 
   if (session?.access_token) {
     headers.set(
