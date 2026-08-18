@@ -20,13 +20,12 @@ export function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-
 export function FacebookIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" {...props}>
       <path
         d="M24 12.07C24 5.68 18.63.5 12 .5S0 5.68 0 12.07c0 5.77 4.39 10.56 10.13 11.43v-8.09H7.08v-3.34h3.05V9.41c0-3 1.79-4.67 4.53-4.67 1.31 0 2.68.24 2.68.24v2.94h-1.51c-1.49 0-1.95.92-1.95 1.87v2.24h3.32l-.53 3.34h-2.79v8.09C19.61 22.63 24 17.84 24 12.07Z"
-        fill="#1877F2"
+        fill="currentColor" 
       />
     </svg>
   );
