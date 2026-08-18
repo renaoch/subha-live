@@ -1,43 +1,128 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark, .dark *));
+
+@theme {
+  /* Colors */
+  --color-surface: hsl(var(--surface));
+  --color-surface-raised: hsl(var(--surface-raised));
+
+  --color-ink: hsl(var(--ink));
+  --color-ink-muted: hsl(var(--ink-muted));
+
+  --color-border: hsl(var(--border));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-hot: hsl(var(--accent-hot));
+
+  /* Fonts */
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+
+  /* Backgrounds */
+  --background-image-playhouses-gradient:
+    linear-gradient(
+      160deg,
+      hsl(var(--grad-start)) 0%,
+      hsl(var(--grad-mid)) 55%,
+      hsl(var(--grad-end)) 100%
+    );
+
+  /* Shadows */
+  --shadow-panel:
+    0 24px 60px -20px hsl(var(--shadow-color) / 0.55);
+
+  /* Animations */
+  --animate-float-slow:
+    float-slow 6s ease-in-out infinite;
+
+  --animate-pulse-ring:
+    pulse-ring 2.2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+/* Design tokens */
 
 :root {
   --surface: 260 40% 98%;
   --surface-raised: 0 0% 100%;
+
   --ink: 262 45% 11%;
   --ink-muted: 260 15% 42%;
+
   --border: 260 20% 88%;
+
   --accent: 291 70% 55%;
   --accent-hot: 322 80% 55%;
+
   --grad-start: 262 85% 95%;
   --grad-mid: 291 75% 91%;
   --grad-end: 322 80% 89%;
+
   --shadow-color: 280 40% 70%;
 }
+
+/* Dark mode */
 
 .dark {
   --surface: 262 48% 7%;
   --surface-raised: 263 38% 12%;
+
   --ink: 260 25% 97%;
   --ink-muted: 260 15% 68%;
+
   --border: 262 28% 20%;
+
   --accent: 291 85% 64%;
   --accent-hot: 322 90% 62%;
+
   --grad-start: 266 62% 12%;
   --grad-mid: 285 55% 20%;
   --grad-end: 322 60% 26%;
+
   --shadow-color: 280 65% 4%;
 }
 
+/* Base */
+
 * {
   border-color: hsl(var(--border));
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: hsl(var(--surface));
   color: hsl(var(--ink));
 }
+
+/* Animations */
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Accessibility */
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -46,5 +131,9 @@ body {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+
+  html {
+    scroll-behavior: auto;
   }
 }
