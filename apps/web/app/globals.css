@@ -1,50 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --surface: 260 40% 98%;
+  --surface-raised: 0 0% 100%;
+  --ink: 262 45% 11%;
+  --ink-muted: 260 15% 42%;
+  --border: 260 20% 88%;
+  --accent: 291 70% 55%;
+  --accent-hot: 322 80% 55%;
+  --grad-start: 262 85% 95%;
+  --grad-mid: 291 75% 91%;
+  --grad-end: 322 80% 89%;
+  --shadow-color: 280 40% 70%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
+.dark {
+  --surface: 262 48% 7%;
+  --surface-raised: 263 38% 12%;
+  --ink: 260 25% 97%;
+  --ink-muted: 260 15% 68%;
+  --border: 262 28% 20%;
+  --accent: 291 85% 64%;
+  --accent-hot: 322 90% 62%;
+  --grad-start: 266 62% 12%;
+  --grad-mid: 285 55% 20%;
+  --grad-end: 322 60% 26%;
+  --shadow-color: 280 65% 4%;
 }
 
 * {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+  border-color: hsl(var(--border));
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+body {
+  background: hsl(var(--surface));
+  color: hsl(var(--ink));
 }
 
-.imgDark {
-  display: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
-
-  .imgLight {
-    display: none;
-  }
-  .imgDark {
-    display: unset;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }
