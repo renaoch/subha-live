@@ -20,6 +20,7 @@ export function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
 export function FacebookIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" {...props}>
