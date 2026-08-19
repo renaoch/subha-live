@@ -2,16 +2,32 @@ export type Provider = "google" | "facebook" | null;
 
 export interface Profile {
   id: string;
+
   name: string | null;
   handle: string | null;
   avatar: string | null;
   bio: string | null;
+
   country: string | null;
   country_flag: string | null;
   gender: string | null;
+
+  level: number;
+  vip_level: number;
+  svip: boolean;
+  is_verified: boolean;
+
+  coins: number;
+  diamonds: number;
+
+  followers: number;
+  following: number;
+
+  created_at: string;
 }
 
 export type RoomMediaType = "video" | "audio";
+
 export type RoomStatus = "scheduled" | "live" | "ended";
 
 export interface LiveRoom {
@@ -21,7 +37,7 @@ export interface LiveRoom {
   countryFlag: string;
   viewerCount: number;
   mediaType: RoomMediaType;
-  cover: string | null; // gradient key when no real image
+  cover: string | null;
   category: "nearby" | "popular" | "featured" | "explore";
 }
 

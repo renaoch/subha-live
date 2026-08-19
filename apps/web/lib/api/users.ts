@@ -1,8 +1,8 @@
 import { apiFetch } from "@/lib/api/client";
 import type { Profile } from "@/lib/types";
 
-// apps/api users.controller returns { status: "ok", user } — different
-// envelope than /rooms. Normalized here so components only see `Profile`.
+// apps/api users.controller returns { status: "ok", user }.
+// Normalized here so components only see `Profile`.
 interface UserEnvelope {
   status: string;
   user: Profile;
@@ -20,17 +20,24 @@ export interface UpdateProfileInput {
 
 export const usersApi = {
   me() {
-    return apiFetch<UserEnvelope>("/api/v1/users/me").then((r) => r.user);
+    return apiFetch<UserEnvelope>(
+      "/api/v1/users/me"
+    ).then((r) => r.user);
   },
 
   publicProfile(id: string) {
-    return apiFetch<UserEnvelope>(`/users/${id}`).then((r) => r.user);
+    return apiFetch<UserEnvelope>(
+      `/api/v1/users/${encodeURIComponent(id)}`
+    ).then((r) => r.user);
   },
 
   updateMe(input: UpdateProfileInput) {
-    return apiFetch<UserEnvelope>("/users/me", {
-      method: "PATCH",
-      body: JSON.stringify(input),
-    }).then((r) => r.user);
+    return apiFetch<UserEnvelope>(
+      "/api/v1/users/me",
+      {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }
+    ).then((r) => r.user);
   },
 };
