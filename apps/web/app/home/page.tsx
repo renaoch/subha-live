@@ -98,7 +98,7 @@ export default function LivePage() {
         {!searchOpen && (
           <div className="mt-4 flex gap-4 overflow-x-auto pb-1">
             {trending.map((room) => (
-              
+              <a
                 key={room.id}
                 href={`/home/room/${room.id}`}
                 className="flex shrink-0 flex-col items-center gap-1.5"
