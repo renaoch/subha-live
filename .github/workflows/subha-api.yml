@@ -39,7 +39,11 @@ jobs:
         run: pnpm turbo build --filter=api
 
       - name: Create production deployment
+        run: rm -rf ./deploy
+
+      - name: Deploy API
         run: pnpm --filter=api deploy --prod ./deploy
+
 
       - name: Replace pnpm node_modules with npm production node_modules
         working-directory: deploy
