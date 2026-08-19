@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/client";
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  window.location.origin;
+
 export const authApi = {
   signInWithGoogle() {
     const supabase = createClient();
@@ -7,7 +11,7 @@ export const authApi = {
     return supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${SITE_URL}/auth/callback`,
       },
     });
   },
@@ -18,12 +22,15 @@ export const authApi = {
     return supabase.auth.signInWithOAuth({
       provider: "facebook",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${SITE_URL}/auth/callback`,
       },
     });
   },
 
-  signInWithPassword(email: string, password: string) {
+  signInWithPassword(
+    email: string,
+    password: string,
+  ) {
     const supabase = createClient();
 
     return supabase.auth.signInWithPassword({
@@ -32,7 +39,10 @@ export const authApi = {
     });
   },
 
-  signUp(email: string, password: string) {
+  signUp(
+    email: string,
+    password: string,
+  ) {
     const supabase = createClient();
 
     return supabase.auth.signUp({
