@@ -20,7 +20,7 @@ export interface UpdateProfileInput {
 
 export const usersApi = {
   me() {
-    return apiFetch<UserEnvelope>("api/v1/users/me").then((r) => r.user);
+    return apiFetch<UserEnvelope>("/api/v1/users/me").then((r) => r.user);
   },
 
   publicProfile(id: string) {
