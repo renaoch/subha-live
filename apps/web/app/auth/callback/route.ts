@@ -6,9 +6,14 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
 
+  console.log("OAUTH CALLBACK URL:", request.url);
+  console.log("OAUTH CODE EXISTS:", !!code);
+
   if (!code) {
+    console.error("OAUTH CALLBACK: NO CODE");
+
     return NextResponse.redirect(
-      new URL("/auth?error=oauth_failed", url.origin),
+      new URL("/auth?error=no_code", url.origin),
     );
   }
 
@@ -22,6 +27,7 @@ export async function GET(request: Request) {
         getAll() {
           return cookieStore.getAll();
         },
+
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(
@@ -29,22 +35,24 @@ export async function GET(request: Request) {
                 cookieStore.set(name, value, options);
               },
             );
-          } catch {
-            // Middleware handles session refresh.
-          }
+          } catch {}
         },
       },
     },
   );
 
-  const { error } =
+  const { data, error } =
     await supabase.auth.exchangeCodeForSession(code);
 
-  if (error) {
-    console.error("OAuth callback error:", error);
+  console.log("OAUTH EXCHANGE ERROR:", error);
+  console.log("OAUTH SESSION CREATED:", !!data.session);
 
+  if (error) {
     return NextResponse.redirect(
-      new URL("/auth?error=oauth_failed", url.origin),
+      new URL(
+        `/auth?error=${encodeURIComponent(error.message)}`,
+        url.origin,
+      ),
     );
   }
 
