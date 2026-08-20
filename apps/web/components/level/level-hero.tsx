@@ -2,194 +2,433 @@
 
 import type { LevelProgress } from "@/lib/api/levels";
 
+import { getLevelTheme } from "./level-theme";
+
 interface LevelHeroProps {
   progress: LevelProgress;
+}
+
+function Crown({
+  type,
+}: {
+  type:
+    | "none"
+    | "small"
+    | "royal"
+    | "winged"
+    | "celestial";
+}) {
+  if (type === "none") {
+    return null;
+  }
+
+  const scale =
+    type === "small"
+      ? 0.65
+      : type === "royal"
+        ? 0.8
+        : 1;
+
+  return (
+    <div
+      className="absolute -top-8 left-1/2 z-30 -translate-x-1/2"
+      style={{
+        transform: `translateX(-50%) scale(${scale})`,
+      }}
+    >
+      <svg
+        width="100"
+        height="60"
+        viewBox="0 0 100 60"
+        fill="none"
+      >
+        <path
+          d="M10 15L25 38L50 8L75 38L90 15L82 50H18L10 15Z"
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinejoin="round"
+        />
+
+        <circle
+          cx="25"
+          cy="38"
+          r="4"
+          fill="white"
+          fillOpacity="0.8"
+        />
+
+        <circle
+          cx="50"
+          cy="8"
+          r="5"
+          fill="white"
+          fillOpacity="0.9"
+        />
+
+        <circle
+          cx="75"
+          cy="38"
+          r="4"
+          fill="white"
+          fillOpacity="0.8"
+        />
+
+        {type === "winged" ||
+        type === "celestial" ? (
+          <>
+            <path
+              d="M18 28C5 17 2 8 5 2C17 7 26 15 30 25"
+              stroke="currentColor"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+
+            <path
+              d="M82 28C95 17 98 8 95 2C83 7 74 15 70 25"
+              stroke="currentColor"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+          </>
+        ) : null}
+      </svg>
+    </div>
+  );
+}
+
+function Frame({
+  frame,
+  primary,
+  secondary,
+  glow,
+}: {
+  frame: string;
+  primary: string;
+  secondary: string;
+  glow: string;
+}) {
+  return (
+    <>
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{
+          border: `3px solid ${primary}`,
+          boxShadow: `
+            0 0 12px ${glow},
+            0 0 30px ${glow},
+            inset 0 0 20px ${glow}
+          `,
+        }}
+      />
+
+      <div
+        className="absolute inset-[-7px] rounded-full opacity-80"
+        style={{
+          border:
+            frame === "basic"
+              ? `1px solid ${secondary}`
+              : `2px solid ${secondary}`,
+
+          boxShadow:
+            frame === "mythic"
+              ? `
+                0 0 12px ${secondary},
+                0 0 35px ${glow},
+                0 0 70px ${glow}
+              `
+              : `0 0 18px ${glow}`,
+        }}
+      />
+
+      {frame !== "basic" && (
+        <div
+          className="absolute inset-[-13px] rounded-full border border-dashed opacity-40"
+          style={{
+            borderColor: primary,
+          }}
+        />
+      )}
+
+      {frame === "mythic" && (
+        <>
+          <div
+            className="absolute inset-[-20px] rounded-full opacity-30 blur-sm"
+            style={{
+              border: `5px solid ${secondary}`,
+            }}
+          />
+
+          <div
+            className="absolute inset-[-27px] rounded-full"
+            style={{
+              borderTop: `3px solid ${primary}`,
+              borderBottom: `3px solid ${secondary}`,
+              opacity: 0.5,
+            }}
+          />
+        </>
+      )}
+    </>
+  );
 }
 
 export function LevelHero({
   progress,
 }: LevelHeroProps) {
-  const {
-    currentLevel,
-    currentXp,
-    totalXp,
-    currentLevelXp,
-    nextLevelXp,
-    progress: progressPercent,
-    currentTitle,
-    nextTitle,
-  } = progress;
+  const theme = getLevelTheme(
+    progress.currentLevel,
+  );
 
-  const isMaxLevel = nextLevelXp === null;
-
-  const xpNeeded = isMaxLevel
-    ? 0
-    : Math.max(
-        0,
-        nextLevelXp - totalXp,
-      );
+  const isMaxLevel =
+    progress.nextLevel === null;
 
   const xpRange = isMaxLevel
     ? 1
     : Math.max(
         1,
-        nextLevelXp - currentLevelXp,
+        (progress.nextLevelXp ?? 0) -
+          progress.currentLevelXp,
       );
 
-  const barProgress = Math.min(
-    100,
-    Math.max(
-      0,
-      ((totalXp - currentLevelXp) /
-        xpRange) *
+  const barProgress = isMaxLevel
+    ? 100
+    : Math.min(
         100,
-    ),
-  );
+        Math.max(
+          0,
+          ((progress.totalXp -
+            progress.currentLevelXp) /
+            xpRange) *
+            100,
+        ),
+      );
 
   return (
-    <section className="relative overflow-hidden rounded-[30px] border border-white/[0.08] bg-gradient-to-br from-[#29203D] via-[#211A32] to-[#17131F] p-6 shadow-[0_20px_70px_rgba(0,0,0,0.35)]">
-      {/* Ambient glow */}
-      <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#9B6DFF]/20 blur-[80px]" />
-      <div className="pointer-events-none absolute -bottom-24 -left-20 h-52 w-52 rounded-full bg-[#D9A94A]/10 blur-[70px]" />
+    <section
+      className="relative overflow-hidden rounded-[32px] border border-white/10 p-6"
+      style={{
+        background: theme.background,
+        boxShadow: `
+          0 20px 80px rgba(0,0,0,0.45),
+          0 0 60px ${theme.glow}
+        `,
+      }}
+    >
+      {/* Background aura */}
+      <div
+        className="pointer-events-none absolute left-1/2 top-[-140px] h-[320px] w-[320px] -translate-x-1/2 rounded-full blur-[100px]"
+        style={{
+          background:
+            theme.glow,
+          opacity:
+            0.28 *
+            theme.intensity,
+        }}
+      />
 
-      {/* Top label */}
-      <div className="relative flex items-center justify-between">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/40">
-            Your journey
-          </p>
+      {/* Tiny particles */}
+      <div
+        className="pointer-events-none absolute right-8 top-10 h-1 w-1 rounded-full"
+        style={{
+          background:
+            theme.accent,
+          boxShadow: `
+            0 0 10px ${theme.accent},
+            40px 25px 0 ${theme.primary},
+            -35px 55px 0 ${theme.secondary}
+          `,
+        }}
+      />
 
-          <h2 className="mt-1 text-xl font-bold text-[#F8F1E6]">
-            Level Progress
-          </h2>
-        </div>
-
-        <div className="rounded-full border border-[#D9A94A]/20 bg-[#D9A94A]/10 px-3 py-1.5">
-          <span className="text-xs font-semibold text-[#E1B85A]">
-            {isMaxLevel
-              ? "MAX LEVEL"
-              : `${xpNeeded.toLocaleString()} XP TO GO`}
-          </span>
-        </div>
-      </div>
-
-      {/* Main level display */}
-      <div className="relative mt-8 flex items-center gap-5">
-        {/* Level orb */}
-        <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
-          <div className="absolute inset-0 rounded-full border border-[#D9A94A]/20" />
-
-          <div className="absolute inset-2 rounded-full border border-[#D9A94A]/30" />
-
-          <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#D9A94A] via-[#B9812D] to-[#76521D] shadow-[0_0_35px_rgba(217,169,74,0.28)]" />
-
-          <div className="relative z-10 text-center">
-            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-black/50">
-              LVL
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.3em]"
+              style={{
+                color: theme.secondary,
+              }}
+            >
+              Prestige
             </p>
 
-            <p className="text-4xl font-black leading-none text-[#17131F]">
-              {currentLevel}
-            </p>
+            <h2 className="mt-1 text-xl font-black text-white">
+              {theme.tierName}
+            </h2>
+          </div>
+
+          <div
+            className="rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wider"
+            style={{
+              color: theme.accent,
+              borderColor:
+                `${theme.primary}40`,
+              background:
+                `${theme.primary}12`,
+            }}
+          >
+            {theme.frameName}
           </div>
         </div>
 
-        {/* Level information */}
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-white/40">
-            Current level
-          </p>
+        {/* Crown + level */}
+        <div className="relative mx-auto mt-12 h-52 w-52">
+          <div
+            className="absolute inset-[-45px] rounded-full blur-3xl"
+            style={{
+              background:
+                theme.glow,
+              opacity:
+                0.25 *
+                theme.intensity,
+            }}
+          />
 
-          <h3 className="mt-1 truncate text-2xl font-bold text-[#F8F1E6]">
-            {currentTitle ??
-              `Level ${currentLevel}`}
-          </h3>
+          <Crown
+            type={theme.crown}
+          />
 
-          <div className="mt-3 flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-[#D9A94A] shadow-[0_0_10px_rgba(217,169,74,0.7)]" />
+          <Frame
+            frame={theme.frame}
+            primary={theme.primary}
+            secondary={theme.secondary}
+            glow={theme.glow}
+          />
 
-            <span className="text-xs text-white/45">
-              {isMaxLevel
-                ? "You've reached the top"
-                : nextTitle
-                  ? `Next: ${nextTitle}`
-                  : `Keep earning XP`}
+          {/* Avatar placeholder */}
+          <div className="absolute inset-3 overflow-hidden rounded-full bg-[#15111D]">
+            <div
+              className="absolute inset-0"
+              style={{
+                background: `
+                  radial-gradient(
+                    circle at 50% 35%,
+                    ${theme.secondary}25,
+                    transparent 45%
+                  ),
+                  linear-gradient(
+                    145deg,
+                    ${theme.primary}30,
+                    #15111D 70%
+                  )
+                `,
+              }}
+            />
+
+            <div className="relative flex h-full flex-col items-center justify-center">
+              <div
+                className="text-6xl font-black"
+                style={{
+                  color:
+                    theme.primary,
+                  textShadow: `
+                    0 0 20px ${theme.glow}
+                  `,
+                }}
+              >
+                {progress.currentLevel}
+              </div>
+
+              <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.35em] text-white/35">
+                Level
+              </span>
+            </div>
+          </div>
+
+          {/* Level badge */}
+          <div
+            className="absolute -bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border px-5 py-2 shadow-xl"
+            style={{
+              borderColor:
+                `${theme.secondary}80`,
+              background:
+                `linear-gradient(
+                  135deg,
+                  ${theme.primary},
+                  ${theme.secondary}
+                )`,
+              color: "#100C16",
+              boxShadow: `
+                0 0 20px ${theme.glow}
+              `,
+            }}
+          >
+            <span className="text-xs font-black uppercase tracking-wider">
+              LV.{progress.currentLevel}
             </span>
           </div>
         </div>
-      </div>
 
-      {/* XP stats */}
-      <div className="relative mt-8 grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-white/[0.06] bg-black/10 p-4">
-          <p className="text-xs text-white/35">
-            Total XP
+        {/* Title */}
+        <div className="mt-10 text-center">
+          <p className="text-xs font-medium uppercase tracking-[0.25em] text-white/35">
+            {progress.currentTitle ??
+              theme.tierName}
           </p>
 
-          <p className="mt-1 text-xl font-bold text-[#F8F1E6]">
-            {totalXp.toLocaleString()}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-white/[0.06] bg-black/10 p-4">
-          <p className="text-xs text-white/35">
-            Level XP
-          </p>
-
-          <p className="mt-1 text-xl font-bold text-[#F8F1E6]">
-            {currentXp.toLocaleString()}
-          </p>
-        </div>
-      </div>
-
-      {/* XP progress */}
-      <div className="relative mt-6">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-medium text-white/45">
+          <h3 className="mt-2 text-2xl font-black text-white">
             {isMaxLevel
-              ? "Maximum level reached"
-              : "Progress to next level"}
-          </span>
-
-          <span className="text-xs font-bold text-[#D9A94A]">
-            {Math.round(
-              isMaxLevel
-                ? 100
-                : Math.min(
-                    progressPercent,
-                    100,
-                  ),
-            )}
-            %
-          </span>
+              ? "MYTHIC SOVEREIGN"
+              : `Level ${progress.currentLevel}`}
+          </h3>
         </div>
 
-        <div className="h-3 overflow-hidden rounded-full border border-white/[0.06] bg-black/30">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-[#A86CFF] via-[#C785FF] to-[#E0B75B] shadow-[0_0_18px_rgba(199,133,255,0.35)] transition-all duration-700"
-            style={{
-              width: `${Math.max(
-                2,
-                isMaxLevel
-                  ? 100
-                  : barProgress,
-              )}%`,
-            }}
-          />
-        </div>
+        {/* XP */}
+        <div className="mt-8">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs text-white/40">
+              Experience
+            </span>
 
-        <div className="mt-2 flex justify-between text-[11px] text-white/30">
-          <span>
-            Level {currentLevel}
-          </span>
+            <span
+              className="text-xs font-bold"
+              style={{
+                color:
+                  theme.secondary,
+              }}
+            >
+              {isMaxLevel
+                ? "MAX"
+                : `${Math.round(barProgress)}%`}
+            </span>
+          </div>
 
-          <span>
-            {isMaxLevel
-              ? "MAX"
-              : `Level ${
-                  currentLevel + 1
-                }`}
-          </span>
+          <div className="h-3 overflow-hidden rounded-full bg-black/40">
+            <div
+              className="h-full rounded-full transition-all duration-1000"
+              style={{
+                width: `${Math.max(
+                  2,
+                  barProgress,
+                )}%`,
+                background: `
+                  linear-gradient(
+                    90deg,
+                    ${theme.primary},
+                    ${theme.secondary},
+                    ${theme.accent}
+                  )
+                `,
+                boxShadow: `
+                  0 0 15px ${theme.glow}
+                `,
+              }}
+            />
+          </div>
+
+          <div className="mt-2 flex justify-between text-[10px] text-white/25">
+            <span>
+              {progress.totalXp.toLocaleString()} XP
+            </span>
+
+            <span>
+              {isMaxLevel
+                ? "MAX LEVEL"
+                : `${progress.nextLevelXp?.toLocaleString()} XP`}
+            </span>
+          </div>
         </div>
       </div>
     </section>
