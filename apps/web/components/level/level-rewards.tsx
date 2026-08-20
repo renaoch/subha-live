@@ -1,15 +1,14 @@
 "use client";
 
 import type { LevelReward } from "@/lib/api/levels";
+import { getLevelTheme } from "./level-theme";
 
 interface LevelRewardsProps {
   rewards: LevelReward[];
   currentLevel: number;
 }
 
-function rewardLabel(
-  rewardType: string,
-) {
+function rewardLabel(rewardType: string) {
   switch (rewardType.toLowerCase()) {
     case "coins":
       return "Coins";
@@ -22,9 +21,7 @@ function rewardLabel(
   }
 }
 
-function rewardSymbol(
-  rewardType: string,
-) {
+function rewardIcon(rewardType: string) {
   switch (rewardType.toLowerCase()) {
     case "coins":
       return "●";
@@ -45,141 +42,290 @@ export function LevelRewards({
     (a, b) => a.level - b.level,
   );
 
-  return (
-    <section className="rounded-[30px] border border-white/[0.08] bg-[#1D1729] p-5">
-      {/* Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#D9A94A]/70">
-            Milestones
-          </p>
+  const nextReward = sortedRewards.find(
+    (reward) => reward.level > currentLevel,
+  );
 
-          <h2 className="mt-1 text-xl font-bold text-[#F8F1E6]">
-            Level Rewards
-          </h2>
+  return (
+    <section className="relative overflow-hidden rounded-[32px] border border-white/[0.08] bg-[#17131F] p-5">
+      {/* Ambient background */}
+      <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#A86CFF]/10 blur-[90px]" />
+
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
+              Prestige Path
+            </p>
+
+            <h2 className="mt-1 text-xl font-black text-[#F8F1E6]">
+              Level Rewards
+            </h2>
+          </div>
+
+          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[10px] font-bold text-white/35">
+            {sortedRewards.length} milestones
+          </span>
         </div>
 
-        <span className="text-xs text-white/30">
-          {sortedRewards.length} rewards
-        </span>
-      </div>
+        {/* Next reward */}
+        {nextReward && (
+          <div className="relative mt-5 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+            <div
+              className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full blur-3xl"
+              style={{
+                background: getLevelTheme(
+                  nextReward.level,
+                ).glow,
+              }}
+            />
 
-      {/* Rewards */}
-      <div className="mt-5 space-y-3">
-        {sortedRewards.map(
-          (reward, index) => {
-            const unlocked =
-              currentLevel >=
-              reward.level;
+            <div className="relative flex items-center justify-between">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-white/30">
+                  Next unlock
+                </p>
 
-            const isNext =
-              !unlocked &&
-              sortedRewards
-                .slice(0, index)
-                .every(
-                  (item) =>
-                    currentLevel >=
-                    item.level,
-                );
+                <p className="mt-1 text-sm font-black text-white">
+                  Level {nextReward.level}
+                </p>
 
-            return (
+                <p className="mt-1 text-xs text-white/35">
+                  {rewardLabel(
+                    nextReward.rewardType,
+                  )}{" "}
+                  reward
+                </p>
+              </div>
+
               <div
-                key={reward.id}
-                className={[
-                  "group relative overflow-hidden rounded-2xl border p-4 transition-all",
-                  unlocked
-                    ? "border-[#D9A94A]/20 bg-[#D9A94A]/[0.06]"
-                    : isNext
-                      ? "border-[#A86CFF]/20 bg-[#A86CFF]/[0.05]"
-                      : "border-white/[0.06] bg-white/[0.015]",
-                ].join(" ")}
+                className="flex h-12 w-12 items-center justify-center rounded-2xl border text-lg"
+                style={{
+                  color:
+                    getLevelTheme(
+                      nextReward.level,
+                    ).primary,
+                  borderColor:
+                    `${getLevelTheme(nextReward.level).primary}40`,
+                  background:
+                    `${getLevelTheme(nextReward.level).primary}10`,
+                }}
               >
-                {unlocked && (
-                  <div className="pointer-events-none absolute right-0 top-0 h-20 w-20 rounded-full bg-[#D9A94A]/10 blur-2xl" />
+                {rewardIcon(
+                  nextReward.rewardType,
                 )}
+              </div>
+            </div>
+          </div>
+        )}
 
-                <div className="relative flex items-center gap-4">
-                  {/* Reward icon */}
+        {/* Timeline */}
+        <div className="relative mt-6">
+          {/* Vertical line */}
+          <div className="absolute bottom-5 left-[23px] top-5 w-px bg-white/[0.07]" />
+
+          <div className="space-y-3">
+            {sortedRewards.map(
+              (reward) => {
+                const unlocked =
+                  currentLevel >=
+                  reward.level;
+
+                const theme =
+                  getLevelTheme(
+                    reward.level,
+                  );
+
+                const isNext =
+                  !unlocked &&
+                  reward.id ===
+                    nextReward?.id;
+
+                return (
                   <div
+                    key={reward.id}
                     className={[
-                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-lg font-bold",
+                      "group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300",
                       unlocked
-                        ? "bg-[#D9A94A]/15 text-[#E1B85A]"
+                        ? "border-white/[0.08] bg-white/[0.025]"
                         : isNext
-                          ? "bg-[#A86CFF]/15 text-[#C99BFF]"
-                          : "bg-white/[0.04] text-white/25",
+                          ? "border-white/[0.12] bg-white/[0.035]"
+                          : "border-white/[0.05] bg-white/[0.015] opacity-70",
                     ].join(" ")}
                   >
-                    {unlocked
-                      ? "✓"
-                      : rewardSymbol(
-                          reward.rewardType,
-                        )}
-                  </div>
+                    {/* Reward glow */}
+                    <div
+                      className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full blur-3xl"
+                      style={{
+                        background:
+                          theme.glow,
+                        opacity:
+                          unlocked
+                            ? 0.22
+                            : 0.08,
+                      }}
+                    />
 
-                  {/* Details */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-[#F8F1E6]">
-                        Level {reward.level}
-                      </span>
+                    <div className="relative flex items-center gap-4">
+                      {/* Timeline icon */}
+                      <div className="relative shrink-0">
+                        <div
+                          className="flex h-12 w-12 items-center justify-center rounded-2xl border"
+                          style={{
+                            color:
+                              unlocked
+                                ? theme.accent
+                                : isNext
+                                  ? theme.primary
+                                  : "rgba(255,255,255,0.25)",
 
-                      {unlocked && (
-                        <span className="rounded-full bg-[#D9A94A]/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#D9A94A]">
-                          Claimed
-                        </span>
-                      )}
+                            borderColor:
+                              unlocked ||
+                              isNext
+                                ? `${theme.primary}45`
+                                : "rgba(255,255,255,0.06)",
 
-                      {isNext && (
-                        <span className="rounded-full bg-[#A86CFF]/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#C99BFF]">
-                          Next
-                        </span>
-                      )}
+                            background:
+                              unlocked ||
+                              isNext
+                                ? `${theme.primary}12`
+                                : "rgba(255,255,255,0.025)",
+
+                            boxShadow:
+                              unlocked
+                                ? `0 0 20px ${theme.glow}`
+                                : "none",
+                          }}
+                        >
+                          {unlocked ? (
+                            <span className="text-sm font-black">
+                              ✓
+                            </span>
+                          ) : (
+                            <span className="text-base font-black">
+                              {rewardIcon(
+                                reward.rewardType,
+                              )}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Level number */}
+                        <div
+                          className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border px-2 py-0.5 text-[8px] font-black"
+                          style={{
+                            borderColor:
+                              unlocked
+                                ? `${theme.primary}50`
+                                : "rgba(255,255,255,0.08)",
+                            background:
+                              "#17131F",
+                            color:
+                              unlocked
+                                ? theme.accent
+                                : "rgba(255,255,255,0.35)",
+                          }}
+                        >
+                          {reward.level}
+                        </div>
+                      </div>
+
+                      {/* Details */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-black text-white">
+                            {rewardLabel(
+                              reward.rewardType,
+                            )}
+                          </span>
+
+                          {unlocked && (
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-wider"
+                              style={{
+                                color:
+                                  theme.accent,
+                                background:
+                                  `${theme.primary}15`,
+                              }}
+                            >
+                              Unlocked
+                            </span>
+                          )}
+
+                          {isNext && (
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-wider"
+                              style={{
+                                color:
+                                  theme.accent,
+                                background:
+                                  `${theme.primary}15`,
+                              }}
+                            >
+                              Next
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="mt-1 text-[11px] text-white/30">
+                          Reach level{" "}
+                          <span className="font-bold text-white/50">
+                            {reward.level}
+                          </span>{" "}
+                          to unlock
+                        </p>
+                      </div>
+
+                      {/* Amount */}
+                      <div className="text-right">
+                        <div
+                          className="text-lg font-black"
+                          style={{
+                            color:
+                              unlocked
+                                ? theme.accent
+                                : "rgba(255,255,255,0.3)",
+                            textShadow:
+                              unlocked
+                                ? `0 0 12px ${theme.glow}`
+                                : "none",
+                          }}
+                        >
+                          +
+                          {reward.rewardAmount.toLocaleString()}
+                        </div>
+
+                        <div className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/20">
+                          reward
+                        </div>
+                      </div>
                     </div>
-
-                    <p className="mt-1 text-xs text-white/35">
-                      {rewardLabel(
-                        reward.rewardType,
-                      )}
-                    </p>
                   </div>
+                );
+              },
+            )}
+          </div>
+        </div>
 
-                  {/* Amount */}
-                  <div className="text-right">
-                    <p
-                      className={[
-                        "text-lg font-bold",
-                        unlocked
-                          ? "text-[#F8F1E6]"
-                          : "text-white/30",
-                      ].join(" ")}
-                    >
-                      +
-                      {reward.rewardAmount.toLocaleString()}
-                    </p>
+        {/* Empty */}
+        {sortedRewards.length === 0 && (
+          <div className="mt-5 rounded-2xl border border-dashed border-white/[0.08] p-8 text-center">
+            <div className="text-2xl text-white/20">
+              ✦
+            </div>
 
-                    <p className="text-[10px] uppercase tracking-wider text-white/25">
-                      reward
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          },
+            <p className="mt-3 text-sm font-bold text-white/40">
+              No rewards yet
+            </p>
+
+            <p className="mt-1 text-xs text-white/20">
+              More milestones are coming.
+            </p>
+          </div>
         )}
       </div>
-
-      {sortedRewards.length === 0 && (
-        <div className="mt-5 rounded-2xl border border-dashed border-white/[0.08] p-8 text-center">
-          <p className="text-sm font-medium text-white/40">
-            No rewards configured yet.
-          </p>
-
-          <p className="mt-1 text-xs text-white/20">
-            More milestones are coming.
-          </p>
-        </div>
-      )}
     </section>
   );
 }
