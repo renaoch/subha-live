@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -40,32 +39,25 @@ export function LevelPage() {
         setLoading(true);
         setError(null);
 
-        const [
-          overview,
-          rewardsResult,
-          historyResult,
-        ] = await Promise.all([
-          levelsApi.me(),
-          levelsApi.rewards(),
-          levelsApi.history(),
-        ]);
+const [
+  overview,
+  rewardsResult,
+  historyResult,
+] = await Promise.all([
+  levelsApi.me(),
+  levelsApi.rewards(),
+  levelsApi.history(),
+]);
 
-        if (cancelled) {
-          return;
-        }
-
-        setProgress(
-          overview.progress,
-        );
-
-        setRewards(
-          rewardsResult,
-        );
-
-        setHistory(
-          historyResult,
-        );
+setProgress(overview.progress);
+        setRewards(rewardsResult);
+        setHistory(historyResult);
       } catch (err) {
+        console.error(
+          "LEVEL API ERROR:",
+          err,
+        );
+
         if (cancelled) {
           return;
         }
