@@ -39,21 +39,15 @@ export function LevelPage() {
         setLoading(true);
         setError(null);
 
-        // --------------------------------------------------
-        // 1. Fetch level overview
-        // --------------------------------------------------
-
-        console.log(
-          "LEVEL: fetching overview...",
-        );
-
-        const overview =
-          await levelsApi.me();
-
-        console.log(
-          "LEVEL: overview success",
+        const [
           overview,
-        );
+          rewardsResult,
+          historyResult,
+        ] = await Promise.all([
+          levelsApi.me(),
+          levelsApi.rewards(),
+          levelsApi.history(),
+        ]);
 
         if (cancelled) {
           return;
@@ -63,49 +57,9 @@ export function LevelPage() {
           overview.progress,
         );
 
-        // --------------------------------------------------
-        // 2. Fetch rewards
-        // --------------------------------------------------
-
-        console.log(
-          "LEVEL: fetching rewards...",
-        );
-
-        const rewardsResult =
-          await levelsApi.rewards();
-
-        console.log(
-          "LEVEL: rewards success",
-          rewardsResult,
-        );
-
-        if (cancelled) {
-          return;
-        }
-
         setRewards(
           rewardsResult,
         );
-
-        // --------------------------------------------------
-        // 3. Fetch history
-        // --------------------------------------------------
-
-        console.log(
-          "LEVEL: fetching history...",
-        );
-
-        const historyResult =
-          await levelsApi.history();
-
-        console.log(
-          "LEVEL: history success",
-          historyResult,
-        );
-
-        if (cancelled) {
-          return;
-        }
 
         setHistory(
           historyResult,
@@ -139,17 +93,9 @@ export function LevelPage() {
     };
   }, []);
 
-  // --------------------------------------------------
-  // Loading
-  // --------------------------------------------------
-
   if (loading) {
     return <LevelLoading />;
   }
-
-  // --------------------------------------------------
-  // Error
-  // --------------------------------------------------
 
   if (error || !progress) {
     return (
@@ -162,30 +108,37 @@ export function LevelPage() {
     );
   }
 
-  // --------------------------------------------------
-  // Page
-  // --------------------------------------------------
-
   return (
-    <main className="min-h-dvh bg-[#17131F] font-[family-name:var(--font-body)] text-[#F3ECE0] antialiased">
-      <div className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-10 pt-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold">
-            My Level
-          </h1>
+    <main className="min-h-dvh bg-[#120E19] text-[#F8F1E6] antialiased">
+      <div className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-12 pt-5">
+        {/* Page heading */}
+        <header className="px-1">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#D9A94A]/70">
+                Profile
+              </p>
 
-          <p className="mt-1 text-sm text-white/40">
-            Track your progress and rewards.
+              <h1 className="mt-1 text-3xl font-black tracking-tight">
+                My Level
+              </h1>
+            </div>
+
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-sm text-white/50">
+              ✦
+            </div>
+          </div>
+
+          <p className="mt-2 text-sm text-white/35">
+            Build your XP, unlock rewards,
+            and climb higher.
           </p>
-        </div>
+        </header>
 
-        {/* Current level + progress */}
         <LevelHero
           progress={progress}
         />
 
-        {/* Rewards */}
         <LevelRewards
           rewards={rewards}
           currentLevel={
@@ -193,7 +146,6 @@ export function LevelPage() {
           }
         />
 
-        {/* Level history */}
         <LevelHistory
           history={history}
         />
