@@ -5,8 +5,16 @@ import healthRoutes from "./routes/health";
 import authRoutes from "./modules/auth/auth.routes";
 import userRoutes from "./modules/users/users.routes";
 import socialRoutes from "./modules/social/social.routes";
-import { errorMiddleware } from "./middleware/error.middleware";
+import levelRoutes from "./modules/levels/levels.routes";
 import roomRoutes from "./modules/rooms/room.routes";
+import tasksRoutes from "./modules/tasks/tasks.routes";
+import vipRoutes from "./modules/vip/vip.routes";
+import familyRoutes from "./modules/family/family.routes";
+import cpRoutes from "./modules/cp/cp.routes";
+import bdRoutes from "./modules/bd/bd.routes";
+import agencyRoutes from "./modules/agency/agency.routes";
+import { errorMiddleware } from "./middleware/error.middleware";
+
 
 
 const app = express();
@@ -29,6 +37,19 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/users", socialRoutes);
 app.use("/api/v1/rooms", roomRoutes);
+app.use("/api/v1/levels", levelRoutes);
+app.use("/api/v1/tasks", tasksRoutes);
+app.use("/api/v1/agency", agencyRoutes);
+app.use(
+  "/api/v1/family",
+  familyRoutes,
+);
+app.use(
+  "/api/v1/vip",
+  vipRoutes,
+);
+app.use("/api/v1/bd", bdRoutes);
+app.use("/api/v1/cp", cpRoutes);
 app.use(errorMiddleware);
 
 export { app };

@@ -454,6 +454,62 @@ export type Database = {
           },
         ]
       }
+      level_definitions: {
+        Row: {
+          created_at: string
+          level: number
+          title: string | null
+          xp_required: number
+        }
+        Insert: {
+          created_at?: string
+          level: number
+          title?: string | null
+          xp_required: number
+        }
+        Update: {
+          created_at?: string
+          level?: number
+          title?: string | null
+          xp_required?: number
+        }
+        Relationships: []
+      }
+      level_rewards: {
+        Row: {
+          created_at: string
+          id: string
+          level: number
+          metadata: Json
+          reward_amount: number
+          reward_type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          level: number
+          metadata?: Json
+          reward_amount?: number
+          reward_type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          level?: number
+          metadata?: Json
+          reward_amount?: number
+          reward_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "level_rewards_level_fkey"
+            columns: ["level"]
+            isOneToOne: false
+            referencedRelation: "level_definitions"
+            referencedColumns: ["level"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
@@ -1037,6 +1093,70 @@ export type Database = {
             foreignKeyName: "user_inventory_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_level_history: {
+        Row: {
+          created_at: string
+          id: string
+          new_level: number
+          old_level: number
+          user_id: string
+          xp_at_level_up: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          new_level: number
+          old_level: number
+          user_id: string
+          xp_at_level_up: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          new_level?: number
+          old_level?: number
+          user_id?: string
+          xp_at_level_up?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_level_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_level_progress: {
+        Row: {
+          total_xp: number
+          updated_at: string
+          user_id: string
+          xp: number
+        }
+        Insert: {
+          total_xp?: number
+          updated_at?: string
+          user_id: string
+          xp?: number
+        }
+        Update: {
+          total_xp?: number
+          updated_at?: string
+          user_id?: string
+          xp?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_level_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },

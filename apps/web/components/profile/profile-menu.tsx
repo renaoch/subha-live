@@ -6,21 +6,21 @@ export function ProfileMenu() {
   return (
     <nav
       aria-label="Profile menu"
-      className="rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 p-2"
+      className="rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 p-4"
     >
-      <ul className="grid grid-cols-4 gap-y-4">
+      <ul className="grid grid-cols-4 gap-x-2 gap-y-6">
         {profileMenuItems.map(
           ({ id, label, href, Icon }) => (
             <li key={id}>
               <Link
                 href={href}
-                className="flex flex-col items-center gap-2 rounded-xl px-1 py-2 text-center transition-colors hover:bg-[#2A2238]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#CBA35C]"
+                className="group flex min-h-[88px] flex-col items-center justify-start gap-2 rounded-xl px-1 py-1 text-center transition-colors hover:bg-[#2A2238]/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#CBA35C]"
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#2A2238]">
-                  <Icon className="h-5 w-5 text-[#CBA35C]" />
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#2A2238] transition-colors group-hover:bg-[#332A45]">
+                  <Icon className="h-6 w-6 text-[#CBA35C]" />
                 </span>
 
-                <span className="text-[11px] text-[#D9D2E0]">
+                <span className="max-w-[76px] text-[11px] font-medium leading-4 text-[#D9D2E0]">
                   {label}
                 </span>
               </Link>
