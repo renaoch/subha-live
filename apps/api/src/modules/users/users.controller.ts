@@ -1,18 +1,27 @@
 import { Request, Response, NextFunction } from "express";
+
 import {
   getCurrentUser,
   getUserById,
-  updateCurrentUser
+  updateCurrentUser,
 } from "./users.service";
+
+import {
+  PrivateProfileResponse,
+  PublicProfileResponse,
+} from "./users.types";
+
 import { updateMyProfileSchema } from "./users.schema";
+
 import { AppError } from "../../errors/app-error";
 
+// GET /api/v1/users/me
+// Get the currently authenticated user's private profile
 
-// get user
 export async function getMyProfile(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     if (!req.user) {
@@ -21,46 +30,64 @@ export async function getMyProfile(
         "Authentication required",
         {
           code: "AUTHENTICATION_REQUIRED",
-        }
+        },
       );
     }
 
     const user = await getCurrentUser(req.user.id);
 
-    return res.status(200).json({
+    const response: PrivateProfileResponse = {
       status: "ok",
       user,
-    });
+    };
+
+    return res.status(200).json(response);
   } catch (error) {
     next(error);
   }
 }
 
-// get user by id
+// GET /api/v1/users/:id
+// Get a user's public profile
+
 export async function getPublicProfile(
   req: Request<{ id: string }>,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { id } = req.params;
 
+    if (!id) {
+      throw new AppError(
+        400,
+        "User ID is required",
+        {
+          code: "USER_ID_REQUIRED",
+        },
+      );
+    }
+
     const user = await getUserById(id);
 
-    return res.status(200).json({
+    const response: PublicProfileResponse = {
       status: "ok",
       user,
-    });
+    };
+
+    return res.status(200).json(response);
   } catch (error) {
     next(error);
   }
 }
 
-// cahnge current user details
+// PATCH /api/v1/users/me
+// Update the currently authenticated user's profile
+
 export async function updateMyProfile(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     if (!req.user) {
@@ -69,7 +96,7 @@ export async function updateMyProfile(
         "Authentication required",
         {
           code: "AUTHENTICATION_REQUIRED",
-        }
+        },
       );
     }
 
@@ -82,21 +109,22 @@ export async function updateMyProfile(
         {
           code: "INVALID_PROFILE_DATA",
           details: result.error.flatten().fieldErrors,
-        }
+        },
       );
     }
 
     const user = await updateCurrentUser(
       req.user.id,
-      result.data
+      result.data,
     );
 
-    return res.status(200).json({
+    const response: PrivateProfileResponse = {
       status: "ok",
       user,
-    });
+    };
+
+    return res.status(200).json(response);
   } catch (error) {
     next(error);
   }
 }
-

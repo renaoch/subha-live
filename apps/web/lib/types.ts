@@ -1,6 +1,11 @@
 export type Provider = "google" | "facebook" | null;
 
-export interface Profile {
+// -----------------------------------------------------------------------------
+// Public Profile
+// Information that can safely be exposed on another user's profile.
+// -----------------------------------------------------------------------------
+
+export interface PublicProfile {
   id: string;
 
   name: string | null;
@@ -17,14 +22,39 @@ export interface Profile {
   svip: boolean;
   is_verified: boolean;
 
-  coins: number;
-  diamonds: number;
-
   followers: number;
   following: number;
 
   created_at: string;
 }
+
+// -----------------------------------------------------------------------------
+// Private Profile
+// The authenticated user's own profile.
+// -----------------------------------------------------------------------------
+
+export interface PrivateProfile extends PublicProfile {
+  coins: number;
+  diamonds: number;
+}
+
+// -----------------------------------------------------------------------------
+// Profile API responses
+// -----------------------------------------------------------------------------
+
+export interface PrivateProfileResponse {
+  status: "ok";
+  user: PrivateProfile;
+}
+
+export interface PublicProfileResponse {
+  status: "ok";
+  user: PublicProfile;
+}
+
+// -----------------------------------------------------------------------------
+// Live Rooms
+// -----------------------------------------------------------------------------
 
 export type RoomMediaType = "video" | "audio";
 
@@ -40,6 +70,10 @@ export interface LiveRoom {
   cover: string | null;
   category: "nearby" | "popular" | "featured" | "explore";
 }
+
+// -----------------------------------------------------------------------------
+// Chat
+// -----------------------------------------------------------------------------
 
 export interface ChatPreview {
   id: string;

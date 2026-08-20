@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import type { Database } from "../../types/database.types";
+import type { PrivateProfile, PublicProfile } from "./users.types";
 import { AppError } from "../../errors/app-error";
 
 type ProfileUpdate =
@@ -8,38 +9,69 @@ type ProfileUpdate =
 type UserId =
   Database["public"]["Tables"]["profiles"]["Row"]["id"];
 
-// current user : application level
-export async function getCurrentUser(userId: UserId) {
+// Private profile fields
+// Returned only for the authenticated user's own profile.
+const PRIVATE_PROFILE_FIELDS = `
+  id,
+  name,
+  handle,
+  avatar,
+  bio,
+  country,
+  country_flag,
+  level,
+  vip_level,
+  svip,
+  is_verified,
+  coins,
+  diamonds,
+  followers,
+  following,
+  created_at,
+  gender
+`;
+
+// -----------------------------------------------------------------------------
+// Public profile fields
+// Safe profile information that can be viewed by other users.
+// -----------------------------------------------------------------------------
+
+const PUBLIC_PROFILE_FIELDS = `
+  id,
+  name,
+  handle,
+  avatar,
+  bio,
+  country,
+  country_flag,
+  level,
+  vip_level,
+  svip,
+  is_verified,
+  followers,
+  following,
+  created_at,
+  gender
+`;
+
+// -----------------------------------------------------------------------------
+// Get current authenticated user's private profile
+// GET /api/v1/users/me
+// -----------------------------------------------------------------------------
+
+export async function getCurrentUser(
+  userId: UserId,
+): Promise<PrivateProfile> {
   const profileStart = performance.now();
 
   const { data, error } = await supabase
     .from("profiles")
-    .select(`
-      id,
-      name,
-      handle,
-      avatar,
-      bio,
-      country,
-      country_flag,
-      level,
-      vip_level,
-      svip,
-      is_verified,
-      coins,
-      diamonds,
-      followers,
-      following,
-      created_at,
-      gender,
-      is_admin,
-      role
-    `)
+    .select(PRIVATE_PROFILE_FIELDS)
     .eq("id", userId)
     .single();
 
   console.log(
-    `profiles query: ${(performance.now() - profileStart).toFixed(2)}ms`
+    `profiles private query: ${(performance.now() - profileStart).toFixed(2)}ms`,
   );
 
   if (error) {
@@ -51,7 +83,7 @@ export async function getCurrentUser(userId: UserId) {
         "User profile not found",
         {
           code: "PROFILE_NOT_FOUND",
-        }
+        },
       );
     }
 
@@ -59,32 +91,28 @@ export async function getCurrentUser(userId: UserId) {
     throw error;
   }
 
-  return data;
+  return data as PrivateProfile;
 }
 
-//user profile details : only public view
-export async function getUserById(userId: UserId) {
+// -----------------------------------------------------------------------------
+// Get public user profile
+// GET /api/v1/users/:id
+// -----------------------------------------------------------------------------
+
+export async function getUserById(
+  userId: UserId,
+): Promise<PublicProfile> {
+  const profileStart = performance.now();
+
   const { data, error } = await supabase
     .from("profiles")
-    .select(`
-      id,
-      name,
-      handle,
-      avatar,
-      bio,
-      country,
-      country_flag,
-      level,
-      vip_level,
-      svip,
-      is_verified,
-      followers,
-      following,
-      created_at,
-      gender
-    `)
+    .select(PUBLIC_PROFILE_FIELDS)
     .eq("id", userId)
     .single();
+
+  console.log(
+    `profiles public query: ${(performance.now() - profileStart).toFixed(2)}ms`,
+  );
 
   if (error) {
     if (error.code === "PGRST116") {
@@ -93,36 +121,30 @@ export async function getUserById(userId: UserId) {
         "User not found",
         {
           code: "USER_NOT_FOUND",
-        }
+        },
       );
     }
 
     throw error;
   }
 
-  return data;
+  return data as PublicProfile;
 }
 
-//update current user only - not sensitive imfo tho
+// -----------------------------------------------------------------------------
+// Update current authenticated user's profile
+// PATCH /api/v1/users/me
+// -----------------------------------------------------------------------------
+
 export async function updateCurrentUser(
   userId: UserId,
-  updates: ProfileUpdate
-) {
+  updates: ProfileUpdate,
+): Promise<PrivateProfile> {
   const { data, error } = await supabase
     .from("profiles")
     .update(updates)
     .eq("id", userId)
-    .select(`
-      id,
-      name,
-      handle,
-      avatar,
-      bio,
-      country,
-      country_flag,
-      created_at,
-      gender
-    `)
+    .select(PRIVATE_PROFILE_FIELDS)
     .single();
 
   if (error) {
@@ -132,7 +154,7 @@ export async function updateCurrentUser(
         "User profile not found",
         {
           code: "PROFILE_NOT_FOUND",
-        }
+        },
       );
     }
 
@@ -143,13 +165,12 @@ export async function updateCurrentUser(
         "Username or handle is already in use",
         {
           code: "PROFILE_FIELD_ALREADY_EXISTS",
-        }
+        },
       );
     }
 
     throw error;
   }
 
-  return data;
+  return data as PrivateProfile;
 }
-

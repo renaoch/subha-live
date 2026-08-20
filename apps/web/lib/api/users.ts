@@ -1,12 +1,11 @@
 import { apiFetch } from "@/lib/api/client";
-import type { Profile } from "@/lib/types";
 
-// apps/api users.controller returns { status: "ok", user }.
-// Normalized here so components only see `Profile`.
-interface UserEnvelope {
-  status: string;
-  user: Profile;
-}
+import type {
+  PrivateProfile,
+  PrivateProfileResponse,
+  PublicProfile,
+  PublicProfileResponse,
+} from "@/lib/types";
 
 export interface UpdateProfileInput {
   name?: string;
@@ -19,25 +18,44 @@ export interface UpdateProfileInput {
 }
 
 export const usersApi = {
-  me() {
-    return apiFetch<UserEnvelope>(
-      "/api/v1/users/me"
-    ).then((r) => r.user);
+  // ---------------------------------------------------------------------------
+  // Private profile
+  // GET /api/v1/users/me
+  // ---------------------------------------------------------------------------
+
+  me(): Promise<PrivateProfile> {
+    return apiFetch<PrivateProfileResponse>(
+      "/api/v1/users/me",
+    ).then((response) => response.user);
   },
 
-  publicProfile(id: string) {
-    return apiFetch<UserEnvelope>(
-      `/api/v1/users/${encodeURIComponent(id)}`
-    ).then((r) => r.user);
+  // ---------------------------------------------------------------------------
+  // Public profile
+  // GET /api/v1/users/:id
+  // ---------------------------------------------------------------------------
+
+  publicProfile(
+    id: string,
+  ): Promise<PublicProfile> {
+    return apiFetch<PublicProfileResponse>(
+      `/api/v1/users/${encodeURIComponent(id)}`,
+    ).then((response) => response.user);
   },
 
-  updateMe(input: UpdateProfileInput) {
-    return apiFetch<UserEnvelope>(
+  // ---------------------------------------------------------------------------
+  // Update private profile
+  // PATCH /api/v1/users/me
+  // ---------------------------------------------------------------------------
+
+  updateMe(
+    input: UpdateProfileInput,
+  ): Promise<PrivateProfile> {
+    return apiFetch<PrivateProfileResponse>(
       "/api/v1/users/me",
       {
         method: "PATCH",
         body: JSON.stringify(input),
-      }
-    ).then((r) => r.user);
+      },
+    ).then((response) => response.user);
   },
 };

@@ -8,10 +8,10 @@ const supabase = createClient(
 
 async function main() {
   const { data, error } = await supabase.auth.signInWithPassword({
-    // email: "chetriprem.work@gmail.com",
-    // password: "renao123",
-        email: "chetri.prem999@gmail.com",
-    password: "chetri.prem999@gmail.com",
+    email: "chetriprem.work@gmail.com",
+    password: "renao123",
+    //     email: "chetri.prem999@gmail.com",
+    // password: "chetri.prem999@gmail.com",
   });
 
   if (error) {
