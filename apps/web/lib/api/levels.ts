@@ -49,13 +49,18 @@ interface LevelHistoryResponse {
 }
 
 export const levelsApi = {
-  me() {
-    return apiFetch<LevelOverviewResponse>(
-      "/api/v1/levels/me",
-    ).then((response) => ({
-      progress: response.progress,
-    }));
-  },
+me() {
+  return apiFetch<unknown>(
+    "/api/v1/levels/me",
+  ).then((response) => {
+    console.log(
+      "RAW LEVEL ME RESPONSE:",
+      response,
+    );
+
+    return response as LevelOverviewResponse;
+  });
+},
 
   rewards() {
     return apiFetch<LevelRewardsResponse>(
