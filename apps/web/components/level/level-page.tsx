@@ -39,19 +39,77 @@ export function LevelPage() {
         setLoading(true);
         setError(null);
 
-const [
-  overview,
-  rewardsResult,
-  historyResult,
-] = await Promise.all([
-  levelsApi.me(),
-  levelsApi.rewards(),
-  levelsApi.history(),
-]);
+        // --------------------------------------------------
+        // 1. Fetch level overview
+        // --------------------------------------------------
 
-setProgress(overview.progress);
-        setRewards(rewardsResult);
-        setHistory(historyResult);
+        console.log(
+          "LEVEL: fetching overview...",
+        );
+
+        const overview =
+          await levelsApi.me();
+
+        console.log(
+          "LEVEL: overview success",
+          overview,
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setProgress(
+          overview.progress,
+        );
+
+        // --------------------------------------------------
+        // 2. Fetch rewards
+        // --------------------------------------------------
+
+        console.log(
+          "LEVEL: fetching rewards...",
+        );
+
+        const rewardsResult =
+          await levelsApi.rewards();
+
+        console.log(
+          "LEVEL: rewards success",
+          rewardsResult,
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setRewards(
+          rewardsResult,
+        );
+
+        // --------------------------------------------------
+        // 3. Fetch history
+        // --------------------------------------------------
+
+        console.log(
+          "LEVEL: fetching history...",
+        );
+
+        const historyResult =
+          await levelsApi.history();
+
+        console.log(
+          "LEVEL: history success",
+          historyResult,
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setHistory(
+          historyResult,
+        );
       } catch (err) {
         console.error(
           "LEVEL API ERROR:",
@@ -81,9 +139,17 @@ setProgress(overview.progress);
     };
   }, []);
 
+  // --------------------------------------------------
+  // Loading
+  // --------------------------------------------------
+
   if (loading) {
     return <LevelLoading />;
   }
+
+  // --------------------------------------------------
+  // Error
+  // --------------------------------------------------
 
   if (error || !progress) {
     return (
@@ -96,9 +162,14 @@ setProgress(overview.progress);
     );
   }
 
+  // --------------------------------------------------
+  // Page
+  // --------------------------------------------------
+
   return (
     <main className="min-h-dvh bg-[#17131F] font-[family-name:var(--font-body)] text-[#F3ECE0] antialiased">
       <div className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-10 pt-6">
+        {/* Header */}
         <div>
           <h1 className="text-2xl font-bold">
             My Level
@@ -109,10 +180,12 @@ setProgress(overview.progress);
           </p>
         </div>
 
+        {/* Current level + progress */}
         <LevelHero
           progress={progress}
         />
 
+        {/* Rewards */}
         <LevelRewards
           rewards={rewards}
           currentLevel={
@@ -120,6 +193,7 @@ setProgress(overview.progress);
           }
         />
 
+        {/* Level history */}
         <LevelHistory
           history={history}
         />
