@@ -12,10 +12,6 @@ export interface LevelProgress {
   nextTitle: string | null;
 }
 
-export interface LevelOverview {
-  progress: LevelProgress;
-}
-
 export interface LevelReward {
   id: string;
   level: number;
@@ -33,44 +29,86 @@ export interface LevelHistoryItem {
   createdAt: string;
 }
 
+/**
+ * Actual backend response:
+ *
+ * {
+ *   status: "ok",
+ *   level: {
+ *     currentLevel: 150,
+ *     currentXp: 0,
+ *     ...
+ *   }
+ * }
+ */
 interface LevelOverviewResponse {
   status: string;
-  progress: LevelProgress;
+  level: LevelProgress;
 }
 
+/**
+ * Actual backend response:
+ *
+ * {
+ *   status: "ok",
+ *   rewards: [...]
+ * }
+ */
 interface LevelRewardsResponse {
   status: string;
   rewards: LevelReward[];
 }
 
+/**
+ * Actual backend response:
+ *
+ * {
+ *   status: "ok",
+ *   history: [...]
+ * }
+ */
 interface LevelHistoryResponse {
   status: string;
   history: LevelHistoryItem[];
 }
 
 export const levelsApi = {
-me() {
-  return apiFetch<unknown>(
-    "/api/v1/levels/me",
-  ).then((response) => {
+  async me(): Promise<{
+    progress: LevelProgress;
+  }> {
+    const response =
+      await apiFetch<LevelOverviewResponse>(
+        "/api/v1/levels/me",
+      );
+
     console.log(
-      "RAW LEVEL ME RESPONSE:",
+      "LEVEL API /me:",
       response,
     );
 
-    return response as LevelOverviewResponse;
-  });
-},
-
-  rewards() {
-    return apiFetch<LevelRewardsResponse>(
-      "/api/v1/levels/rewards",
-    ).then((response) => response.rewards);
+    return {
+      progress: response.level,
+    };
   },
 
-  history(limit = 20, offset = 0) {
-    return apiFetch<LevelHistoryResponse>(
-      `/api/v1/levels/history?limit=${limit}&offset=${offset}`,
-    ).then((response) => response.history);
+  async rewards(): Promise<LevelReward[]> {
+    const response =
+      await apiFetch<LevelRewardsResponse>(
+        "/api/v1/levels/rewards",
+      );
+
+    return response.rewards;
+  },
+
+  async history(
+    limit = 20,
+    offset = 0,
+  ): Promise<LevelHistoryItem[]> {
+    const response =
+      await apiFetch<LevelHistoryResponse>(
+        `/api/v1/levels/history?limit=${limit}&offset=${offset}`,
+      );
+
+    return response.history;
   },
 };
