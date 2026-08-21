@@ -244,29 +244,31 @@ export async function getAgencies(): Promise<AgencyListResult> {
 export async function getMyAgency(
   userId: string,
 ): Promise<MyAgencyResult> {
-  // 1. Check if user is a host (pending/approved)
-  const { data: hostData, error: hostError } = await supabase
+  // 1. Try to find the user as a host (pending or approved)
+  const { data: hostRows, error: hostError } = await supabase
     .from("agency_hosts")
     .select("agency_id, host_id, status, joined_at")
     .eq("host_id", userId)
     .in("status", ["pending", "approved"])
     .order("joined_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
   if (hostError) throw hostError;
 
-  let membership = hostData as AgencyHostRow | null;
+  // hostRows is an array (even with limit 1)
+  const membership = (hostRows && hostRows.length > 0) ? hostRows[0] : null;
 
   // 2. If not a host, check if they own an agency
   if (!membership) {
-    const { data: ownerData, error: ownerError } = await supabase
+    const { data: ownerRows, error: ownerError } = await supabase
       .from("agencies")
       .select("id, code, name, owner_id, commission_rate, monthly_revenue, total_hosts, created_at")
       .eq("owner_id", userId)
-      .maybeSingle();
+      .limit(1);
 
     if (ownerError) throw ownerError;
+
+    const ownerData = (ownerRows && ownerRows.length > 0) ? ownerRows[0] : null;
 
     if (ownerData) {
       return {
@@ -278,7 +280,7 @@ export async function getMyAgency(
     return { agency: null, membershipStatus: null };
   }
 
-  // 3. Host case
+  // 3. Host case – fetch the agency details
   const { data: agencyData, error: agencyError } = await supabase
     .from("agencies")
     .select("id, code, name, owner_id, commission_rate, monthly_revenue, total_hosts, created_at")
