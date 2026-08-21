@@ -1,318 +1,525 @@
-// File: apps/web/lib/api/agency.ts
+import { api } from "./client";
 
-import { apiFetch } from "@/lib/api/client";
+/* ========================================================================== */
+/* TYPES                                                                      */
+/* ========================================================================== */
+
+export type AgencyMembershipStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "left";
 
 export interface Agency {
   id: string;
-  code: string;
   name: string;
+  code?: string;
+  description?: string | null;
+  country?: string | null;
+  countryFlag?: string | null;
+  avatar?: string | null;
+
   ownerId: string;
-  commissionRate: number;
-  monthlyRevenue: number;
+
   totalHosts: number;
-  createdAt: string;
+  activeHosts?: number;
+
+  monthlyRevenue: number;
+  totalRevenue?: number;
+
+  commissionRate?: number;
+
+  membershipStatus?: AgencyMembershipStatus | null;
+
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export interface AgencyMember {
-  agencyId: string;
-  hostId: string;
-  joinedAt: string | null;
-  status: string | null;
-}
-
-export interface AgencyAgent {
+export interface AgencyApplication {
   id: string;
   agencyId: string;
   userId: string;
-  name: string;
-  handle: string;
-  avatar: string | null;
-  commissionRate: number;
-  status: string;
-  hostCount: number;
+
+  status:
+    | "pending"
+    | "approved"
+    | "rejected";
+
   createdAt: string;
+  updatedAt?: string;
+
+  user?: {
+    id: string;
+    name: string;
+    handle: string;
+    avatar?: string | null;
+    country?: string | null;
+    countryFlag?: string | null;
+    level?: number;
+  };
 }
 
-export interface AgencyInvitation {
+export interface AgencyHost {
   id: string;
+
   agencyId: string;
-  agencyName: string;
-  hostId: string;
-  hostName: string;
-  hostHandle: string;
-  hostAvatar: string | null;
-  invitedBy: string;
-  status: string;
-  createdAt: string;
-  respondedAt: string | null;
-  expiresAt: string | null;
+  userId: string;
+
+  status:
+    | "pending"
+    | "approved"
+    | "suspended"
+    | "removed";
+
+  commissionRate?: number;
+
+  joinedAt?: string;
+  updatedAt?: string;
+
+  user?: {
+    id: string;
+    name: string;
+    handle: string;
+    avatar?: string | null;
+    level?: number;
+    country?: string | null;
+    countryFlag?: string | null;
+  };
 }
 
 export interface AgencyDashboard {
-  agency: Agency;
   totalHosts: number;
   activeHosts: number;
-  agentCount: number;
+
   pendingApplications: number;
-  pendingInvitations: number;
+
   activeTasks: number;
+
   pendingPayouts: number;
+
+  monthlyRevenue: number;
+  totalRevenue: number;
 }
 
-export type AgencyTaskType =
-  | "stream_hours"
-  | "stream_days"
-  | "gift_amount"
-  | "gift_count"
-  | "viewer_count"
-  | "followers"
-  | "live_sessions"
-  | "recruit_hosts"
-  | "custom";
-
-export interface AgencyTaskAssignment {
-  id: string;
-  taskId: string;
-  hostId: string;
-  progress: number;
-  targetValue: number;
-  status: "in_progress" | "completed" | "claimed" | "expired";
-  completedAt: string | null;
-  claimedAt: string | null;
-}
-
-export interface AgencyTask {
-  id: string;
-  agencyId: string;
-  title: string;
-  description: string | null;
-  type: AgencyTaskType;
-  targetValue: number;
-  rewardCoins: number;
-  rewardDiamonds: number;
-  startAt: string;
-  endAt: string | null;
-  status: string;
-  assignedCount: number;
-  completedCount: number;
-  createdAt: string;
-  assignment: AgencyTaskAssignment | null;
-}
-
-export interface ClaimAgencyTaskResult {
-  taskId: string;
-  rewardCoins: number;
-  rewardDiamonds: number;
-  newCoins: number;
-  newDiamonds: number;
-}
-
-export type PayoutStatus =
-  | "requested"
-  | "under_review"
-  | "approved"
-  | "processing"
-  | "paid"
-  | "rejected"
-  | "failed"
-  | "cancelled";
-
-export interface Payout {
-  id: string;
-  agencyId: string;
-  requestedBy: string;
-  amount: number;
-  status: PayoutStatus;
-  note: string | null;
-  requestedAt: string;
-  processedAt: string | null;
-  paidAt: string | null;
-}
-
-interface AgencyListResponse {
-  status: string;
-  agencies: Agency[];
-}
-
-interface AgencyResponse {
-  status: string;
+export interface AgencyJoinResponse {
   agency: Agency;
+  membership: {
+    id: string;
+    status: AgencyMembershipStatus;
+  };
 }
 
-interface MyAgencyResponse {
-  status: string;
-  agency: Agency | null;
-  membershipStatus: string | null;
+/* ========================================================================== */
+/* RESPONSE NORMALIZATION                                                     */
+/* ========================================================================== */
+
+/**
+ * Your API may return either:
+ *
+ * { data: ... }
+ *
+ * or:
+ *
+ * { ... }
+ *
+ * depending on the route.
+ *
+ * This keeps the frontend API layer tolerant of both.
+ */
+
+function unwrap<T>(response: any): T {
+  if (
+    response &&
+    typeof response === "object" &&
+    "data" in response
+  ) {
+    return response.data as T;
+  }
+
+  return response as T;
 }
+
+/* ========================================================================== */
+/* AGENCY API                                                                 */
+/* ========================================================================== */
 
 export const agencyApi = {
-  list() {
-    return apiFetch<AgencyListResponse>("/api/v1/agency").then((r) => r.agencies);
-  },
-
-  get(id: string) {
-    return apiFetch<AgencyResponse>(`/api/v1/agency/${id}`).then((r) => r.agency);
-  },
-
-  me() {
-    return apiFetch<MyAgencyResponse>("/api/v1/agency/me");
-  },
-
-  join(id: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${id}/join`, { method: "POST" });
-  },
-
-  leave() {
-    return apiFetch<void>("/api/v1/agency/leave", { method: "POST" });
-  },
-
-  applications(id: string) {
-    return apiFetch<{ status: string; applications: unknown[] }>(`/api/v1/agency/${id}/applications`).then(
-      (r) => r.applications,
+  /**
+   * ------------------------------------------------------------------------
+   * GET CURRENT USER'S AGENCY
+   * ------------------------------------------------------------------------
+   *
+   * Returns:
+   *
+   * null
+   * OR
+   * agency with membershipStatus = pending
+   * OR
+   * agency with membershipStatus = approved
+   */
+  async myAgency(): Promise<Agency | null> {
+    const response = await api.get(
+      "/agencies/me",
     );
+
+    const data = unwrap<any>(response);
+
+    if (!data) {
+      return null;
+    }
+
+    /*
+     * Some APIs return:
+     *
+     * {
+     *   agency: {...},
+     *   membership: {...}
+     * }
+     *
+     * Convert that into the object the UI expects.
+     */
+
+    if (data.agency) {
+      return {
+        ...data.agency,
+        membershipStatus:
+          data.membership?.status ??
+          data.agency.membershipStatus ??
+          null,
+      };
+    }
+
+    return data;
   },
 
-  approveApplication(agencyId: string, userId: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${agencyId}/applications/${userId}/approve`, {
-      method: "POST",
-    });
-  },
+  /**
+   * ------------------------------------------------------------------------
+   * DISCOVER AGENCIES
+   * ------------------------------------------------------------------------
+   */
 
-  rejectApplication(agencyId: string, userId: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${agencyId}/applications/${userId}/reject`, {
-      method: "POST",
-    });
-  },
-
-  dashboard(id: string) {
-    return apiFetch<{ status: string; dashboard: AgencyDashboard }>(`/api/v1/agency/${id}/dashboard`).then(
-      (r) => r.dashboard,
+  async list(): Promise<Agency[]> {
+    const response = await api.get(
+      "/agencies",
     );
+
+    const data = unwrap<any>(response);
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    return data?.agencies ?? [];
   },
 
-  // Agents -------------------------------------------------------------
+  /**
+   * ------------------------------------------------------------------------
+   * REQUEST TO JOIN
+   * ------------------------------------------------------------------------
+   *
+   * IMPORTANT:
+   *
+   * This does NOT immediately approve the user.
+   *
+   * Backend should:
+   *
+   * 1. Validate agency exists
+   * 2. Validate private agency code
+   * 3. Check duplicate membership
+   * 4. Create membership with status = pending
+   * 5. Return agency + membership
+   */
 
-  agents(id: string) {
-    return apiFetch<{ status: string; agents: AgencyAgent[] }>(`/api/v1/agency/${id}/agents`).then((r) => r.agents);
-  },
-
-  addAgent(agencyId: string, userId: string, commissionRate?: number) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${agencyId}/agents`, {
-      method: "POST",
-      body: JSON.stringify({ userId, commissionRate }),
-    });
-  },
-
-  removeAgent(agencyId: string, agentId: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${agencyId}/agents/${agentId}`, { method: "DELETE" });
-  },
-
-  suspendAgent(agencyId: string, agentId: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${agencyId}/agents/${agentId}/suspend`, { method: "POST" });
-  },
-
-  // Host management ------------------------------------------------------
-
-  assignHostAgent(agencyId: string, hostId: string, agentId: string | null) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${agencyId}/hosts/${hostId}/agent`, {
-      method: "PATCH",
-      body: JSON.stringify({ agentId }),
-    });
-  },
-
-  suspendHost(agencyId: string, hostId: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${agencyId}/hosts/${hostId}/suspend`, { method: "POST" });
-  },
-
-  removeHost(agencyId: string, hostId: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${agencyId}/hosts/${hostId}/remove`, { method: "POST" });
-  },
-
-  // Invitations ------------------------------------------------------------
-
-  invitations(agencyId: string) {
-    return apiFetch<{ status: string; invitations: AgencyInvitation[] }>(
-      `/api/v1/agency/${agencyId}/invitations`,
-    ).then((r) => r.invitations);
-  },
-
-  myInvitations() {
-    return apiFetch<{ status: string; invitations: AgencyInvitation[] }>("/api/v1/agency/me/invitations").then(
-      (r) => r.invitations,
-    );
-  },
-
-  inviteHost(agencyId: string, hostId: string, expiresInDays?: number) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/${agencyId}/invitations`, {
-      method: "POST",
-      body: JSON.stringify({ hostId, expiresInDays }),
-    });
-  },
-
-  acceptInvitation(invitationId: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/invitations/${invitationId}/accept`, { method: "POST" });
-  },
-
-  rejectInvitation(invitationId: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/invitations/${invitationId}/reject`, { method: "POST" });
-  },
-
-  cancelInvitation(invitationId: string) {
-    return apiFetch<{ status: string }>(`/api/v1/agency/invitations/${invitationId}/cancel`, { method: "POST" });
-  },
-
-  // Tasks --------------------------------------------------------------
-
-  tasks(agencyId: string) {
-    return apiFetch<{ status: string; tasks: AgencyTask[] }>(`/api/v1/agency/${agencyId}/tasks`).then(
-      (r) => r.tasks,
-    );
-  },
-
-  createTask(
+  async requestToJoin(
     agencyId: string,
-    input: {
-      title: string;
-      description?: string;
-      type: AgencyTaskType;
-      targetValue: number;
-      rewardCoins?: number;
-      rewardDiamonds?: number;
-      endAt?: string;
-    },
-  ) {
-    return apiFetch<{ status: string; task: AgencyTask }>(`/api/v1/agency/${agencyId}/tasks`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    }).then((r) => r.task);
+    agencyCode: string,
+  ): Promise<Agency> {
+    if (!agencyCode.trim()) {
+      throw new Error(
+        "Agency code is required.",
+      );
+    }
+
+    const response = await api.post(
+      `/agencies/${agencyId}/join`,
+      {
+        code: agencyCode.trim(),
+      },
+    );
+
+    const data =
+      unwrap<AgencyJoinResponse>(response);
+
+    return {
+      ...data.agency,
+      membershipStatus:
+        data.membership?.status ?? "pending",
+    };
   },
 
-  claimTask(agencyId: string, taskId: string) {
-    return apiFetch<{ status: string; task: ClaimAgencyTaskResult }>(
-      `/api/v1/agency/${agencyId}/tasks/${taskId}/claim`,
-      { method: "POST" },
-    ).then((r) => r.task);
-  },
+  /**
+   * ------------------------------------------------------------------------
+   * CANCEL PENDING REQUEST / LEAVE AGENCY
+   * ------------------------------------------------------------------------
+   */
 
-  // Payouts --------------------------------------------------------------
-
-  payouts(agencyId: string) {
-    return apiFetch<{ status: string; payouts: Payout[] }>(`/api/v1/agency/${agencyId}/payouts`).then(
-      (r) => r.payouts,
+  async leave(
+    agencyId: string,
+  ): Promise<void> {
+    await api.delete(
+      `/agencies/${agencyId}/membership`,
     );
   },
 
-  requestPayout(agencyId: string, amount: number, note?: string) {
-    return apiFetch<{ status: string; payout: Payout }>(`/api/v1/agency/${agencyId}/payouts`, {
-      method: "POST",
-      body: JSON.stringify({ amount, note }),
-    }).then((r) => r.payout);
+  /**
+   * ------------------------------------------------------------------------
+   * AGENCY DASHBOARD
+   * ------------------------------------------------------------------------
+   */
+
+  async dashboard(
+    agencyId: string,
+  ): Promise<AgencyDashboard> {
+    const response = await api.get(
+      `/agencies/${agencyId}/dashboard`,
+    );
+
+    return unwrap<AgencyDashboard>(
+      response,
+    );
   },
 
-  updatePayoutStatus(payoutId: string, status: PayoutStatus) {
-    return apiFetch<{ status: string; payout: Payout }>(`/api/v1/agency/payouts/${payoutId}/status`, {
-      method: "POST",
-      body: JSON.stringify({ status }),
-    }).then((r) => r.payout);
+  /**
+   * ------------------------------------------------------------------------
+   * APPLICATIONS
+   * ------------------------------------------------------------------------
+   */
+
+  async applications(
+    agencyId: string,
+  ): Promise<AgencyApplication[]> {
+    const response = await api.get(
+      `/agencies/${agencyId}/applications`,
+    );
+
+    const data = unwrap<any>(response);
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    return data?.applications ?? [];
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * APPROVE APPLICATION
+   * ------------------------------------------------------------------------
+   */
+
+  async approveApplication(
+    agencyId: string,
+    userId: string,
+  ): Promise<AgencyApplication> {
+    const response = await api.post(
+      `/agencies/${agencyId}/applications/${userId}/approve`,
+    );
+
+    return unwrap<AgencyApplication>(
+      response,
+    );
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * REJECT APPLICATION
+   * ------------------------------------------------------------------------
+   */
+
+  async rejectApplication(
+    agencyId: string,
+    userId: string,
+  ): Promise<AgencyApplication> {
+    const response = await api.post(
+      `/agencies/${agencyId}/applications/${userId}/reject`,
+    );
+
+    return unwrap<AgencyApplication>(
+      response,
+    );
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * HOSTS
+   * ------------------------------------------------------------------------
+   */
+
+  async hosts(
+    agencyId: string,
+  ): Promise<AgencyHost[]> {
+    const response = await api.get(
+      `/agencies/${agencyId}/hosts`,
+    );
+
+    const data = unwrap<any>(response);
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    return data?.hosts ?? [];
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * SUSPEND HOST
+   * ------------------------------------------------------------------------
+   */
+
+  async suspendHost(
+    agencyId: string,
+    hostId: string,
+  ): Promise<void> {
+    await api.patch(
+      `/agencies/${agencyId}/hosts/${hostId}/suspend`,
+    );
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * RESTORE HOST
+   * ------------------------------------------------------------------------
+   */
+
+  async restoreHost(
+    agencyId: string,
+    hostId: string,
+  ): Promise<void> {
+    await api.patch(
+      `/agencies/${agencyId}/hosts/${hostId}/restore`,
+    );
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * REMOVE HOST
+   * ------------------------------------------------------------------------
+   *
+   * This should NOT delete the user.
+   *
+   * It only removes the user's membership
+   * from the agency.
+   */
+
+  async removeHost(
+    agencyId: string,
+    hostId: string,
+  ): Promise<void> {
+    await api.delete(
+      `/agencies/${agencyId}/hosts/${hostId}`,
+    );
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * UPDATE HOST COMMISSION
+   * ------------------------------------------------------------------------
+   */
+
+  async updateHostCommission(
+    agencyId: string,
+    hostId: string,
+    commissionRate: number,
+  ): Promise<void> {
+    await api.patch(
+      `/agencies/${agencyId}/hosts/${hostId}`,
+      {
+        commissionRate,
+      },
+    );
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * INVITATIONS
+   * ------------------------------------------------------------------------
+   */
+
+  async invitations(
+    agencyId: string,
+  ) {
+    const response = await api.get(
+      `/agencies/${agencyId}/invitations`,
+    );
+
+    return unwrap<any>(response);
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * SEND INVITATION
+   * ------------------------------------------------------------------------
+   */
+
+  async invite(
+    agencyId: string,
+    userId: string,
+  ) {
+    const response = await api.post(
+      `/agencies/${agencyId}/invitations`,
+      {
+        userId,
+      },
+    );
+
+    return unwrap<any>(response);
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * CANCEL INVITATION
+   * ------------------------------------------------------------------------
+   */
+
+  async cancelInvitation(
+    agencyId: string,
+    invitationId: string,
+  ) {
+    await api.delete(
+      `/agencies/${agencyId}/invitations/${invitationId}`,
+    );
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * TASKS
+   * ------------------------------------------------------------------------
+   */
+
+  async tasks(
+    agencyId: string,
+  ) {
+    const response = await api.get(
+      `/agencies/${agencyId}/tasks`,
+    );
+
+    return unwrap<any>(response);
+  },
+
+  /**
+   * ------------------------------------------------------------------------
+   * PAYOUTS
+   * ------------------------------------------------------------------------
+   */
+
+  async payouts(
+    agencyId: string,
+  ) {
+    const response = await api.get(
+      `/agencies/${agencyId}/payouts`,
+    );
+
+    return unwrap<any>(response);
   },
 };
