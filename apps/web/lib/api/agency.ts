@@ -18,11 +18,8 @@ export interface Agency {
   name: string;
 
   /*
-   * Private agency code should NOT normally be returned
-   * by public agency endpoints.
-   *
-   * Kept optional only for places where the backend may
-   * explicitly return it to the authorized owner.
+   * Private code should not be returned by public endpoints.
+   * It remains optional for owner-only responses.
    */
   code?: string;
 
@@ -53,6 +50,12 @@ export interface Agency {
 /* APPLICATIONS                                                               */
 /* ========================================================================== */
 
+export type AgencyApplicationStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+
 export interface AgencyApplication {
   id: string;
 
@@ -60,11 +63,7 @@ export interface AgencyApplication {
 
   userId: string;
 
-  status:
-    | "pending"
-    | "approved"
-    | "rejected"
-    | "cancelled";
+  status: AgencyApplicationStatus;
 
   createdAt: string;
 
@@ -85,6 +84,13 @@ export interface AgencyApplication {
 /* HOSTS                                                                      */
 /* ========================================================================== */
 
+export type AgencyHostStatus =
+  | "pending"
+  | "approved"
+  | "suspended"
+  | "removed"
+  | "left";
+
 export interface AgencyHost {
   id: string;
 
@@ -92,12 +98,7 @@ export interface AgencyHost {
 
   userId: string;
 
-  status:
-    | "pending"
-    | "approved"
-    | "suspended"
-    | "removed"
-    | "left";
+  status: AgencyHostStatus;
 
   commissionRate?: number;
 
@@ -117,6 +118,37 @@ export interface AgencyHost {
 }
 
 /* ========================================================================== */
+/* AGENTS                                                                     */
+/* ========================================================================== */
+
+export type AgencyAgentStatus =
+  | "active"
+  | "suspended"
+  | "removed";
+
+export interface AgencyAgent {
+  id: string;
+
+  agencyId: string;
+
+  userId: string;
+
+  name: string;
+
+  handle: string;
+
+  avatar: string | null;
+
+  commissionRate: number;
+
+  status: AgencyAgentStatus;
+
+  hostCount: number;
+
+  createdAt: string;
+}
+
+/* ========================================================================== */
 /* DASHBOARD                                                                  */
 /* ========================================================================== */
 
@@ -127,7 +159,7 @@ export interface AgencyDashboard {
 
   pendingApplications: number;
 
-  pendingInvitations?: number;
+  pendingInvitations: number;
 
   activeTasks: number;
 
@@ -139,37 +171,28 @@ export interface AgencyDashboard {
 }
 
 /* ========================================================================== */
-/* JOIN RESPONSE                                                              */
+/* JOIN                                                                       */
 /* ========================================================================== */
+
+export interface AgencyJoinApplication {
+  agencyId: string;
+
+  status: AgencyApplicationStatus;
+
+  createdAt: string | null;
+}
 
 export interface AgencyJoinResponse {
   agency?: Agency;
 
+  application?: AgencyJoinApplication;
+
   membership?: {
     id?: string;
-
     status: AgencyMembershipStatus;
   };
 
-  /*
-   * Current backend returns the application object
-   * rather than an `agency + membership` object.
-   *
-   * Support both shapes.
-   */
-  application?: {
-    agencyId: string;
-
-    status:
-      | "pending"
-      | "approved"
-      | "rejected"
-      | "cancelled";
-
-    createdAt: string | null;
-  };
-
-  membershipStatus?:
+  membershipStatus:
     | AgencyMembershipStatus
     | null;
 }
@@ -212,30 +235,169 @@ export interface AgencyInvitation {
 }
 
 /* ========================================================================== */
-/* RESPONSE NORMALIZATION                                                     */
+/* TASKS                                                                      */
+/* ========================================================================== */
+
+export type AgencyTaskType =
+  | "stream_hours"
+  | "stream_days"
+  | "gift_amount"
+  | "gift_count"
+  | "viewer_count"
+  | "followers"
+  | "live_sessions"
+  | "recruit_hosts"
+  | "custom";
+
+
+  export interface AgencyTaskAssignment {
+  id: string;
+
+  taskId: string;
+
+  hostId: string;
+
+  progress: number;
+
+  targetValue: number;
+
+  status:
+    | "in_progress"
+    | "completed"
+    | "claimed"
+    | "expired";
+
+  completedAt: string | null;
+
+  claimedAt: string | null;
+}
+
+export interface AgencyTask {
+  id: string;
+
+  agencyId: string;
+
+  title: string;
+
+  description: string | null;
+
+  type: AgencyTaskType;
+
+  targetValue: number;
+
+  rewardCoins: number;
+
+  rewardDiamonds: number;
+
+  startAt: string;
+
+  endAt: string | null;
+
+  status: string;
+
+  assignedCount: number;
+
+  completedCount: number;
+
+  createdAt: string;
+
+  assignment:
+    | AgencyTaskAssignment
+    | null;
+}
+export interface AgencyTask {
+  id: string;
+
+  agencyId: string;
+
+  title: string;
+
+  description: string | null;
+
+  type: AgencyTaskType;
+
+  targetValue: number;
+
+  rewardCoins: number;
+
+  rewardDiamonds: number;
+
+  startAt: string;
+
+  endAt: string | null;
+
+  status: string;
+
+  assignedCount: number;
+
+  completedCount: number;
+
+  createdAt: string;
+}
+
+/* ========================================================================== */
+/* PAYOUTS                                                                    */
+/* ========================================================================== */
+
+export type PayoutStatus =
+  | "requested"
+  | "under_review"
+  | "approved"
+  | "processing"
+  | "paid"
+  | "rejected"
+  | "failed"
+  | "cancelled";
+
+export interface Payout {
+  id: string;
+
+  agencyId: string;
+
+  requestedBy: string;
+
+  amount: number;
+
+  status: PayoutStatus;
+
+  note: string | null;
+
+  requestedAt: string;
+
+  processedAt: string | null;
+
+  paidAt: string | null;
+}
+
+/* ========================================================================== */
+/* HELPERS                                                                    */
 /* ========================================================================== */
 
 function unwrap<T>(
-  response: any,
+  response: unknown,
 ): T {
   if (
     response &&
     typeof response === "object" &&
     "data" in response
   ) {
-    return response.data as T;
+    return (
+      response as {
+        data: T;
+      }
+    ).data;
   }
 
   return response as T;
 }
 
 /* ========================================================================== */
-/* AGENCY API                                                                 */
+/* API                                                                        */
 /* ========================================================================== */
 
 export const agencyApi = {
   /* ------------------------------------------------------------------------ */
-  /* CURRENT USER AGENCY                                                      */
+  /* CURRENT USER                                                             */
   /* ------------------------------------------------------------------------ */
 
   async myAgency(): Promise<
@@ -261,7 +423,7 @@ export const agencyApi = {
           data.membership?.status ??
           data.membershipStatus ??
           data.agency
-            .membershipStatus ??
+            ?.membershipStatus ??
           null,
       };
     }
@@ -270,12 +432,10 @@ export const agencyApi = {
   },
 
   /* ------------------------------------------------------------------------ */
-  /* DISCOVER AGENCIES                                                        */
+  /* AGENCY LIST                                                              */
   /* ------------------------------------------------------------------------ */
 
-  async list(): Promise<
-    Agency[]
-  > {
+  async list(): Promise<Agency[]> {
     const response =
       await api.get(
         "/agencies",
@@ -292,7 +452,7 @@ export const agencyApi = {
   },
 
   /* ------------------------------------------------------------------------ */
-  /* GET AGENCY                                                               */
+  /* AGENCY DETAILS                                                           */
   /* ------------------------------------------------------------------------ */
 
   async get(
@@ -306,18 +466,24 @@ export const agencyApi = {
     const data =
       unwrap<any>(response);
 
-    return data?.agency ?? data;
+    return (
+      data?.agency ??
+      data
+    );
   },
 
   /* ------------------------------------------------------------------------ */
-  /* REQUEST TO JOIN                                                          */
+  /* JOIN                                                                     */
   /* ------------------------------------------------------------------------ */
 
   async requestToJoin(
     agencyId: string,
     agencyCode: string,
   ): Promise<Agency> {
-    if (!agencyCode.trim()) {
+    const code =
+      agencyCode.trim();
+
+    if (!code) {
       throw new Error(
         "Agency code is required.",
       );
@@ -327,8 +493,7 @@ export const agencyApi = {
       await api.post(
         `/agencies/${agencyId}/join`,
         {
-          code:
-            agencyCode.trim(),
+          code,
         },
       );
 
@@ -336,47 +501,17 @@ export const agencyApi = {
       unwrap<any>(response);
 
     /*
-     * Current backend:
+     * The backend creates a PENDING application.
      *
-     * {
-     *   status: "ok",
-     *   application: {
-     *     agencyId,
-     *     status: "pending",
-     *     createdAt
-     *   },
-     *   membershipStatus: "pending"
-     * }
-     *
-     * Older/alternate backend:
-     *
-     * {
-     *   agency,
-     *   membership
-     * }
+     * It does not mean the user is already
+     * an approved agency member.
      */
 
-    if (data?.agency) {
-      return {
-        ...data.agency,
-
-        membershipStatus:
-          data.membership
-            ?.status ??
-          data.membershipStatus ??
-          "pending",
-      };
-    }
-
-    /*
-     * If the backend only returns the application,
-     * fetch the agency after successfully creating
-     * the pending request.
-     */
     const agency =
-      await this.get(
+      data?.agency ??
+      (await this.get(
         agencyId,
-      );
+      ));
 
     return {
       ...agency,
@@ -390,17 +525,12 @@ export const agencyApi = {
   },
 
   /* ------------------------------------------------------------------------ */
-  /* LEAVE / CANCEL REQUEST                                                   */
+  /* LEAVE                                                                    */
   /* ------------------------------------------------------------------------ */
 
   async leave(
     _agencyId?: string,
   ): Promise<void> {
-    /*
-     * Current backend route:
-     *
-     * POST /agencies/leave
-     */
     await api.post(
       "/agencies/leave",
     );
@@ -423,15 +553,13 @@ export const agencyApi = {
     );
   },
 
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
   /* APPLICATIONS                                                             */
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
 
   async applications(
     agencyId: string,
-  ): Promise<
-    AgencyApplication[]
-  > {
+  ): Promise<AgencyApplication[]> {
     const response =
       await api.get(
         `/agencies/${agencyId}/applications`,
@@ -446,10 +574,6 @@ export const agencyApi = {
 
     return data?.applications ?? [];
   },
-
-  /* ------------------------------------------------------------------------ */
-  /* APPROVE APPLICATION                                                      */
-  /* ------------------------------------------------------------------------ */
 
   async approveApplication(
     agencyId: string,
@@ -469,10 +593,6 @@ export const agencyApi = {
     );
   },
 
-  /* ------------------------------------------------------------------------ */
-  /* REJECT APPLICATION                                                       */
-  /* ------------------------------------------------------------------------ */
-
   async rejectApplication(
     agencyId: string,
     userId: string,
@@ -491,9 +611,63 @@ export const agencyApi = {
     );
   },
 
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
+  /* AGENTS                                                                   */
+  /* ======================================================================== */
+
+  async agents(
+    agencyId: string,
+  ): Promise<AgencyAgent[]> {
+    const response =
+      await api.get(
+        `/agencies/${agencyId}/agents`,
+      );
+
+    const data =
+      unwrap<any>(response);
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    return data?.agents ?? [];
+  },
+
+  async addAgent(
+    agencyId: string,
+    userId: string,
+    commissionRate = 0,
+  ): Promise<void> {
+    await api.post(
+      `/agencies/${agencyId}/agents`,
+      {
+        userId,
+        commissionRate,
+      },
+    );
+  },
+
+  async suspendAgent(
+    agencyId: string,
+    agentId: string,
+  ): Promise<void> {
+    await api.post(
+      `/agencies/${agencyId}/agents/${agentId}/suspend`,
+    );
+  },
+
+  async removeAgent(
+    agencyId: string,
+    agentId: string,
+  ): Promise<void> {
+    await api.delete(
+      `/agencies/${agencyId}/agents/${agentId}`,
+    );
+  },
+
+  /* ======================================================================== */
   /* HOSTS                                                                    */
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
 
   async hosts(
     agencyId: string,
@@ -513,10 +687,6 @@ export const agencyApi = {
     return data?.hosts ?? [];
   },
 
-  /* ------------------------------------------------------------------------ */
-  /* SUSPEND HOST                                                             */
-  /* ------------------------------------------------------------------------ */
-
   async suspendHost(
     agencyId: string,
     hostId: string,
@@ -525,10 +695,6 @@ export const agencyApi = {
       `/agencies/${agencyId}/hosts/${hostId}/suspend`,
     );
   },
-
-  /* ------------------------------------------------------------------------ */
-  /* RESTORE HOST                                                             */
-  /* ------------------------------------------------------------------------ */
 
   async restoreHost(
     agencyId: string,
@@ -539,10 +705,6 @@ export const agencyApi = {
     );
   },
 
-  /* ------------------------------------------------------------------------ */
-  /* REMOVE HOST                                                              */
-  /* ------------------------------------------------------------------------ */
-
   async removeHost(
     agencyId: string,
     hostId: string,
@@ -551,10 +713,6 @@ export const agencyApi = {
       `/agencies/${agencyId}/hosts/${hostId}/remove`,
     );
   },
-
-  /* ------------------------------------------------------------------------ */
-  /* UPDATE HOST COMMISSION                                                   */
-  /* ------------------------------------------------------------------------ */
 
   async updateHostCommission(
     agencyId: string,
@@ -569,9 +727,9 @@ export const agencyApi = {
     );
   },
 
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
   /* INVITATIONS                                                              */
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
 
   async invitations(
     agencyId: string,
@@ -591,10 +749,6 @@ export const agencyApi = {
     return data?.invitations ?? [];
   },
 
-  /* ------------------------------------------------------------------------ */
-  /* SEND INVITATION                                                          */
-  /* ------------------------------------------------------------------------ */
-
   async inviteHost(
     agencyId: string,
     userId: string,
@@ -607,9 +761,6 @@ export const agencyApi = {
     );
   },
 
-  /*
-   * Backwards-compatible alias.
-   */
   async invite(
     agencyId: string,
     userId: string,
@@ -620,12 +771,7 @@ export const agencyApi = {
     );
   },
 
-  /* ------------------------------------------------------------------------ */
-  /* CANCEL INVITATION                                                        */
-  /* ------------------------------------------------------------------------ */
-
   async cancelInvitation(
-    agencyId: string,
     invitationId: string,
   ): Promise<void> {
     await api.post(
@@ -633,16 +779,63 @@ export const agencyApi = {
     );
   },
 
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
   /* TASKS                                                                    */
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
 
   async tasks(
     agencyId: string,
-  ) {
+  ): Promise<AgencyTask[]> {
     const response =
       await api.get(
         `/agencies/${agencyId}/tasks`,
+      );
+
+    const data =
+      unwrap<any>(response);
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    return data?.tasks ?? [];
+  },
+
+  async createTask(
+    agencyId: string,
+    payload: {
+      title: string;
+      description?: string | null;
+      type: AgencyTaskType;
+      targetValue: number;
+      rewardCoins?: number;
+      rewardDiamonds?: number;
+      startAt?: string;
+      endAt?: string | null;
+    },
+  ): Promise<AgencyTask> {
+    const response =
+      await api.post(
+        `/agencies/${agencyId}/tasks`,
+        payload,
+      );
+
+    const data =
+      unwrap<any>(response);
+
+    return (
+      data?.task ??
+      data
+    );
+  },
+
+  async claimTask(
+    agencyId: string,
+    taskId: string,
+  ): Promise<any> {
+    const response =
+      await api.post(
+        `/agencies/${agencyId}/tasks/${taskId}/claim`,
       );
 
     return unwrap<any>(
@@ -650,20 +843,48 @@ export const agencyApi = {
     );
   },
 
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
   /* PAYOUTS                                                                  */
-  /* ------------------------------------------------------------------------ */
+  /* ======================================================================== */
 
   async payouts(
     agencyId: string,
-  ) {
+  ): Promise<Payout[]> {
     const response =
       await api.get(
         `/agencies/${agencyId}/payouts`,
       );
 
-    return unwrap<any>(
-      response,
+    const data =
+      unwrap<any>(response);
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    return data?.payouts ?? [];
+  },
+
+  async requestPayout(
+    agencyId: string,
+    amount: number,
+    note?: string,
+  ): Promise<Payout> {
+    const response =
+      await api.post(
+        `/agencies/${agencyId}/payouts`,
+        {
+          amount,
+          note,
+        },
+      );
+
+    const data =
+      unwrap<any>(response);
+
+    return (
+      data?.payout ??
+      data
     );
   },
 };
