@@ -535,6 +535,7 @@ export const agencyApi = {
     };
   },
 
+  
   /* --------------------------------------------------------------------------
    * LEAVE / CANCEL PENDING APPLICATION
    * ------------------------------------------------------------------------ */
@@ -546,6 +547,23 @@ export const agencyApi = {
       `${AGENCY_BASE}/leave`,
     );
   },
+  async joinByCode(code: string): Promise<Agency> {
+  const trimmed = code.trim();
+  if (!trimmed) {
+    throw new Error("Agency code is required.");
+  }
+
+  const response = await api.post(`${AGENCY_BASE}/join`, { code: trimmed });
+  const data = unwrap<any>(response);
+
+  // The backend returns { application, membershipStatus, agency?, message }
+  // We construct an Agency object with pending status.
+  const agency = data?.agency ?? { id: data?.application?.agencyId, name: "Agency" };
+  return {
+    ...agency,
+    membershipStatus: data?.membershipStatus ?? "pending",
+  };
+},
 
   /* --------------------------------------------------------------------------
    * DASHBOARD

@@ -3532,6 +3532,44 @@ export async function listPayouts(
     (data ?? []) as PayoutRow[]
   ).map(toPayout);
 }
+// File: apps/api/src/modules/agency/agency.service.ts
+
+/**
+ * Join agency by private code only.
+ * Finds the agency by code, then calls the existing `requestAgencyJoin`.
+ */
+/* -------------------------------------------------------------------------- */
+/* JOIN BY CODE (only code)                                                   */
+/* -------------------------------------------------------------------------- */
+
+export async function joinAgencyByCode(
+  userId: string,
+  code: string,
+): Promise<AgencyApplicationResult> {
+  const trimmed = code.trim();
+  if (!trimmed) {
+    throw new AppError(400, "Agency code is required", {
+      code: "AGENCY_CODE_REQUIRED",
+    });
+  }
+
+  // 1. Find the agency by private code
+  const { data: agency, error } = await supabase
+    .from("agencies")
+    .select("id, code")
+    .eq("code", trimmed)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!agency) {
+    throw new AppError(404, "No agency found with that code.", {
+      code: "AGENCY_NOT_FOUND_BY_CODE",
+    });
+  }
+
+  // 2. Reuse the existing join service (validates code again, but fine)
+  return await requestAgencyJoin(userId, agency.id, trimmed);
+}
 
 export async function adminUpdatePayoutStatus(
   adminUserId: string,

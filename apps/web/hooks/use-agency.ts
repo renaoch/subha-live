@@ -283,55 +283,40 @@ export function useAgency() {
   /* JOIN WITH CODE (no modal, no selectedAgency)                             */
   /* ======================================================================== */
 
-  const joinWithCode = useCallback(
-    async (code: string) => {
-      const trimmed = code.trim();
-      if (!trimmed) {
-        throw new Error("Agency code is required.");
-      }
+/* ======================================================================== */
+/* JOIN WITH CODE (no modal, no selectedAgency)                             */
+/* ======================================================================== */
 
-      // Find the agency by comparing codes (case‑insensitive)
-      const matchedAgency = agencies.find(
-        (a) => a.code?.toLowerCase() === trimmed.toLowerCase()
-      );
+const joinWithCode = useCallback(
+  async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      throw new Error("Agency code is required.");
+    }
 
-      if (!matchedAgency) {
-        throw new Error("No agency found with that code.");
-      }
+    setJoining("by-code");
+    setError(null);
 
-      setJoining(matchedAgency.id);
-      setError(null);
+    try {
+      const agency = await agencyApi.joinByCode(trimmed);
+      setMyAgency(agency);
+      setView("my-agency");
 
-      try {
-        const result = await agencyApi.requestToJoin(
-          matchedAgency.id,
-          trimmed
-        );
+      // Remove this agency from the local discovery list (if present)
+      setAgencies((current) => current.filter((a) => a.id !== agency.id));
 
-        setMyAgency(result);
-        setView("my-agency");
-
-        // Remove this agency from the discovery list
-        setAgencies((current) =>
-          current.filter((a) => a.id !== matchedAgency.id)
-        );
-
-        return result;
-      } catch (err) {
-        console.error("Failed to join by code:", err);
-        const message =
-          err instanceof Error
-            ? err.message
-            : "Unable to submit agency application.";
-        setError(message);
-        throw err;
-      } finally {
-        setJoining(null);
-      }
-    },
-    [agencies]
-  );
-
+      return agency;
+    } catch (err) {
+      console.error("Failed to join by code:", err);
+      const message = err instanceof Error ? err.message : "Unable to submit application.";
+      setError(message);
+      throw err;
+    } finally {
+      setJoining(null);
+    }
+  },
+  [setMyAgency, setAgencies, setView, setError, setJoining]
+);
   /* ======================================================================== */
   /* CLOSE JOIN DIALOG                                                        */
   /* ======================================================================== */

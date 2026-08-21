@@ -74,6 +74,8 @@ import {
   createPayout,
   getPayouts,
   updatePayoutStatusController,
+
+  joinAgencyByCodeController
 } from "./agency.controller";
 
 const router = Router();
@@ -125,6 +127,12 @@ router.post(
   leaveMyAgency,
 );
 
+
+router.post(
+  "/join",
+  authMiddleware,
+  joinAgencyByCodeController,
+);
 /* ========================================================================== */
 /* HOST INVITATIONS                                                           */
 /* ========================================================================== */

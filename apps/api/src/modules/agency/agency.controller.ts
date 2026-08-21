@@ -46,6 +46,8 @@ import {
   requestPayout,
   listPayouts,
   adminUpdatePayoutStatus,
+
+  joinAgencyByCode
 } from "./agency.service";
 
 import {
@@ -155,6 +157,35 @@ export async function getAgency(
   }
 }
 
+
+export async function joinAgencyByCodeController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const user = requireUser(req);
+
+    const parsed = joinAgencySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "Invalid payload", {
+        code: "INVALID_AGENCY_JOIN_PAYLOAD",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const result = await joinAgencyByCode(user.id, parsed.data.code);
+
+    return res.status(201).json({
+      status: "ok",
+      application: result,
+      membershipStatus: "pending",
+      message: "Your request has been submitted and is waiting for approval.",
+    });
+  } catch (error) {
+    next(error);
+  }
+}
 /* ========================================================================== */
 /* JOIN AGENCY                                                                */
 /* ========================================================================== */
