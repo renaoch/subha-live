@@ -174,7 +174,7 @@ export function useAgency() {
   );
 
   /* ======================================================================== */
-  /* SUBMIT JOIN                                                              */
+  /* SUBMIT JOIN (via modal)                                                  */
   /* ======================================================================== */
 
   const submitJoin = useCallback(
@@ -277,6 +277,59 @@ export function useAgency() {
       }
     },
     [selectedAgency],
+  );
+
+  /* ======================================================================== */
+  /* JOIN WITH CODE (no modal, no selectedAgency)                             */
+  /* ======================================================================== */
+
+  const joinWithCode = useCallback(
+    async (code: string) => {
+      const trimmed = code.trim();
+      if (!trimmed) {
+        throw new Error("Agency code is required.");
+      }
+
+      // Find the agency by comparing codes (case‑insensitive)
+      const matchedAgency = agencies.find(
+        (a) => a.code?.toLowerCase() === trimmed.toLowerCase()
+      );
+
+      if (!matchedAgency) {
+        throw new Error("No agency found with that code.");
+      }
+
+      setJoining(matchedAgency.id);
+      setError(null);
+
+      try {
+        const result = await agencyApi.requestToJoin(
+          matchedAgency.id,
+          trimmed
+        );
+
+        setMyAgency(result);
+        setView("my-agency");
+
+        // Remove this agency from the discovery list
+        setAgencies((current) =>
+          current.filter((a) => a.id !== matchedAgency.id)
+        );
+
+        return result;
+      } catch (err) {
+        console.error("Failed to join by code:", err);
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Unable to submit agency application.";
+        setError(message);
+        throw err;
+      } finally {
+        setJoining(null);
+      }
+    },
+    [agencies]
   );
 
   /* ======================================================================== */
@@ -427,5 +480,8 @@ export function useAgency() {
     leave,
 
     refresh,
+
+    // NEW: direct code‑only join
+    joinWithCode,
   };
 }

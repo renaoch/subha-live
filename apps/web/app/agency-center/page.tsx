@@ -15,9 +15,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import type { Agency } from "@/lib/api/agency";
 import { useAgency } from "@/hooks/use-agency";
 import { MyAgencyPanel } from "@/components/agency/my-agency-panel";
+import { type Agency } from "@/lib/api/agency";   // <-- ADD THIS IMPORT
 
 // ─── Main Component ────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ export default function AgencyCenterPage() {
         loading,
         joining,
         error,
-        submitJoin,
+        joinWithCode,
         leave,
     } = useAgency();
 
@@ -58,11 +58,9 @@ export default function AgencyCenterPage() {
         setLocalError(null);
         setIsSubmitting(true);
         try {
-            await submitJoin(trimmed);
-            // success – the page will update to pending state
-            toast.success("Request submitted! Waiting for approval.");
+            const agency = await joinWithCode(trimmed);
+            toast.success(`Request submitted for ${agency.name}!`);
         } catch (err: any) {
-            // error is already in the hook's error state, but we can show a toast too
             toast.error("Could not join", {
                 description: err?.message || "Please check the code and try again.",
             });
@@ -72,7 +70,6 @@ export default function AgencyCenterPage() {
     };
 
     // ── Loading ──
-
     if (loading) {
         return (
             <main className="relative min-h-dvh w-full overflow-hidden bg-Subha-gradient">
@@ -82,7 +79,6 @@ export default function AgencyCenterPage() {
     }
 
     // ── Pending ──
-
     if (isPending && myAgency) {
         return (
             <main className="relative min-h-dvh w-full overflow-hidden bg-Subha-gradient">
@@ -95,7 +91,6 @@ export default function AgencyCenterPage() {
     }
 
     // ── Approved ──
-
     if (isApproved && myAgency) {
         return (
             <main className="relative min-h-dvh w-full overflow-hidden bg-Subha-gradient">
@@ -108,13 +103,12 @@ export default function AgencyCenterPage() {
     }
 
     // ── No Agency ──
-
     return (
         <main className="relative min-h-dvh w-full overflow-hidden bg-Subha-gradient">
             <BackgroundEffects />
 
             <div className="relative z-10 mx-auto flex min-h-dvh max-w-[520px] flex-col items-center justify-center px-6 py-10">
-                {/* ── Logo ── */}
+                {/* Logo */}
                 <div className="shrink-0 animate-[fadeIn_0.6s_ease-out]">
                     <span
                         className="font-display text-[2.2rem] font-bold uppercase tracking-[-0.05em] bg-clip-text text-transparent sm:text-[2.45rem]"
@@ -129,9 +123,8 @@ export default function AgencyCenterPage() {
                     </span>
                 </div>
 
-                {/* ── Hero ── */}
+                {/* Hero */}
                 <section className="mt-6 flex w-full flex-col items-center animate-[fadeIn_0.6s_ease-out_0.1s_both]">
-                    {/* Mascot */}
                     <div className="relative h-40 w-40 sm:h-48 sm:w-48 animate-[floatIn_0.7s_ease-out_0.2s_both]">
                         <div
                             aria-hidden
@@ -183,7 +176,7 @@ export default function AgencyCenterPage() {
                     </p>
                 </section>
 
-                {/* ── Code Form ── */}
+                {/* Code Form */}
                 <section className="mt-8 w-full animate-[fadeIn_0.6s_ease-out_0.3s_both]">
                     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.2)]">
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -247,13 +240,13 @@ export default function AgencyCenterPage() {
                     </div>
                 </section>
 
-                {/* ── Footer ── */}
+                {/* Footer */}
                 <p className="mt-6 text-[10.5px] text-ink-muted/40 animate-[fadeIn_0.6s_ease-out_0.4s_both]">
                     Need an agency? Contact your creator network administrator.
                 </p>
             </div>
 
-            {/* Inline global styles for animations and theme variables */}
+            {/* Inline global styles */}
             <style jsx global>{`
                 :root {
                     --accent: #a78bfa;
@@ -362,7 +355,6 @@ function BackgroundEffects() {
             <div className="absolute -bottom-32 -right-40 h-[450px] w-[450px] rounded-full bg-fuchsia-500/[0.08] blur-[120px]" />
             <div className="absolute -bottom-[250px] left-1/2 h-[420px] w-[150%] -translate-x-1/2 rounded-[50%] bg-accent/[0.08]" />
             <div className="absolute -bottom-[290px] left-1/2 h-[420px] w-[135%] -translate-x-1/2 rounded-[50%] bg-accent-hot/[0.08]" />
-
             {/* Grain overlay */}
             <div
                 className="absolute inset-0 opacity-[0.035] mix-blend-overlay"
