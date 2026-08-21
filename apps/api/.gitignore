@@ -1,3 +1,4 @@
 .env
 .env.*
 !.env.example
+apps/api/src/scripts/get-token.ts

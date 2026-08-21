@@ -1,92 +1,79 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
-
 import { addXp } from "../levels/levels.service";
 
 import type {
-  DailyTask,
-  UserTaskClaim,
   TaskItem,
   TasksResult,
   ClaimTaskResult,
   TaskReward,
 } from "./tasks.types";
 
-type DailyTaskRow = Pick<
-  DailyTask,
-  | "id"
-  | "title"
-  | "reward_coins"
-  | "reward_diamonds"
-  | "reward_exp"
-  | "target_count"
-  | "type"
-  | "icon"
->;
+type TaskRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  duration_type: string;
+  expiry_date: string | null;
+  icon_url: string | null;
+  reward_coins: number;
+  status: string;
+  target_count: number;
+  target_gender: string;
+};
 
-type UserTaskClaimRow = Pick<
-  UserTaskClaim,
-  | "id"
-  | "user_id"
-  | "task_id"
-  | "progress"
-  | "is_completed"
-  | "is_claimed"
-  | "claimed_at"
-  | "updated_at"
->;
+type UserTaskRow = {
+  id: string;
+  user_id: string;
+  task_id: string;
+  progress: number;
+  is_completed: boolean;
+  is_claimed: boolean;
+  completed_at: string | null;
+  claimed_at: string | null;
+  updated_at: string;
+};
 
-function toNumber(
-  value: number | null,
-): number {
+function toNumber(value: number | null | undefined): number {
   return value ?? 0;
 }
 
-function toTaskReward(
-  task: DailyTaskRow,
-): TaskReward {
+function toTaskReward(task: TaskRow): TaskReward {
   return {
-    coins: toNumber(
-      task.reward_coins,
-    ),
-
-    diamonds: toNumber(
-      task.reward_diamonds,
-    ),
-
-    exp: toNumber(
-      task.reward_exp,
-    ),
+    coins: toNumber(task.reward_coins),
+    diamonds: 0,
+    exp: 0,
   };
 }
 
 /**
- * Get all active daily tasks for the authenticated user.
- *
- * This does not create task claim rows for every task.
- * Missing claim rows simply mean zero progress.
+ * Get active tasks for the authenticated user.
  */
 export async function getMyTasks(
   userId: string,
 ): Promise<TasksResult> {
+  const now = new Date().toISOString();
+
   const {
     data: tasks,
     error: tasksError,
   } = await supabase
-    .from("daily_tasks")
-    .select(
-      `
-        id,
-        title,
-        reward_coins,
-        reward_diamonds,
-        reward_exp,
-        target_count,
-        type,
-        icon
-      `,
-    )
-    .order("id", {
+    .from("tasks")
+    .select(`
+      id,
+      title,
+      description,
+      duration_type,
+      expiry_date,
+      icon_url,
+      reward_coins,
+      status,
+      target_count,
+      target_gender
+    `)
+    .eq("status", "active")
+    .or(`expiry_date.is.null,expiry_date.gt.${now}`)
+    .order("created_at", {
       ascending: true,
     });
 
@@ -94,117 +81,103 @@ export async function getMyTasks(
     throw tasksError;
   }
 
-  const activeTasks =
-    (tasks ?? []) as DailyTaskRow[];
+  const taskRows = (tasks ?? []) as TaskRow[];
 
-  if (activeTasks.length === 0) {
+  if (taskRows.length === 0) {
     return {
       tasks: [],
     };
   }
 
-  const taskIds =
-    activeTasks.map(
-      (task) => task.id,
-    );
+  const taskIds = taskRows.map(
+    (task) => task.id,
+  );
 
   const {
-    data: claims,
-    error: claimsError,
+    data: userTasks,
+    error: userTasksError,
   } = await supabase
-    .from("user_task_claims")
-    .select(
-      `
-        id,
-        user_id,
-        task_id,
-        progress,
-        is_completed,
-        is_claimed,
-        claimed_at,
-        updated_at
-      `,
-    )
+    .from("user_tasks")
+    .select(`
+      id,
+      user_id,
+      task_id,
+      progress,
+      is_completed,
+      is_claimed,
+      completed_at,
+      claimed_at,
+      updated_at
+    `)
     .eq("user_id", userId)
     .in("task_id", taskIds);
 
-  if (claimsError) {
-    throw claimsError;
+  if (userTasksError) {
+    throw userTasksError;
   }
 
-  const claimRows =
-    (claims ?? []) as UserTaskClaimRow[];
+  const userTaskRows =
+    (userTasks ?? []) as UserTaskRow[];
 
-  const claimsByTaskId =
-    new Map<string, UserTaskClaimRow>();
+  const userTasksByTaskId =
+    new Map<string, UserTaskRow>();
 
-  for (const claim of claimRows) {
-    claimsByTaskId.set(
-      claim.task_id,
-      claim,
+  for (const userTask of userTaskRows) {
+    userTasksByTaskId.set(
+      userTask.task_id,
+      userTask,
     );
   }
 
   const result: TaskItem[] =
-    activeTasks.map(
-      (task) => {
-        const claim =
-          claimsByTaskId.get(
-            task.id,
-          );
+    taskRows.map((task) => {
+      const userTask =
+        userTasksByTaskId.get(task.id);
 
-        const targetCount =
-          Math.max(
-            1,
-            task.target_count ?? 1,
-          );
+      const targetCount = Math.max(
+        1,
+        task.target_count ?? 1,
+      );
 
-        const progress =
-          Math.min(
-            targetCount,
-            Math.max(
-              0,
-              claim?.progress ?? 0,
-            ),
-          );
+      const progress = Math.min(
+        targetCount,
+        Math.max(
+          0,
+          userTask?.progress ?? 0,
+        ),
+      );
 
-        return {
-          id: task.id,
+      return {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        type: task.duration_type,
+        icon: task.icon_url,
+        targetCount,
+        reward: toTaskReward(task),
 
-          title: task.title,
-
-          type: task.type,
-
-          icon: task.icon,
-
+        progress: {
+          progress,
           targetCount,
 
-          reward:
-            toTaskReward(task),
+          isCompleted:
+            userTask?.is_completed ??
+            progress >= targetCount,
 
-          progress: {
-            progress,
+          isClaimed:
+            userTask?.is_claimed ??
+            false,
 
-            targetCount,
+          completedAt:
+            userTask?.completed_at ??
+            null,
 
-            isCompleted:
-              claim?.is_completed ??
-              progress >= targetCount,
-
-            isClaimed:
-              claim?.is_claimed ??
-              false,
-
-            completedAt:
-              null,
-
-            claimedAt:
-              claim?.claimed_at ??
-              null,
-          },
-        };
-      },
-    );
+          claimedAt:
+            userTask?.claimed_at ??
+            null,
+        },
+      };
+    });
 
   return {
     tasks: result,
@@ -212,28 +185,28 @@ export async function getMyTasks(
 }
 
 /**
- * Get a single task by ID.
+ * Get a single task.
  */
 async function getTaskById(
   taskId: string,
-): Promise<DailyTaskRow> {
+): Promise<TaskRow> {
   const {
     data,
     error,
   } = await supabase
-    .from("daily_tasks")
-    .select(
-      `
-        id,
-        title,
-        reward_coins,
-        reward_diamonds,
-        reward_exp,
-        target_count,
-        type,
-        icon
-      `,
-    )
+    .from("tasks")
+    .select(`
+      id,
+      title,
+      description,
+      duration_type,
+      expiry_date,
+      icon_url,
+      reward_coins,
+      status,
+      target_count,
+      target_gender
+    `)
     .eq("id", taskId)
     .single();
 
@@ -251,23 +224,14 @@ async function getTaskById(
     throw error;
   }
 
-  return data as DailyTaskRow;
+  return data as TaskRow;
 }
 
 /**
- * Internal task-progress mutation.
+ * Internal task progress mutation.
  *
- * This is intentionally NOT exposed directly as a public HTTP
- * endpoint. Future modules such as live, social, gifts, etc.
- * should call this function when a real user action occurs.
- *
- * Example:
- *
- *   await incrementTaskProgress(
- *     userId,
- *     "watch_live",
- *     1,
- *   );
+ * Other modules can call this when a real
+ * user action happens.
  */
 export async function incrementTaskProgress(
   userId: string,
@@ -290,29 +254,38 @@ export async function incrementTaskProgress(
   const task =
     await getTaskById(taskId);
 
-  const targetCount =
-    Math.max(
-      1,
-      task.target_count ?? 1,
-    );
+  if (task.status !== "active") {
+    return;
+  }
+
+  if (
+    task.expiry_date &&
+    new Date(task.expiry_date) <= new Date()
+  ) {
+    return;
+  }
+
+  const targetCount = Math.max(
+    1,
+    task.target_count ?? 1,
+  );
 
   const {
     data: existing,
     error: existingError,
   } = await supabase
-    .from("user_task_claims")
-    .select(
-      `
-        id,
-        user_id,
-        task_id,
-        progress,
-        is_completed,
-        is_claimed,
-        claimed_at,
-        updated_at
-      `,
-    )
+    .from("user_tasks")
+    .select(`
+      id,
+      user_id,
+      task_id,
+      progress,
+      is_completed,
+      is_claimed,
+      completed_at,
+      claimed_at,
+      updated_at
+    `)
     .eq("user_id", userId)
     .eq("task_id", taskId)
     .maybeSingle();
@@ -328,24 +301,31 @@ export async function incrementTaskProgress(
   const currentProgress =
     existing?.progress ?? 0;
 
-  const newProgress =
-    Math.min(
-      targetCount,
-      currentProgress + amount,
-    );
+  const newProgress = Math.min(
+    targetCount,
+    currentProgress + amount,
+  );
 
   const isCompleted =
     newProgress >= targetCount;
+
+  const now =
+    new Date().toISOString();
 
   if (existing) {
     const {
       error: updateError,
     } = await supabase
-      .from("user_task_claims")
+      .from("user_tasks")
       .update({
         progress: newProgress,
         is_completed: isCompleted,
-        updated_at: new Date().toISOString(),
+        completed_at:
+          isCompleted
+            ? existing.completed_at ??
+              now
+            : null,
+        updated_at: now,
       })
       .eq("id", existing.id)
       .eq("user_id", userId);
@@ -360,12 +340,16 @@ export async function incrementTaskProgress(
   const {
     error: insertError,
   } = await supabase
-    .from("user_task_claims")
+    .from("user_tasks")
     .insert({
       user_id: userId,
       task_id: taskId,
       progress: newProgress,
       is_completed: isCompleted,
+      completed_at:
+        isCompleted
+          ? now
+          : null,
     });
 
   if (insertError) {
@@ -375,9 +359,6 @@ export async function incrementTaskProgress(
 
 /**
  * Claim a completed task.
- *
- * The server reads all rewards from daily_tasks.
- * The client cannot modify the reward amount.
  */
 export async function claimTask(
   userId: string,
@@ -386,32 +367,54 @@ export async function claimTask(
   const task =
     await getTaskById(taskId);
 
+  if (task.status !== "active") {
+    throw new AppError(
+      400,
+      "Task is no longer active",
+      {
+        code: "TASK_NOT_ACTIVE",
+      },
+    );
+  }
+
+  if (
+    task.expiry_date &&
+    new Date(task.expiry_date) <= new Date()
+  ) {
+    throw new AppError(
+      400,
+      "Task has expired",
+      {
+        code: "TASK_EXPIRED",
+      },
+    );
+  }
+
   const {
-    data: claim,
-    error: claimError,
+    data: userTask,
+    error: userTaskError,
   } = await supabase
-    .from("user_task_claims")
-    .select(
-      `
-        id,
-        user_id,
-        task_id,
-        progress,
-        is_completed,
-        is_claimed,
-        claimed_at,
-        updated_at
-      `,
-    )
+    .from("user_tasks")
+    .select(`
+      id,
+      user_id,
+      task_id,
+      progress,
+      is_completed,
+      is_claimed,
+      completed_at,
+      claimed_at,
+      updated_at
+    `)
     .eq("user_id", userId)
     .eq("task_id", taskId)
     .maybeSingle();
 
-  if (claimError) {
-    throw claimError;
+  if (userTaskError) {
+    throw userTaskError;
   }
 
-  if (!claim) {
+  if (!userTask) {
     throw new AppError(
       400,
       "Task has not been completed",
@@ -421,7 +424,7 @@ export async function claimTask(
     );
   }
 
-  if (!claim.is_completed) {
+  if (!userTask.is_completed) {
     throw new AppError(
       400,
       "Task has not been completed",
@@ -431,7 +434,7 @@ export async function claimTask(
     );
   }
 
-  if (claim.is_claimed) {
+  if (userTask.is_claimed) {
     throw new AppError(
       409,
       "Task reward has already been claimed",
@@ -444,9 +447,6 @@ export async function claimTask(
   const reward =
     toTaskReward(task);
 
-  /*
-   * Read the current wallet values.
-   */
   const {
     data: profile,
     error: profileError,
@@ -475,9 +475,6 @@ export async function claimTask(
     currentDiamonds +
     reward.diamonds;
 
-  /*
-   * Update wallet.
-   */
   const {
     error: walletError,
   } = await supabase
@@ -492,9 +489,6 @@ export async function claimTask(
     throw walletError;
   }
 
-  /*
-   * Award XP through the Level service.
-   */
   if (reward.exp > 0) {
     await addXp(
       userId,
@@ -502,21 +496,19 @@ export async function claimTask(
     );
   }
 
-  /*
-   * Mark reward as claimed.
-   */
+  const now =
+    new Date().toISOString();
+
   const {
     error: claimUpdateError,
   } = await supabase
-    .from("user_task_claims")
+    .from("user_tasks")
     .update({
       is_claimed: true,
-      claimed_at:
-        new Date().toISOString(),
-      updated_at:
-        new Date().toISOString(),
+      claimed_at: now,
+      updated_at: now,
     })
-    .eq("id", claim.id)
+    .eq("id", userTask.id)
     .eq("user_id", userId)
     .eq("is_claimed", false);
 
@@ -526,11 +518,8 @@ export async function claimTask(
 
   return {
     taskId,
-
     reward,
-
     newCoins,
-
     newDiamonds,
   };
 }
