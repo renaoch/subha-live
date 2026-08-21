@@ -70,16 +70,17 @@ export function AgentsPanel({ agencyId }: AgentsPanelProps) {
   }
 
   return (
-    <div className="mt-6">
+    <div className="space-y-4">
+      <div><p className="text-[9px] font-black uppercase tracking-[.18em] text-white/25">Agency team</p><h3 className="mt-1 text-sm font-black">Manage agents</h3><p className="mt-1 text-xs text-white/25">Add managers and control their commission access.</p></div>
       <form
         onSubmit={handleAdd}
-        className="flex flex-col gap-3 rounded-2xl border border-white/[0.07] bg-[#15111B] p-4 sm:flex-row sm:items-center"
+        className="flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.018] p-4 shadow-[0_10px_40px_rgba(0,0,0,.12)] sm:flex-row sm:items-center"
       >
         <input
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
           placeholder="User ID to add as agent"
-          className="h-10 flex-1 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-[#A855F7]/40"
+          className="h-10 flex-1 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-violet-300/25"
         />
         <input
           value={commissionRate}
@@ -88,12 +89,12 @@ export function AgentsPanel({ agencyId }: AgentsPanelProps) {
           type="number"
           min={0}
           max={100}
-          className="h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-[#A855F7]/40 sm:w-48"
+          className="h-10 w-full rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-violet-300/25 sm:w-48"
         />
         <button
           type="submit"
           disabled={submitting || !userId.trim()}
-          className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#A855F7] px-4 text-xs font-black text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-white px-4 text-xs font-black text-black transition hover:bg-[#f8f1e6] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <UserPlus className="h-3.5 w-3.5" />
           Add Agent
@@ -117,7 +118,7 @@ export function AgentsPanel({ agencyId }: AgentsPanelProps) {
           {agents.map((agent) => (
             <div
               key={agent.id}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#15111B] p-4"
+              className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.018] p-4 shadow-[0_10px_40px_rgba(0,0,0,.12)]"
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white">{agent.name}</p>

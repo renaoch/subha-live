@@ -1,40 +1,5 @@
-// File: components/agency/stat-tile.tsx
+import type { ReactNode } from "react";
 
-interface StatTileProps {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-  size?: "sm" | "md" | "lg";
-}
-
-const SIZE_STYLES = {
-  sm: {
-    wrap: "rounded-xl bg-white/[0.025] px-3 py-2.5",
-    label: "text-[7px] tracking-wider",
-    value: "mt-1 text-xs font-bold text-white/60",
-  },
-  md: {
-    wrap: "rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4",
-    label: "text-[8px] tracking-[0.2em]",
-    value: "mt-1 text-lg font-black text-white",
-  },
-  lg: {
-    wrap: "rounded-[24px] border border-white/[0.07] bg-[#15111B] p-5",
-    label: "text-[9px] tracking-[0.2em]",
-    value: "mt-2 text-2xl font-black text-white",
-  },
-} as const;
-
-export function StatTile({ label, value, icon, size = "md" }: StatTileProps) {
-  const s = SIZE_STYLES[size];
-
-  return (
-    <div className={s.wrap}>
-      <div className="flex items-center gap-1.5">
-        {icon && <span className="text-[#D9A94A]/60">{icon}</span>}
-        <p className={`font-black uppercase text-white/20 ${s.label}`}>{label}</p>
-      </div>
-      <p className={s.value}>{value}</p>
-    </div>
-  );
-}
+interface StatTileProps { label:string; value:string; icon?:ReactNode; detail?:string; tone?:"purple"|"gold"|"green"|"blue"; }
+const tones={purple:"text-violet-300 bg-violet-400/10 border-violet-300/10",gold:"text-amber-200 bg-amber-400/10 border-amber-300/10",green:"text-emerald-300 bg-emerald-400/10 border-emerald-300/10",blue:"text-sky-300 bg-sky-400/10 border-sky-300/10"};
+export function StatTile({label,value,icon,detail,tone="purple"}:StatTileProps){return <div className="group rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 transition hover:border-white/[0.11] hover:bg-white/[0.04]"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">{label}</p><p className="mt-2 text-xl font-black tracking-tight text-white">{value}</p>{detail&&<p className="mt-1 text-[11px] text-white/25">{detail}</p>}</div>{icon&&<span className={`flex h-9 w-9 items-center justify-center rounded-xl border ${tones[tone]}`}>{icon}</span>}</div></div>}

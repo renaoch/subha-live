@@ -94,13 +94,14 @@ export function AgencyTasksPanel({ agencyId, isOwner }: AgencyTasksPanelProps) {
   }
 
   return (
-    <div className="mt-6">
+    <div className="space-y-4">
+      <div><p className="text-[9px] font-black uppercase tracking-[.18em] text-white/25">Performance programs</p><h3 className="mt-1 text-sm font-black">Agency tasks</h3><p className="mt-1 text-xs text-white/25">Turn creator activity into measurable rewards.</p></div>
       {isOwner && (
         <div className="mb-4">
           <button
             type="button"
             onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-xs font-bold text-white/60 transition hover:bg-white/[0.06]"
+            className="flex items-center gap-1.5 rounded-xl border border-white/[0.07] bg-white/[0.025] px-4 py-2.5 text-xs font-bold text-white/60 transition hover:bg-white/[0.06]"
           >
             <Plus className="h-3.5 w-3.5" />
             {showForm ? "Cancel" : "Create Task"}
@@ -109,18 +110,18 @@ export function AgencyTasksPanel({ agencyId, isOwner }: AgencyTasksPanelProps) {
           {showForm && (
             <form
               onSubmit={handleCreate}
-              className="mt-3 grid gap-3 rounded-2xl border border-white/[0.07] bg-[#15111B] p-4 sm:grid-cols-2"
+              className="mt-3 grid gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.018] p-4 shadow-[0_10px_40px_rgba(0,0,0,.12)] sm:grid-cols-2"
             >
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Task title"
-                className="h-10 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-[#A855F7]/40 sm:col-span-2"
+                className="h-10 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-violet-300/25 sm:col-span-2"
               />
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as AgencyTaskType)}
-                className="h-10 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white outline-none focus:border-[#A855F7]/40"
+                className="h-10 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-xs text-white outline-none focus:border-violet-300/25"
               >
                 {TASK_TYPES.map((t) => (
                   <option key={t.value} value={t.value} className="bg-[#15111B]">
@@ -134,7 +135,7 @@ export function AgencyTasksPanel({ agencyId, isOwner }: AgencyTasksPanelProps) {
                 placeholder="Target value"
                 type="number"
                 min={1}
-                className="h-10 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-[#A855F7]/40"
+                className="h-10 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-violet-300/25"
               />
               <input
                 value={rewardCoins}
@@ -142,7 +143,7 @@ export function AgencyTasksPanel({ agencyId, isOwner }: AgencyTasksPanelProps) {
                 placeholder="Reward coins"
                 type="number"
                 min={0}
-                className="h-10 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-[#A855F7]/40"
+                className="h-10 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-violet-300/25"
               />
               <input
                 value={rewardDiamonds}
@@ -150,13 +151,13 @@ export function AgencyTasksPanel({ agencyId, isOwner }: AgencyTasksPanelProps) {
                 placeholder="Reward diamonds"
                 type="number"
                 min={0}
-                className="h-10 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-[#A855F7]/40"
+                className="h-10 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-violet-300/25"
               />
 
               <button
                 type="submit"
                 disabled={submitting || !title.trim() || !targetValue}
-                className="h-10 rounded-xl bg-[#A855F7] px-4 text-xs font-black text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+                className="h-10 rounded-xl bg-white px-4 text-xs font-black text-black transition hover:bg-[#f8f1e6] disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
               >
                 {submitting ? "Creating..." : "Create Task"}
               </button>
@@ -189,7 +190,7 @@ export function AgencyTasksPanel({ agencyId, isOwner }: AgencyTasksPanelProps) {
             return (
               <div
                 key={task.id}
-                className="rounded-2xl border border-white/[0.07] bg-[#15111B] p-4"
+                className="rounded-2xl border border-white/[0.06] bg-white/[0.018] p-4 shadow-[0_10px_40px_rgba(0,0,0,.12)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

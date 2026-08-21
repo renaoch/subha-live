@@ -67,21 +67,22 @@ export function InvitationsPanel({ agencyId }: InvitationsPanelProps) {
   }
 
   return (
-    <div className="mt-6">
+    <div className="space-y-4">
+      <div><p className="text-[9px] font-black uppercase tracking-[.18em] text-white/25">Recruiting</p><h3 className="mt-1 text-sm font-black">Host invitations</h3><p className="mt-1 text-xs text-white/25">Invite creators directly into your network.</p></div>
       <form
         onSubmit={handleInvite}
-        className="flex flex-col gap-3 rounded-2xl border border-white/[0.07] bg-[#15111B] p-4 sm:flex-row sm:items-center"
+        className="flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.018] p-4 shadow-[0_10px_40px_rgba(0,0,0,.12)] sm:flex-row sm:items-center"
       >
         <input
           value={hostId}
           onChange={(e) => setHostId(e.target.value)}
           placeholder="Host user ID to invite"
-          className="h-10 flex-1 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-[#A855F7]/40"
+          className="h-10 flex-1 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 text-xs text-white outline-none placeholder:text-white/20 focus:border-violet-300/25"
         />
         <button
           type="submit"
           disabled={submitting || !hostId.trim()}
-          className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#A855F7] px-4 text-xs font-black text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-white px-4 text-xs font-black text-black transition hover:bg-[#f8f1e6] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Send className="h-3.5 w-3.5" />
           Send Invite
@@ -106,7 +107,7 @@ export function InvitationsPanel({ agencyId }: InvitationsPanelProps) {
           {invitations.map((invitation) => (
             <div
               key={invitation.id}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#15111B] p-4"
+              className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.018] p-4 shadow-[0_10px_40px_rgba(0,0,0,.12)]"
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white">{invitation.hostName}</p>

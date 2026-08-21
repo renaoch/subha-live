@@ -1,98 +1,11 @@
-// File: components/agency/agency-hero.tsx
 "use client";
-
-import { Building2, Sparkles } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, Compass, Crown, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
 import type { Agency } from "@/lib/api/agency";
 import { formatCompact } from "@/lib/format";
-import { StatTile } from "./stat-tile";
-
-interface AgencyHeroProps {
-  myAgency: Agency | null;
-  onManage: () => void;
-  onExplore: () => void;
-  onApply: () => void;
+interface Props { myAgency:Agency|null; onManage:()=>void; onExplore:()=>void; }
+export function AgencyHero({myAgency,onManage,onExplore}:Props){
+ if(myAgency)return <section className="relative mt-7 overflow-hidden rounded-[30px] border border-amber-300/15 bg-[radial-gradient(circle_at_78%_20%,rgba(245,158,11,.14),transparent_30%),linear-gradient(135deg,#21170d,#17121d_48%,#100d15)] p-6 sm:p-7"><div className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-amber-400/10 blur-3xl"/><div className="relative"><div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between"><div className="flex items-center gap-4"><div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] border border-amber-300/20 bg-amber-400/10 text-amber-200 shadow-[0_0_40px_rgba(245,158,11,.12)]"><Building2 className="h-7 w-7"/></div><div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-emerald-300/10 bg-emerald-400/10 px-2 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-300">Active agency</span><span className="text-[10px] text-white/25">Code {myAgency.code}</span></div><h2 className="mt-2 text-2xl font-black tracking-tight sm:text-3xl">{myAgency.name}</h2><p className="mt-1 text-xs text-white/35">Your creator network is ready to manage.</p></div></div><button onClick={onManage} className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-black text-[#120D19] transition hover:bg-[#f8f1e6]"><span>Open workspace</span><ArrowRight className="h-3.5 w-3.5"/></button></div><div className="mt-7 grid gap-3 sm:grid-cols-3"><MiniStat icon={<Users/>} label="Hosts" value={String(myAgency.totalHosts)}/><MiniStat icon={<WalletCards/>} label="Monthly revenue" value={`₹${formatCompact(myAgency.monthlyRevenue)}`}/><MiniStat icon={<Crown/>} label="Commission" value={`${myAgency.commissionRate}%`}/></div></div></section>;
+ return <section className="relative mt-7 overflow-hidden rounded-[30px] border border-violet-300/10 bg-[radial-gradient(circle_at_82%_18%,rgba(139,92,246,.16),transparent_32%),linear-gradient(135deg,#1b1327,#130f18)] p-6 sm:p-8"><div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl"/><div className="relative max-w-2xl"><div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-300/10 bg-violet-400/10 text-violet-200"><Sparkles className="h-5 w-5"/></div><p className="mt-5 text-[10px] font-black uppercase tracking-[.22em] text-violet-200/50">Creator partnerships</p><h2 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Build with an agency, not alone.</h2><p className="mt-3 max-w-xl text-sm leading-6 text-white/35">Discover creator networks, compare their terms, and request to join the one that fits your goals.</p><div className="mt-6 flex flex-wrap gap-2 text-[10px] font-bold text-white/35"><Pill icon={<ShieldCheck/>}>Verified network</Pill><Pill icon={<Users/>}>Creator support</Pill><Pill icon={<CheckCircle2/>}>Performance rewards</Pill></div><button onClick={onExplore} className="mt-7 flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-black text-[#120D19] transition hover:bg-[#f8f1e6]"><Compass className="h-3.5 w-3.5"/>Explore agencies<ArrowRight className="h-3.5 w-3.5"/></button></div></section>;
 }
-
-export function AgencyHero({ myAgency, onManage, onExplore, onApply }: AgencyHeroProps) {
-  if (myAgency) {
-    return (
-      <section className="relative mt-8 overflow-hidden rounded-[32px] border border-[#D9A94A]/20 bg-gradient-to-br from-[#2A1D0C] via-[#18131D] to-[#100D15] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.3)]">
-        <div className="pointer-events-none absolute right-[-100px] top-[-100px] h-72 w-72 rounded-full bg-[#F59E0B]/10 blur-[90px]" />
-
-        <div className="relative">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[24px] border border-[#F59E0B]/30 bg-[#F59E0B]/10 text-[#F5C36B] shadow-[0_0_35px_rgba(245,158,11,0.15)]">
-                <Building2 className="h-8 w-8" />
-              </div>
-
-              <div className="min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-[0.25em] text-[#F59E0B]/60">
-                  Your Agency
-                </p>
-                <h2 className="mt-1 truncate text-2xl font-black">{myAgency.name}</h2>
-                <p className="mt-1 text-xs text-white/30">
-                  Code ·{" "}
-                  <span className="font-bold text-white/50">{myAgency.code}</span>
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onManage}
-              className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-xs font-bold text-white/70 transition hover:bg-white/[0.07]"
-            >
-              Manage Agency
-            </button>
-          </div>
-
-          <div className="mt-6 grid grid-cols-3 gap-2">
-            <StatTile label="Hosts" value={String(myAgency.totalHosts)} />
-            <StatTile
-              label="Revenue"
-              value={`\u20b9${formatCompact(myAgency.monthlyRevenue)}`}
-            />
-            <StatTile label="Commission" value={`${myAgency.commissionRate}%`} />
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="relative mt-8 overflow-hidden rounded-[32px] border border-[#A855F7]/15 bg-gradient-to-br from-[#1D1429] via-[#15111B] to-[#0E0B12] p-6">
-      <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#A855F7]/10 blur-[90px]" />
-
-      <div className="relative max-w-xl">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#A855F7]/10 text-[#D8B4FE]">
-          <Sparkles className="h-5 w-5" />
-        </div>
-
-        <h2 className="mt-5 text-2xl font-black">You&apos;re independent.</h2>
-
-        <p className="mt-2 text-sm leading-6 text-white/35">
-          Join an existing agency and connect with creators, or apply to create your own agency.
-        </p>
-
-        <div className="mt-6 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={onExplore}
-            className="rounded-2xl bg-[#A855F7] px-5 py-3 text-xs font-black text-white shadow-[0_10px_30px_rgba(168,85,247,0.2)] transition hover:scale-[1.02] active:scale-[0.98]"
-          >
-            Explore Agencies
-          </button>
-
-          <button
-            type="button"
-            onClick={onApply}
-            className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3 text-xs font-bold text-white/60 transition hover:bg-white/[0.06]"
-          >
-            Apply for Agency
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
+function MiniStat({icon,label,value}:{icon:React.ReactNode;label:string;value:string}){return <div className="flex items-center gap-3 rounded-2xl border border-white/[.06] bg-black/10 px-4 py-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400/10 text-amber-200/80 [&>svg]:h-4 [&>svg]:w-4">{icon}</span><div><p className="text-[9px] font-semibold uppercase tracking-[.14em] text-white/25">{label}</p><p className="mt-0.5 text-sm font-black text-white">{value}</p></div></div>}
+function Pill({icon,children}:{icon:React.ReactNode;children:React.ReactNode}){return <span className="flex items-center gap-1.5 rounded-full border border-white/[.06] bg-white/[.025] px-3 py-1.5"><span className="[&>svg]:h-3 [&>svg]:w-3">{icon}</span>{children}</span>}
