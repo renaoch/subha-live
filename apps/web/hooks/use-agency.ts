@@ -1,162 +1,260 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import {
   agencyApi,
   type Agency,
   type AgencyApplication,
 } from "@/lib/api/agency";
 
-type AgencyView = "discover" | "my-agency";
+type AgencyView =
+  | "discover"
+  | "my-agency";
 
 export function useAgency() {
-  const [myAgency, setMyAgency] = useState<Agency | null>(null);
+  const [myAgency, setMyAgency] =
+    useState<Agency | null>(null);
 
-  const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [agencies, setAgencies] =
+    useState<Agency[]>([]);
 
-  const [applications, setApplications] = useState<
-    AgencyApplication[]
-  >([]);
+  const [applications, setApplications] =
+    useState<AgencyApplication[]>([]);
 
-  const [loading, setLoading] = useState(true);
-  const [joining, setJoining] = useState<string | null>(null);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [search, setSearch] = useState("");
+  const [joining, setJoining] =
+    useState<string | null>(null);
+
+  const [search, setSearch] =
+    useState("");
 
   const [view, setView] =
     useState<AgencyView>("discover");
 
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] =
+    useState<string | null>(null);
 
-  /**
-   * --------------------------------------------------------------------------
-   * LOAD CURRENT AGENCY + AVAILABLE AGENCIES
-   * --------------------------------------------------------------------------
+  /*
+   * Selected agency waiting for the user
+   * to enter the private agency code.
    */
+  const [
+    selectedAgency,
+    setSelectedAgency,
+  ] = useState<Agency | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  /*
+   * Whether the join-code dialog should
+   * be displayed.
+   */
+  const [
+    joinDialogOpen,
+    setJoinDialogOpen,
+  ] = useState(false);
 
-      const [
-        currentAgency,
-        availableAgencies,
-      ] = await Promise.all([
-        agencyApi.myAgency(),
-        agencyApi.list(),
-      ]);
+  /* ======================================================================== */
+  /* LOAD                                                                     */
+  /* ======================================================================== */
 
-      setMyAgency(currentAgency);
-      setAgencies(availableAgencies);
+  const load = useCallback(
+    async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      /*
-       * If the user already belongs to an agency, don't show
-       * the discovery screen.
-       *
-       * This also applies to pending memberships.
-       */
+        const [
+          currentAgency,
+          availableAgencies,
+        ] = await Promise.all([
+          agencyApi.myAgency(),
+          agencyApi.list(),
+        ]);
 
-      if (currentAgency) {
-        setView("my-agency");
-      } else {
-        setView("discover");
+        setMyAgency(
+          currentAgency,
+        );
+
+        setAgencies(
+          availableAgencies,
+        );
+
+        if (currentAgency) {
+          setView("my-agency");
+        } else {
+          setView("discover");
+        }
+      } catch (err) {
+        console.error(
+          "Failed to load agency data:",
+          err,
+        );
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load agency information.",
+        );
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error(
-        "Failed to load agency data:",
-        err,
-      );
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to load agency information.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  /**
-   * --------------------------------------------------------------------------
-   * FILTER AGENCIES
-   * --------------------------------------------------------------------------
-   */
+  /* ======================================================================== */
+  /* FILTER                                                                   */
+  /* ======================================================================== */
 
-  const filteredAgencies = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const filteredAgencies =
+    useMemo(() => {
+      const query =
+        search
+          .trim()
+          .toLowerCase();
 
-    if (!query) {
-      return agencies;
-    }
+      if (!query) {
+        return agencies;
+      }
 
-    return agencies.filter((agency) => {
-      return (
-        agency.name
-          ?.toLowerCase()
-          .includes(query) ||
-        agency.description
-          ?.toLowerCase()
-          .includes(query) ||
-        agency.country
-          ?.toLowerCase()
-          .includes(query)
+      return agencies.filter(
+        (agency) =>
+          agency.name
+            ?.toLowerCase()
+            .includes(query) ||
+          agency.description
+            ?.toLowerCase()
+            .includes(query) ||
+          agency.country
+            ?.toLowerCase()
+            .includes(query),
       );
-    });
-  }, [agencies, search]);
+    }, [
+      agencies,
+      search,
+    ]);
 
-  /**
-   * --------------------------------------------------------------------------
-   * JOIN AGENCY
+  /* ======================================================================== */
+  /* OPEN JOIN FLOW                                                           */
+  /* ======================================================================== */
+
+  /*
+   * This is the function passed to DiscoverPanel.
    *
-   * This does NOT immediately make the user a member.
+   * DiscoverPanel gives us ONE Agency.
    *
-   * The backend:
+   * We DO NOT submit the join request here.
    *
-   * 1. verifies the agency code
-   * 2. creates a pending membership
-   * 3. returns the agency with membershipStatus = pending
-   *
-   * The owner must approve it before the user becomes approved.
-   * --------------------------------------------------------------------------
+   * We first open the code-entry flow.
    */
-
   const join = useCallback(
+    (agency: Agency) => {
+      setSelectedAgency(
+        agency,
+      );
+
+      setError(null);
+
+      setJoinDialogOpen(
+        true,
+      );
+    },
+    [],
+  );
+
+  /* ======================================================================== */
+  /* SUBMIT JOIN                                                              */
+  /* ======================================================================== */
+
+  const submitJoin = useCallback(
     async (
-      agencyId: string,
       agencyCode: string,
     ) => {
+      if (!selectedAgency) {
+        throw new Error(
+          "No agency selected.",
+        );
+      }
+
+      const code =
+        agencyCode.trim();
+
+      if (!code) {
+        throw new Error(
+          "Agency code is required.",
+        );
+      }
+
+      const agencyId =
+        selectedAgency.id;
+
       try {
-        setJoining(agencyId);
+        setJoining(
+          agencyId,
+        );
+
         setError(null);
 
+        /*
+         * THIS is where the actual API
+         * request happens.
+         */
         const agency =
           await agencyApi.requestToJoin(
             agencyId,
-            agencyCode,
+            code,
           );
 
-        setMyAgency(agency);
+        /*
+         * Backend should return:
+         *
+         * membershipStatus = "pending"
+         *
+         * The user is NOT an approved
+         * member yet.
+         */
+        setMyAgency(
+          agency,
+        );
 
-        setView("my-agency");
+        setView(
+          "my-agency",
+        );
 
         /*
-         * Remove the agency from discover results.
-         *
-         * The user now has an active application,
-         * so they shouldn't be able to submit another
-         * request from the discovery screen.
+         * Close the dialog.
          */
+        setJoinDialogOpen(
+          false,
+        );
 
-        setAgencies((current) =>
-          current.filter(
-            (item) => item.id !== agencyId,
-          ),
+        setSelectedAgency(
+          null,
+        );
+
+        /*
+         * Remove the agency from discovery
+         * because this user already has a
+         * pending application.
+         */
+        setAgencies(
+          (current) =>
+            current.filter(
+              (item) =>
+                item.id !==
+                agencyId,
+            ),
         );
 
         return agency;
@@ -178,115 +276,156 @@ export function useAgency() {
         setJoining(null);
       }
     },
-    [],
+    [selectedAgency],
   );
 
-  /**
-   * --------------------------------------------------------------------------
-   * CANCEL PENDING APPLICATION / LEAVE AGENCY
-   *
-   * Backend decides what to do based on membership state:
-   *
-   * pending  -> cancel application
-   * approved -> leave agency
-   * --------------------------------------------------------------------------
-   */
+  /* ======================================================================== */
+  /* CLOSE JOIN DIALOG                                                        */
+  /* ======================================================================== */
 
-  const leave = useCallback(async () => {
-    if (!myAgency) {
-      return;
-    }
+  const cancelJoin = useCallback(
+    () => {
+      if (joining) {
+        return;
+      }
 
-    try {
+      setJoinDialogOpen(
+        false,
+      );
+
+      setSelectedAgency(
+        null,
+      );
+
       setError(null);
+    },
+    [joining],
+  );
 
-      await agencyApi.leave(myAgency.id);
+  /* ======================================================================== */
+  /* LEAVE / CANCEL APPLICATION                                               */
+  /* ======================================================================== */
 
-      setMyAgency(null);
+  const leave =
+    useCallback(async () => {
+      if (!myAgency) {
+        return;
+      }
 
-      setView("discover");
+      try {
+        setError(null);
 
-      /*
-       * Reload agencies because the previously joined
-       * agency may now be available in discovery again.
-       */
+        await agencyApi.leave(
+          myAgency.id,
+        );
 
-      const availableAgencies =
-        await agencyApi.list();
+        setMyAgency(null);
 
-      setAgencies(availableAgencies);
-    } catch (err) {
-      console.error(
-        "Failed to leave agency:",
-        err,
-      );
+        setView(
+          "discover",
+        );
 
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to leave agency.",
-      );
+        const availableAgencies =
+          await agencyApi.list();
 
-      throw err;
-    }
-  }, [myAgency]);
+        setAgencies(
+          availableAgencies,
+        );
+      } catch (err) {
+        console.error(
+          "Failed to leave agency:",
+          err,
+        );
 
-  /**
-   * --------------------------------------------------------------------------
-   * REFRESH
-   * --------------------------------------------------------------------------
-   */
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to leave agency.",
+        );
 
-  const refresh = useCallback(async () => {
-    await load();
-  }, [load]);
+        throw err;
+      }
+    }, [myAgency]);
+
+  /* ======================================================================== */
+  /* REFRESH                                                                  */
+  /* ======================================================================== */
+
+  const refresh =
+    useCallback(async () => {
+      await load();
+    }, [load]);
+
+  /* ======================================================================== */
+  /* RETURN                                                                   */
+  /* ======================================================================== */
 
   return {
-    /**
-     * Current user's agency.
+    /*
+     * Current agency.
      *
-     * null      = no agency
-     * pending   = waiting for owner
-     * approved  = full membership
+     * null
+     *   = no agency
+     *
+     * pending
+     *   = waiting for owner
+     *
+     * approved
+     *   = full membership
      */
     myAgency,
 
-    /**
-     * All discoverable agencies.
+    /*
+     * Discoverable agencies.
      */
     agencies,
 
-    /**
-     * Agencies filtered by search.
-     */
     filteredAgencies,
 
-    /**
-     * Pending applications for current user.
+    /*
+     * Current user's applications.
      */
     applications,
 
-    /**
-     * UI state.
+    /*
+     * Loading / UI state.
      */
     loading,
+
     joining,
+
     search,
     setSearch,
+
     view,
     setView,
+
     error,
 
-    /**
-     * Number of agencies available to discover.
+    /*
+     * Join-code state.
      */
-    totalAgencyCount: agencies.length,
+    selectedAgency,
 
-    /**
+    joinDialogOpen,
+
+    /*
+     * Number of discoverable agencies.
+     */
+    totalAgencyCount:
+      agencies.length,
+
+    /*
      * Actions.
      */
     join,
+
+    submitJoin,
+
+    cancelJoin,
+
     leave,
+
     refresh,
   };
 }
