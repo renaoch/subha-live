@@ -1,4 +1,6 @@
-import { apiFetch } from "@/lib/api/client";
+// File: lib/api/agency.ts
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export interface Agency {
   id: string;
@@ -6,156 +8,91 @@ export interface Agency {
   code: string;
   ownerId: string;
   commissionRate: number;
-  monthlyRevenue: number;
   totalHosts: number;
+  monthlyRevenue: number;
   createdAt: string;
 }
 
-export interface AgencyHost {
-  agencyId: string;
-  hostId: string;
-  joinedAt: string | null;
-  status: string;
-  name?: string;
-  handle?: string;
-  avatar?: string | null;
-}
-
-export interface AgencyApplication {
+interface RawAgency {
   id: string;
-  agencyId: string;
-  userId: string;
-  status: string;
-  createdAt: string;
+  name: string;
+  code: string;
+  ownerId?: string;
+  owner_id?: string;
+  commissionRate?: number | string;
+  commission_rate?: number | string;
+  totalHosts?: number | string;
+  total_hosts?: number | string;
+  monthlyRevenue?: number | string;
+  monthly_revenue?: number | string;
+  createdAt?: string;
+  created_at?: string;
 }
 
-interface AgenciesResponse {
-  status: string;
-  agencies: Agency[];
+function normalizeAgency(raw: RawAgency): Agency {
+  return {
+    id: raw.id,
+    name: raw.name,
+    code: raw.code,
+    ownerId: raw.ownerId ?? raw.owner_id ?? "",
+    commissionRate: Number(raw.commissionRate ?? raw.commission_rate ?? 0),
+    totalHosts: Number(raw.totalHosts ?? raw.total_hosts ?? 0),
+    monthlyRevenue: Number(raw.monthlyRevenue ?? raw.monthly_revenue ?? 0),
+    createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString(),
+  };
 }
 
-interface AgencyResponse {
-  status: string;
-  agency: Agency;
-}
+class AgencyApiError extends Error {}
 
-interface MyAgencyResponse {
-  status: string;
-  agency: Agency | null;
-  membership?: AgencyHost | null;
-}
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
 
-interface AgencyApplicationsResponse {
-  status: string;
-  applications: AgencyApplication[];
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new AgencyApiError(
+      body?.message || body?.error || `Request failed (${res.status})`,
+    );
+  }
+
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
+  return (await res.json()) as T;
 }
 
 export const agencyApi = {
-  /**
-   * Discover all agencies.
-   *
-   * GET /api/v1/agency
-   */
-  list() {
-    return apiFetch<AgenciesResponse>(
-      "/api/v1/agency",
-    ).then((response) => response.agencies);
+  async list(): Promise<Agency[]> {
+    const data = await request<RawAgency[]>("/api/v1/agency");
+    return data.map(normalizeAgency);
   },
 
-  /**
-   * Get the authenticated user's agency.
-   *
-   * GET /api/v1/agency/me
-   */
-  me() {
-    return apiFetch<MyAgencyResponse>(
+  async me(): Promise<{ agency: Agency | null }> {
+    const data = await request<{ agency: RawAgency | null }>(
       "/api/v1/agency/me",
     );
+    return { agency: data.agency ? normalizeAgency(data.agency) : null };
   },
 
-  /**
-   * Get public agency details.
-   *
-   * GET /api/v1/agency/:id
-   */
-  get(id: string) {
-    return apiFetch<AgencyResponse>(
-      `/api/v1/agency/${id}`,
-    ).then((response) => response.agency);
+  async get(id: string): Promise<Agency> {
+    const data = await request<RawAgency>(`/api/v1/agency/${id}`);
+    return normalizeAgency(data);
   },
 
-  /**
-   * Request to join an agency.
-   *
-   * POST /api/v1/agency/:id/join
-   */
-  join(id: string) {
-    return apiFetch<AgencyResponse>(
-      `/api/v1/agency/${id}/join`,
-      {
-        method: "POST",
-      },
-    );
+  async join(agencyId: string): Promise<void> {
+    await request<void>(`/api/v1/agency/${agencyId}/join`, {
+      method: "POST",
+    });
   },
 
-  /**
-   * Leave current agency.
-   *
-   * POST /api/v1/agency/leave
-   */
-  leave() {
-    return apiFetch<void>(
-      "/api/v1/agency/leave",
-      {
-        method: "POST",
-      },
-    );
-  },
-
-  /**
-   * Get applications for an agency.
-   *
-   * GET /api/v1/agency/:id/applications
-   */
-  applications(agencyId: string) {
-    return apiFetch<AgencyApplicationsResponse>(
-      `/api/v1/agency/${agencyId}/applications`,
-    ).then(
-      (response) => response.applications,
-    );
-  },
-
-  /**
-   * Approve a user's application.
-   *
-   * POST /api/v1/agency/:id/applications/:userId/approve
-   */
-  approveApplication(
-    agencyId: string,
-    userId: string,
-  ) {
-    return apiFetch<AgencyResponse>(
-      `/api/v1/agency/${agencyId}/applications/${userId}/approve`,
-      {
-        method: "POST",
-      },
-    );
-  },
-
-  /**
-   * Reject a user's application.
-   *
-   * POST /api/v1/agency/:id/applications/:userId/reject
-   */
-  rejectApplication(
-    agencyId: string,
-    userId: string,
-  ) {
-    return apiFetch<AgencyResponse>(
-      `/api/v1/agency/${agencyId}/applications/${userId}/reject`,
-      {
-        method: "POST",
-      },
-    );
+  async leave(): Promise<void> {
+    await request<void>("/api/v1/agency/leave", { method: "POST" });
   },
 };
