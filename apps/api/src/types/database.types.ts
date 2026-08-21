@@ -55,21 +55,66 @@ export type Database = {
           },
         ]
       }
+      agency_agents: {
+        Row: {
+          agency_id: string
+          commission_rate: number
+          created_at: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          agency_id: string
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          agency_id?: string
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agency_agents_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_agents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agency_hosts: {
         Row: {
           agency_id: string
+          agent_id: string | null
           host_id: string
           joined_at: string | null
           status: string | null
         }
         Insert: {
           agency_id: string
+          agent_id?: string | null
           host_id: string
           joined_at?: string | null
           status?: string | null
         }
         Update: {
           agency_id?: string
+          agent_id?: string | null
           host_id?: string
           joined_at?: string | null
           status?: string | null
@@ -83,10 +128,234 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "agency_hosts_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "agency_hosts_host_id_fkey"
             columns: ["host_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agency_invitations: {
+        Row: {
+          agency_id: string
+          created_at: string
+          expires_at: string | null
+          host_id: string
+          id: string
+          invited_by: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          agency_id: string
+          created_at?: string
+          expires_at?: string | null
+          host_id: string
+          id?: string
+          invited_by: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          agency_id?: string
+          created_at?: string
+          expires_at?: string | null
+          host_id?: string
+          id?: string
+          invited_by?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agency_invitations_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_invitations_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_invitations_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agency_task_assignments: {
+        Row: {
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          host_id: string
+          id: string
+          progress: number
+          status: string
+          task_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          host_id: string
+          id?: string
+          progress?: number
+          status?: string
+          task_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          host_id?: string
+          id?: string
+          progress?: number
+          status?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agency_task_assignments_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_task_assignments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "agency_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agency_tasks: {
+        Row: {
+          agency_id: string
+          created_at: string
+          created_by: string
+          description: string | null
+          end_at: string | null
+          id: string
+          reward_coins: number
+          reward_diamonds: number
+          start_at: string
+          status: string
+          target_value: number
+          title: string
+          type: string
+        }
+        Insert: {
+          agency_id: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          reward_coins?: number
+          reward_diamonds?: number
+          start_at?: string
+          status?: string
+          target_value?: number
+          title: string
+          type?: string
+        }
+        Update: {
+          agency_id?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          end_at?: string | null
+          id?: string
+          reward_coins?: number
+          reward_diamonds?: number
+          start_at?: string
+          status?: string
+          target_value?: number
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agency_tasks_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          agency_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          new_value: Json | null
+          old_value: Json | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          agency_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          agency_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
             referencedColumns: ["id"]
           },
         ]
@@ -623,6 +892,57 @@ export type Database = {
           {
             foreignKeyName: "offline_recharges_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payouts: {
+        Row: {
+          agency_id: string
+          amount: number
+          id: string
+          note: string | null
+          paid_at: string | null
+          processed_at: string | null
+          requested_at: string
+          requested_by: string
+          status: string
+        }
+        Insert: {
+          agency_id: string
+          amount: number
+          id?: string
+          note?: string | null
+          paid_at?: string | null
+          processed_at?: string | null
+          requested_at?: string
+          requested_by: string
+          status?: string
+        }
+        Update: {
+          agency_id?: string
+          amount?: number
+          id?: string
+          note?: string | null
+          paid_at?: string | null
+          processed_at?: string | null
+          requested_at?: string
+          requested_by?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payouts_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payouts_requested_by_fkey"
+            columns: ["requested_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
