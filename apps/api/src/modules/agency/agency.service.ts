@@ -244,86 +244,59 @@ export async function getAgencies(): Promise<AgencyListResult> {
 export async function getMyAgency(
   userId: string,
 ): Promise<MyAgencyResult> {
-  const { data, error } = await supabase
+  // 1. Check if user is a host (pending/approved)
+  const { data: hostData, error: hostError } = await supabase
     .from("agency_hosts")
-    .select(
-      `
-        agency_id,
-        host_id,
-        status,
-        joined_at
-      `,
-    )
+    .select("agency_id, host_id, status, joined_at")
     .eq("host_id", userId)
-    .in("status", [
-      "pending",
-      "approved",
-    ])
-    .order("joined_at", {
-      ascending: false,
-    })
+    .in("status", ["pending", "approved"])
+    .order("joined_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (error) {
-    throw error;
-  }
+  if (hostError) throw hostError;
 
-  const membership =
-    data as AgencyHostRow | null;
+  let membership = hostData as AgencyHostRow | null;
 
+  // 2. If not a host, check if they own an agency
   if (!membership) {
-    return {
-      agency: null,
-      membershipStatus: null,
-    };
+    const { data: ownerData, error: ownerError } = await supabase
+      .from("agencies")
+      .select("id, code, name, owner_id, commission_rate, monthly_revenue, total_hosts, created_at")
+      .eq("owner_id", userId)
+      .maybeSingle();
+
+    if (ownerError) throw ownerError;
+
+    if (ownerData) {
+      return {
+        agency: toAgencySummary(ownerData as AgencyRow),
+        membershipStatus: "approved", // owner has full access
+      };
+    }
+
+    return { agency: null, membershipStatus: null };
   }
 
-  const {
-    data: agencyData,
-    error: agencyError,
-  } = await supabase
+  // 3. Host case
+  const { data: agencyData, error: agencyError } = await supabase
     .from("agencies")
-    .select(
-      `
-        id,
-        code,
-        name,
-        owner_id,
-        commission_rate,
-        monthly_revenue,
-        total_hosts,
-        created_at
-      `,
-    )
+    .select("id, code, name, owner_id, commission_rate, monthly_revenue, total_hosts, created_at")
     .eq("id", membership.agency_id)
     .single();
 
   if (agencyError) {
     if (agencyError.code === "PGRST116") {
-      throw new AppError(
-        404,
-        "Agency not found",
-        {
-          code: "AGENCY_NOT_FOUND",
-        },
-      );
+      throw new AppError(404, "Agency not found", { code: "AGENCY_NOT_FOUND" });
     }
-
     throw agencyError;
   }
 
   return {
-    agency: toAgencySummary(
-      agencyData as AgencyRow,
-    ),
-    membershipStatus:
-      toAgencyMembershipStatus(
-        membership.status,
-      ),
+    agency: toAgencySummary(agencyData as AgencyRow),
+    membershipStatus: toAgencyMembershipStatus(membership.status),
   };
 }
-
 /* ========================================================================== */
 /* AGENCY DETAILS                                                             */
 /* ========================================================================== */

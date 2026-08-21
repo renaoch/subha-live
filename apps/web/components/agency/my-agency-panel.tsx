@@ -13,6 +13,11 @@ import {
   Settings2,
   Users,
   WalletCards,
+  LayoutDashboard,
+  UserCog,
+  Mail,
+  ListChecks,
+  DollarSign,
 } from "lucide-react";
 
 import type {
@@ -162,42 +167,29 @@ export function MyAgencyPanel({
           return;
         }
 
-        /*
-         * Convert the API model into the UI model.
-         *
-         * API:
-         *   application.user.name
-         *
-         * UI:
-         *   application.name
-         *
-         * This avoids the unsafe:
-         *
-         *   as Application[]
-         */
-const mapped: Application[] = results.map(
-  (application) => ({
-    userId: application.userId,
+        const mapped: Application[] = results.map(
+          (application) => ({
+            userId: application.userId,
 
-    name: application.name,
+            name: application.name,
 
-    handle: application.handle,
+            handle: application.handle,
 
-    avatar: application.avatar ?? null,
+            avatar: application.avatar ?? null,
 
-    country: application.country ?? null,
+            country: application.country ?? null,
 
-    countryFlag:
-      application.countryFlag ?? null,
+            countryFlag:
+              application.countryFlag ?? null,
 
-    level: application.level,
+            level: application.level,
 
-    status: application.status,
+            status: application.status,
 
-    createdAt:
-      application.createdAt ?? null,
-  }),
-);
+            createdAt:
+              application.createdAt ?? null,
+          }),
+        );
 
         setApplications(mapped);
       })
@@ -266,7 +258,7 @@ const mapped: Application[] = results.map(
       id: "overview" as const,
       label: "Overview",
       icon: (
-        <Activity className="h-3.5 w-3.5" />
+        <LayoutDashboard className="h-4 w-4" />
       ),
     },
 
@@ -274,7 +266,7 @@ const mapped: Application[] = results.map(
       id: "agents" as const,
       label: "Agents",
       icon: (
-        <Users className="h-3.5 w-3.5" />
+        <UserCog className="h-4 w-4" />
       ),
       owner: true,
     },
@@ -283,7 +275,7 @@ const mapped: Application[] = results.map(
       id: "applications" as const,
       label: "Applications",
       icon: (
-        <FileCheck2 className="h-3.5 w-3.5" />
+        <FileCheck2 className="h-4 w-4" />
       ),
       owner: true,
       badge:
@@ -294,7 +286,7 @@ const mapped: Application[] = results.map(
       id: "invitations" as const,
       label: "Invitations",
       icon: (
-        <BriefcaseBusiness className="h-3.5 w-3.5" />
+        <Mail className="h-4 w-4" />
       ),
       owner: true,
     },
@@ -303,7 +295,7 @@ const mapped: Application[] = results.map(
       id: "tasks" as const,
       label: "Tasks",
       icon: (
-        <Check className="h-3.5 w-3.5" />
+        <ListChecks className="h-4 w-4" />
       ),
     },
 
@@ -311,7 +303,7 @@ const mapped: Application[] = results.map(
       id: "payouts" as const,
       label: "Payouts",
       icon: (
-        <WalletCards className="h-3.5 w-3.5" />
+        <DollarSign className="h-4 w-4" />
       ),
       owner: true,
     },
@@ -325,59 +317,61 @@ const mapped: Application[] = results.map(
   /* ======================================================================== */
 
   return (
-    <section className="mt-7 overflow-hidden rounded-[30px] border border-white/[.07] bg-[#110e16] shadow-[0_25px_90px_rgba(0,0,0,.22)]">
+    <section className="mt-7 overflow-hidden rounded-[32px] border border-white/[0.07] bg-[#110e16] shadow-[0_30px_120px_rgba(0,0,0,0.4)]">
       {/* ------------------------------------------------------------------ */}
-      {/* HEADER                                                             */}
+      {/* HEADER with gradient                                             */}
       {/* ------------------------------------------------------------------ */}
 
-      <div className="border-b border-white/[.06] bg-white/[.018] p-5 sm:p-6">
+      <div className="relative border-b border-white/[0.06] bg-[radial-gradient(circle_at_80%_20%,rgba(139,92,246,0.10),transparent_40%),#110e16] p-6 sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-300/10 bg-amber-400/10 text-amber-200">
-              <BriefcaseBusiness className="h-5 w-5" />
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-300/15 bg-amber-400/10 text-amber-200 shadow-[0_0_40px_rgba(245,158,11,0.10)]">
+              <BriefcaseBusiness className="h-6 w-6" />
             </div>
 
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-black uppercase tracking-[.2em] text-white/25">
-                  Agency workspace
+              <div className="flex items-center gap-3">
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25">
+                  Agency Workspace
                 </span>
 
-                <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[8px] font-black uppercase text-emerald-300">
+                <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[8px] font-black uppercase text-emerald-300">
                   Live
                 </span>
+
+                {isOwner && (
+                  <span className="flex items-center gap-1.5 rounded-full border border-violet-300/15 bg-violet-400/10 px-2.5 py-1 text-[8px] font-black uppercase text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.15)]">
+                    <Settings2 className="h-3 w-3" />
+                    Owner
+                  </span>
+                )}
               </div>
 
-              <h2 className="mt-1 text-xl font-black tracking-tight">
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">
                 {agency.name}
               </h2>
+
+              <p className="text-xs text-white/30">
+                Code: <span className="font-mono font-bold text-white/50">{agency.code}</span>
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {isOwner && (
-              <span className="flex items-center gap-2 rounded-xl border border-white/[.07] bg-white/[.025] px-3 py-2.5 text-[10px] font-bold text-white/35">
-                <Settings2 className="h-3.5 w-3.5" />
-                Owner workspace
-              </span>
-            )}
-
-            <button
-              type="button"
-              onClick={onLeave}
-              className="flex items-center gap-2 rounded-xl border border-red-400/10 bg-red-400/[.04] px-3 py-2.5 text-[10px] font-bold text-red-300/60 transition hover:bg-red-400/[.08]"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Leave
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onLeave}
+            className="flex items-center gap-2 rounded-xl border border-red-400/10 bg-red-400/[0.05] px-4 py-2.5 text-xs font-bold text-red-300/60 transition hover:bg-red-400/[0.10] hover:text-red-300"
+          >
+            <LogOut className="h-4 w-4" />
+            Leave
+          </button>
         </div>
 
         {/* ---------------------------------------------------------------- */}
         {/* TABS                                                             */}
         {/* ---------------------------------------------------------------- */}
 
-        <div className="mt-5 flex gap-1 overflow-x-auto pb-0">
+        <div className="mt-6 flex gap-1 overflow-x-auto pb-0.5">
           {tabs.map((tab) => (
             <TabButton
               key={tab.id}
@@ -402,11 +396,12 @@ const mapped: Application[] = results.map(
       {/* CONTENT                                                            */}
       {/* ------------------------------------------------------------------ */}
 
-      <div className="p-5 sm:p-6">
+      <div className="p-5 sm:p-7 transition-all duration-300">
         {subTab === "overview" && (
           <Overview
             agency={agency}
             dashboard={dashboard}
+            isOwner={isOwner}
           />
         )}
 
@@ -467,9 +462,11 @@ const mapped: Application[] = results.map(
 function Overview({
   agency,
   dashboard,
+  isOwner,
 }: {
   agency: Agency;
   dashboard: AgencyDashboard | null;
+  isOwner: boolean;
 }) {
   const activeHosts =
     dashboard?.activeHosts ??
@@ -491,27 +488,28 @@ function Overview({
     );
 
   const taskCompletion =
-    dashboard &&
-    dashboard.activeTasks > 0
-      ? dashboard.pendingApplications ===
-        0
-        ? 72
-        : 58
+    dashboard && dashboard.activeTasks > 0
+      ? (dashboard.activeTasks > 5 ? 72 : 58)
+      : 0;
+
+  const payoutProgress =
+    dashboard
+      ? (dashboard.pendingPayouts > 0 ? 45 : 100)
       : 0;
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* ---------------------------------------------------------------- */}
       {/* STATS                                                            */}
       {/* ---------------------------------------------------------------- */}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          label="Monthly revenue"
+          label="Monthly Revenue"
           value={`₹${formatCompact(
             agency.monthlyRevenue,
           )}`}
-          detail="Current agency revenue"
+          detail="Total agency earnings"
           icon={
             <ArrowUpRight className="h-4 w-4" />
           }
@@ -519,11 +517,11 @@ function Overview({
         />
 
         <StatTile
-          label="Active hosts"
+          label="Active Hosts"
           value={String(
             activeHosts,
           )}
-          detail={`${totalHosts} total hosts`}
+          detail={`${totalHosts} total hosts · ${activeHostRatio}% active`}
           icon={
             <Users className="h-4 w-4" />
           }
@@ -531,12 +529,12 @@ function Overview({
         />
 
         <StatTile
-          label="Active tasks"
+          label="Active Tasks"
           value={String(
             dashboard?.activeTasks ??
               0,
           )}
-          detail="Performance programs"
+          detail="Performance programs running"
           icon={
             <Check className="h-4 w-4" />
           }
@@ -544,33 +542,33 @@ function Overview({
         />
 
         <StatTile
-          label="Pending payouts"
+          label="Pending Payouts"
           value={String(
             dashboard?.pendingPayouts ??
               0,
           )}
           detail="Awaiting processing"
           icon={
-            <WalletCards className="h-4 w-4" />
+            <DollarSign className="h-4 w-4" />
           }
           tone="blue"
         />
       </div>
 
       {/* ---------------------------------------------------------------- */}
-      {/* HEALTH                                                            */}
+      {/* HEALTH + QUICK ACTIONS                                            */}
       {/* ---------------------------------------------------------------- */}
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[1.3fr_.7fr]">
-        <div className="rounded-2xl border border-white/[.06] bg-white/[.018] p-5">
+      <div className="grid gap-5 lg:grid-cols-[1.3fr_0.7fr]">
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.018] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-[.18em] text-white/25">
-                Agency health
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/25">
+                Agency Health
               </p>
 
               <h3 className="mt-1 text-sm font-black">
-                Network snapshot
+                Network Snapshot
               </h3>
             </div>
 
@@ -579,41 +577,69 @@ function Overview({
 
           <div className="mt-5 space-y-4">
             <Progress
-              label="Active host ratio"
+              label="Active Host Ratio"
               value={
                 activeHostRatio
               }
             />
 
             <Progress
-              label="Task completion"
+              label="Task Completion Rate"
               value={
                 taskCompletion
+              }
+            />
+
+            <Progress
+              label="Payout Processing"
+              value={
+                payoutProgress
               }
             />
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/[.06] bg-gradient-to-br from-violet-400/[.08] to-amber-400/[.04] p-5">
-          <p className="text-[9px] font-black uppercase tracking-[.18em] text-white/25">
-            Owner tools
+        <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-violet-400/[0.08] to-amber-400/[0.04] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
+          <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/25">
+            {isOwner ? "Owner Tools" : "Host Actions"}
           </p>
 
           <div className="mt-4 space-y-3 text-xs text-white/45">
-            <p className="flex gap-2">
-              <Clock3 className="h-4 w-4 shrink-0 text-amber-200/60" />
-              Review applications before adding hosts.
-            </p>
+            {isOwner ? (
+              <>
+                <p className="flex gap-2">
+                  <Clock3 className="h-4 w-4 shrink-0 text-amber-200/60" />
+                  Review pending applications to onboard new hosts.
+                </p>
 
-            <p className="flex gap-2">
-              <Users className="h-4 w-4 shrink-0 text-violet-200/60" />
-              Assign agents and keep host operations organized.
-            </p>
+                <p className="flex gap-2">
+                  <UserCog className="h-4 w-4 shrink-0 text-violet-200/60" />
+                  Assign agents to manage host operations.
+                </p>
 
-            <p className="flex gap-2">
-              <WalletCards className="h-4 w-4 shrink-0 text-sky-200/60" />
-              Keep payout requests and rewards in one place.
-            </p>
+                <p className="flex gap-2">
+                  <DollarSign className="h-4 w-4 shrink-0 text-sky-200/60" />
+                  Process payouts and keep finances in check.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="flex gap-2">
+                  <ListChecks className="h-4 w-4 shrink-0 text-emerald-200/60" />
+                  Complete your assigned tasks to earn rewards.
+                </p>
+
+                <p className="flex gap-2">
+                  <Users className="h-4 w-4 shrink-0 text-violet-200/60" />
+                  Collaborate with your agent and fellow hosts.
+                </p>
+
+                <p className="flex gap-2">
+                  <Activity className="h-4 w-4 shrink-0 text-blue-200/60" />
+                  Track your performance and agency growth.
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
