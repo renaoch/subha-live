@@ -1020,6 +1020,8 @@ export type Database = {
           icon_url: string | null
           id: string
           reward_coins: number
+          reward_diamonds: number
+          reward_exp: number
           status: string
           target_count: number
           target_gender: string
@@ -1034,6 +1036,8 @@ export type Database = {
           icon_url?: string | null
           id?: string
           reward_coins?: number
+          reward_diamonds?: number
+          reward_exp?: number
           status?: string
           target_count?: number
           target_gender?: string
@@ -1048,6 +1052,8 @@ export type Database = {
           icon_url?: string | null
           id?: string
           reward_coins?: number
+          reward_diamonds?: number
+          reward_exp?: number
           status?: string
           target_count?: number
           target_gender?: string
@@ -1405,6 +1411,8 @@ export type Database = {
           icon_url: string | null
           id: string
           reward_coins: number
+          reward_diamonds: number
+          reward_exp: number
           status: string
           target_count: number
           target_gender: string
@@ -1429,6 +1437,8 @@ export type Database = {
           icon_url: string | null
           id: string
           reward_coins: number
+          reward_diamonds: number
+          reward_exp: number
           status: string
           target_count: number
           target_gender: string
@@ -1463,6 +1473,8 @@ export type Database = {
           icon_url: string | null
           id: string
           reward_coins: number
+          reward_diamonds: number
+          reward_exp: number
           status: string
           target_count: number
           target_gender: string
