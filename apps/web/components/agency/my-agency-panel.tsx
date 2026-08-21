@@ -175,44 +175,29 @@ export function MyAgencyPanel({
          *
          *   as Application[]
          */
-        const mapped: Application[] =
-          results.map(
-            (application) => ({
-              userId:
-                application.userId,
+const mapped: Application[] = results.map(
+  (application) => ({
+    userId: application.userId,
 
-              name:
-                application.user?.name ??
-                "Unknown",
+    name: application.name,
 
-              handle:
-                application.user?.handle ??
-                "",
+    handle: application.handle,
 
-              avatar:
-                application.user?.avatar ??
-                null,
+    avatar: application.avatar ?? null,
 
-              country:
-                application.user?.country ??
-                null,
+    country: application.country ?? null,
 
-              countryFlag:
-                application.user?.countryFlag ??
-                null,
+    countryFlag:
+      application.countryFlag ?? null,
 
-              level:
-                application.user?.level ??
-                1,
+    level: application.level,
 
-              status:
-                application.status,
+    status: application.status,
 
-              createdAt:
-                application.createdAt ??
-                null,
-            }),
-          );
+    createdAt:
+      application.createdAt ?? null,
+  }),
+);
 
         setApplications(mapped);
       })
