@@ -1,98 +1,150 @@
-// File: lib/api/agency.ts
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import { apiFetch } from "@/lib/api/client";
 
 export interface Agency {
   id: string;
-  name: string;
   code: string;
+  name: string;
   ownerId: string;
   commissionRate: number;
-  totalHosts: number;
   monthlyRevenue: number;
+  totalHosts: number;
   createdAt: string;
 }
 
-interface RawAgency {
-  id: string;
-  name: string;
-  code: string;
-  ownerId?: string;
-  owner_id?: string;
-  commissionRate?: number | string;
-  commission_rate?: number | string;
-  totalHosts?: number | string;
-  total_hosts?: number | string;
-  monthlyRevenue?: number | string;
-  monthly_revenue?: number | string;
-  createdAt?: string;
-  created_at?: string;
+export interface AgencyMember {
+  agencyId: string;
+  hostId: string;
+  joinedAt: string | null;
+  status: string | null;
 }
 
-function normalizeAgency(raw: RawAgency): Agency {
-  return {
-    id: raw.id,
-    name: raw.name,
-    code: raw.code,
-    ownerId: raw.ownerId ?? raw.owner_id ?? "",
-    commissionRate: Number(raw.commissionRate ?? raw.commission_rate ?? 0),
-    totalHosts: Number(raw.totalHosts ?? raw.total_hosts ?? 0),
-    monthlyRevenue: Number(raw.monthlyRevenue ?? raw.monthly_revenue ?? 0),
-    createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString(),
-  };
+interface AgencyListResponse {
+  status: string;
+  agencies: Agency[];
 }
 
-class AgencyApiError extends Error {}
+interface AgencyResponse {
+  status: string;
+  agency: Agency;
+}
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
+interface MyAgencyResponse {
+  status: string;
+  agency: Agency | null;
+  members: AgencyMember[];
+}
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new AgencyApiError(
-      body?.message || body?.error || `Request failed (${res.status})`,
-    );
-  }
-
-  if (res.status === 204) {
-    return undefined as T;
-  }
-
-  return (await res.json()) as T;
+interface AgencyActionResponse {
+  status: string;
+  agency?: Agency;
 }
 
 export const agencyApi = {
-  async list(): Promise<Agency[]> {
-    const data = await request<RawAgency[]>("/api/v1/agency");
-    return data.map(normalizeAgency);
+  /**
+   * GET /api/v1/agency
+   *
+   * Public agency discovery.
+   */
+  list() {
+    return apiFetch<AgencyListResponse>(
+      "/api/v1/agency",
+    ).then((response) => response.agencies);
   },
 
-  async me(): Promise<{ agency: Agency | null }> {
-    const data = await request<{ agency: RawAgency | null }>(
+  /**
+   * GET /api/v1/agency/:id
+   *
+   * Public agency details.
+   */
+  get(id: string) {
+    return apiFetch<AgencyResponse>(
+      `/api/v1/agency/${id}`,
+    ).then((response) => response.agency);
+  },
+
+  /**
+   * GET /api/v1/agency/me
+   *
+   * Authenticated user's agency.
+   */
+  me() {
+    return apiFetch<MyAgencyResponse>(
       "/api/v1/agency/me",
     );
-    return { agency: data.agency ? normalizeAgency(data.agency) : null };
   },
 
-  async get(id: string): Promise<Agency> {
-    const data = await request<RawAgency>(`/api/v1/agency/${id}`);
-    return normalizeAgency(data);
+  /**
+   * POST /api/v1/agency/:id/join
+   *
+   * Request to join an agency.
+   */
+  join(id: string) {
+    return apiFetch<AgencyActionResponse>(
+      `/api/v1/agency/${id}/join`,
+      {
+        method: "POST",
+      },
+    );
   },
 
-  async join(agencyId: string): Promise<void> {
-    await request<void>(`/api/v1/agency/${agencyId}/join`, {
-      method: "POST",
-    });
+  /**
+   * POST /api/v1/agency/leave
+   *
+   * Leave current agency.
+   */
+  leave() {
+    return apiFetch<void>(
+      "/api/v1/agency/leave",
+      {
+        method: "POST",
+      },
+    );
   },
 
-  async leave(): Promise<void> {
-    await request<void>("/api/v1/agency/leave", { method: "POST" });
+  /**
+   * GET /api/v1/agency/:id/applications
+   *
+   * Agency owner/admin application list.
+   */
+  applications(id: string) {
+    return apiFetch<{
+      status: string;
+      applications: unknown[];
+    }>(
+      `/api/v1/agency/${id}/applications`,
+    ).then(
+      (response) =>
+        response.applications,
+    );
+  },
+
+  /**
+   * POST /api/v1/agency/:id/applications/:userId/approve
+   */
+  approveApplication(
+    agencyId: string,
+    userId: string,
+  ) {
+    return apiFetch<AgencyActionResponse>(
+      `/api/v1/agency/${agencyId}/applications/${userId}/approve`,
+      {
+        method: "POST",
+      },
+    );
+  },
+
+  /**
+   * POST /api/v1/agency/:id/applications/:userId/reject
+   */
+  rejectApplication(
+    agencyId: string,
+    userId: string,
+  ) {
+    return apiFetch<AgencyActionResponse>(
+      `/api/v1/agency/${agencyId}/applications/${userId}/reject`,
+      {
+        method: "POST",
+      },
+    );
   },
 };
