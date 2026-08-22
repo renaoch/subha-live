@@ -24,8 +24,8 @@ export async function requestOfflineRecharge(
       amount_usd: amountUsd,
       payment_method: paymentMethod,
       transaction_ref: transactionRef,
-      note: note || null,
       status: "pending",
+      coins_credited: 0, // placeholder, updated on approval
     })
     .select("id")
     .single();
@@ -37,7 +37,7 @@ export async function requestOfflineRecharge(
     action: "OFFLINE_RECHARGE_REQUESTED",
     entityType: "offline_recharges",
     entityId: data.id,
-    newValue: payload,
+    newValue: { ...payload, note: note || undefined },
   });
 
   return data;
@@ -63,10 +63,6 @@ export async function getUserRecharges(userId: string) {
 /* -------------------------------------------------------------------------- */
 
 export async function listPendingRecharges(adminId: string) {
-  // Optional: only show requests from hosts of agencies the admin owns
-  // For simplicity, we allow any admin/agency owner to see all pending.
-  // We'll restrict by checking if user is admin or agency owner.
-  // This can be enhanced later.
   const { data, error } = await supabase
     .from("offline_recharges")
     .select("*, profiles!user_id(name, handle)")
@@ -100,9 +96,11 @@ export async function approveRecharge(
   }
 
   // 2. If approved, credit user
+  let coinsToAdd = 0;
+  let diamondsToAdd = 0;
   if (payload.status === "approved") {
-    let coinsToAdd = payload.coins ?? Math.floor(recharge.amount_usd * 100);
-    let diamondsToAdd = payload.diamonds ?? 0;
+    coinsToAdd = payload.coins ?? Math.floor(recharge.amount_usd * 100);
+    diamondsToAdd = payload.diamonds ?? 0;
 
     // Get current user balance
     const { data: profile, error: profileError } = await supabase
@@ -124,14 +122,18 @@ export async function approveRecharge(
     if (updateError) throw updateError;
   }
 
-  // 3. Update recharge status
+  // 3. Update recharge status and coins_credited
+  const updatePayload: any = {
+    status: payload.status,
+  };
+  if (payload.status === "approved") {
+    updatePayload.coins_credited = coinsToAdd;
+    // Table doesn't have diamonds_credited, but we can add later if needed
+  }
+
   const { error: updateRechargeError } = await supabase
     .from("offline_recharges")
-    .update({
-      status: payload.status,
-      coins_credited: payload.coins ?? Math.floor(recharge.amount_usd * 100),
-      // Note: we might want to store diamonds_credited too, but table lacks that; we can add later.
-    })
+    .update(updatePayload)
     .eq("id", rechargeId);
 
   if (updateRechargeError) throw updateRechargeError;
@@ -142,7 +144,7 @@ export async function approveRecharge(
     action: `OFFLINE_RECHARGE_${payload.status.toUpperCase()}`,
     entityType: "offline_recharges",
     entityId: rechargeId,
-    newValue: payload,
+    newValue: { ...payload, coins: coinsToAdd, diamonds: diamondsToAdd },
   });
 
   return { success: true };
