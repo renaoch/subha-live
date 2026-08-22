@@ -14,6 +14,20 @@ import { LevelRewards } from "./level-rewards";
 import { LevelHistory } from "./level-history";
 import { LevelLoading } from "./level-loading";
 import { LevelError } from "./level-error";
+import { LevelTabs } from "./level-tabs";
+import { GiftList } from "./gift-list";
+
+// Types for gift data
+interface Gift {
+  id: string;
+  senderName: string;
+  senderAvatar?: string | null;
+  senderLevel?: number;
+  giftName: string;
+  giftIcon?: string;
+  value: number;
+  timestamp: string;
+}
 
 export function LevelPage() {
   const [progress, setProgress] =
@@ -25,11 +39,16 @@ export function LevelPage() {
   const [history, setHistory] =
     useState<LevelHistoryItem[]>([]);
 
+  const [incomingGifts, setIncomingGifts] = useState<Gift[]>([]);
+  const [outgoingGifts, setOutgoingGifts] = useState<Gift[]>([]);
+
   const [loading, setLoading] =
     useState(true);
 
   const [error, setError] =
     useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">("incoming");
 
   useEffect(() => {
     let cancelled = false;
@@ -43,10 +62,15 @@ export function LevelPage() {
           overview,
           rewardsResult,
           historyResult,
+          // TODO: Replace with actual API calls
+          // incomingResult,
+          // outgoingResult,
         ] = await Promise.all([
           levelsApi.me(),
           levelsApi.rewards(),
           levelsApi.history(),
+          // levelsApi.gifts({ type: "incoming" }),
+          // levelsApi.gifts({ type: "outgoing" }),
         ]);
 
         if (cancelled) {
@@ -64,6 +88,44 @@ export function LevelPage() {
         setHistory(
           historyResult,
         );
+
+        // Temporary mock data until API is ready
+        setIncomingGifts([
+          {
+            id: "1",
+            senderName: "Leo",
+            senderAvatar: null,
+            senderLevel: 42,
+            giftName: "Super Heart",
+            giftIcon: "heart",
+            value: 500,
+            timestamp: new Date().toISOString(),
+          },
+          {
+            id: "2",
+            senderName: "Mia",
+            senderAvatar: null,
+            senderLevel: 78,
+            giftName: "Royal Crown",
+            giftIcon: "crown",
+            value: 1500,
+            timestamp: new Date(Date.now() - 86400000).toISOString(),
+          },
+        ]);
+
+        setOutgoingGifts([
+          {
+            id: "3",
+            senderName: "Aria Studios",
+            senderAvatar: null,
+            senderLevel: 56,
+            giftName: "Sparkles",
+            giftIcon: "sparkles",
+            value: 300,
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+          },
+        ]);
+
       } catch (err) {
         console.error(
           "LEVEL API ERROR:",
@@ -145,6 +207,59 @@ export function LevelPage() {
             progress.currentLevel
           }
         />
+
+        {/* Gifts section with tabs */}
+        <section className="relative overflow-hidden rounded-[32px] border border-white/[0.08] bg-[#17131F] p-5">
+          {/* Background aura */}
+          <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-violet-400/10 blur-[100px]" />
+
+          <div className="relative z-10">
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">
+                  Gifts
+                </p>
+                <h2 className="mt-1 text-xl font-black text-[#F8F1E6]">
+                  Charisma & Gifting
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-emerald-300">
+                  +{incomingGifts.reduce((sum, g) => sum + g.value, 0).toLocaleString()}
+                </span>
+                <span className="text-[9px] text-white/20">received</span>
+              </div>
+            </div>
+
+            <p className="mt-1 text-xs text-white/30">
+              Track gifts you receive (charisma) and gifts you send
+            </p>
+
+            <div className="mt-4">
+              <LevelTabs
+                incomingCount={incomingGifts.length}
+                outgoingCount={outgoingGifts.length}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+              >
+                {activeTab === "incoming" ? (
+                  <GiftList
+                    gifts={incomingGifts}
+                    isIncoming={true}
+                    loading={false}
+                  />
+                ) : (
+                  <GiftList
+                    gifts={outgoingGifts}
+                    isIncoming={false}
+                    loading={false}
+                  />
+                )}
+              </LevelTabs>
+            </div>
+          </div>
+        </section>
 
         <LevelHistory
           history={history}
