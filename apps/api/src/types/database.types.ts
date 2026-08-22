@@ -1707,6 +1707,59 @@ export type Database = {
           },
         ]
       }
+      wallet_transactions: {
+        Row: {
+          amount: number
+          bank_account: string | null
+          coins: number
+          created_at: string
+          id: string
+          metadata: Json | null
+          note: string | null
+          payment_intent_id: string | null
+          status: string
+          type: string
+          upi_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          bank_account?: string | null
+          coins: number
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          note?: string | null
+          payment_intent_id?: string | null
+          status?: string
+          type: string
+          upi_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          bank_account?: string | null
+          coins?: number
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          note?: string | null
+          payment_intent_id?: string | null
+          status?: string
+          type?: string
+          upi_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

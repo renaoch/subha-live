@@ -13,6 +13,7 @@
     import cpRoutes from "./modules/cp/cp.routes";
     import bdRoutes from "./modules/bd/bd.routes";
     import agencyRoutes from "./modules/agency/agency.routes";
+    import walletRoutes from "./modules/wallet/wallet.routes";
     import offlineRechargeRoutes from "./modules/offline-recharge/offline-recharge.routes";
 
     import { errorMiddleware } from "./middleware/error.middleware";
@@ -53,6 +54,7 @@
     app.use("/api/v1/bd", bdRoutes);
     app.use("/api/v1/cp", cpRoutes);
     app.use("/api/v1/offline-recharge", offlineRechargeRoutes);
+    app.use("/api/v1/wallet", walletRoutes);
     app.use(errorMiddleware);
 
     export { app };
