@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import Image from "next/image";
-import { BadgeCheck, Gem, Sparkles } from "lucide-react";
+import { BadgeCheck, Gem, Sparkles, Copy, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import type { PrivateProfile } from "@/lib/types";
 
@@ -17,24 +18,18 @@ interface ProfileHeroProps {
  * Simple hash - not CPU intensive, just uses string operations
  */
 function generateUserId(uuid: string): string {
-  // Remove hyphens and get first 8 chars for a simple hash
   const clean = uuid.replace(/-/g, "");
   
-  // Simple hash: sum of character codes with a multiplier
   let hash = 0;
   for (let i = 0; i < clean.length; i++) {
-    hash = (hash * 31 + clean.charCodeAt(i)) & 0x7FFFFFFF; // Keep within 31-bit
+    hash = (hash * 31 + clean.charCodeAt(i)) & 0x7FFFFFFF;
   }
   
-  // Ensure 7 digits (pad with leading zeros if needed)
-  const userId = (hash % 10_000_000).toString().padStart(7, "0");
-  return userId;
+  return (hash % 10_000_000).toString().padStart(7, "0");
 }
 
 /**
- * Same 10-tier palette used on the Level Rewards card, so a player's rank
- * reads consistently everywhere it shows up. If you already centralized
- * this elsewhere (e.g. `lib/level-theme.ts`), swap this out for that import.
+ * Same 10-tier palette used on the Level Rewards card
  */
 const TIER_PALETTE = [
   { name: "Bronze", primary: "#D98F4E", accent: "#FFCF9E" },
@@ -59,9 +54,41 @@ function tierForLevel(level: number) {
 
 export function ProfileHero({ profile }: ProfileHeroProps) {
   const theme = tierForLevel(profile.level);
-  
-  // Generate 7-digit user ID from UUID
   const userId = useMemo(() => generateUserId(profile.id), [profile.id]);
+  const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(userId);
+      setCopied(true);
+      
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch {
+      // Fallback for older browsers
+      const input = document.createElement("input");
+      input.value = userId;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopied(true);
+      
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    }
+  };
 
   return (
     <section className="relative pt-4" aria-label="Profile overview">
@@ -92,9 +119,36 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
             )}
           </div>
 
-          {profile.handle && (
-            <p className="mt-0.5 truncate text-sm text-[#9088A0]">@{profile.handle}</p>
-          )}
+          {/* User ID Badge – replaces the handle */}
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              onClick={handleCopy}
+              className={cn(
+                "group flex items-center gap-1.5 rounded-full border border-[#2A2238] bg-[#1D1829]/80 px-3 py-1 transition-all duration-200 hover:border-[#CBA35C]/50 hover:bg-[#2A2238] hover:shadow-[0_0_20px_rgba(203,163,92,0.1)]",
+                copied && "border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_20px_rgba(52,211,153,0.15)]"
+              )}
+            >
+              <span className="font-mono text-xs font-bold tracking-wider text-[#9088A0] transition-colors group-hover:text-[#F3ECE0]">
+                #{userId}
+              </span>
+              <span className="text-[#9088A0] transition-colors group-hover:text-[#CBA35C]">
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </span>
+              {/* Copy feedback tooltip */}
+              <span
+                className={cn(
+                  "absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-[#2A2238] px-2 py-0.5 text-[9px] font-medium text-[#F3ECE0] opacity-0 transition-all duration-200",
+                  copied && "opacity-100"
+                )}
+              >
+                Copied!
+              </span>
+            </button>
+          </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span
@@ -112,12 +166,6 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
             <span className="inline-flex items-center gap-1 rounded-full bg-[#2A2238] px-2.5 py-1 text-xs font-semibold tabular-nums text-[#9088A0]">
               <Gem className="h-3 w-3 text-[#7FD8E8]" />
               {numberFormat.format(profile.diamonds)}
-            </span>
-
-            {/* 7-digit User ID */}
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#1D1829] px-2.5 py-1 text-xs font-mono tabular-nums text-[#6A6078] border border-[#2A2238]">
-              <span className="text-[10px]">#</span>
-              {userId}
             </span>
           </div>
         </div>
@@ -165,7 +213,6 @@ function AvatarWithHalo({ src, name, level, theme }: AvatarWithHaloProps) {
 
   return (
     <div className="relative shrink-0" style={{ width: 76, height: 76 }}>
-      {/* Halo ring */}
       <div
         className={`absolute inset-0 rounded-full ${isMax ? "ph-max-ring" : "ph-glow"} p-[2px]`}
         style={isMax ? undefined : { background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})` }}
