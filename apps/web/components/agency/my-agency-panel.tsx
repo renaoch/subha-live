@@ -35,6 +35,10 @@ import { StatTile } from "./stat-tile";
 
 import { AgentsPanel } from "./agents-panel";
 
+import { HostsPanel } from "./hosts-panel"; // <-- NEW
+
+import { AgentDashboardPanel } from "./agent-dashboard-panel"; // <-- NEW
+
 import { InvitationsPanel } from "./invitations-panel";
 
 import { AgencyTasksPanel } from "./agency-tasks-panel";
@@ -55,10 +59,12 @@ interface Props {
 type SubTab =
   | "overview"
   | "agents"
+  | "hosts"              // <-- NEW
   | "applications"
   | "invitations"
   | "tasks"
-  | "payouts";
+  | "payouts"
+  | "agent-dashboard";   // <-- NEW
 
 type Application = {
   userId: string;
@@ -112,28 +118,36 @@ export function MyAgencyPanel({
     setAppBusy,
   ] = useState<string | null>(null);
 
+  const [isAgent, setIsAgent] = useState(false); // <-- NEW
+
   /* ------------------------------------------------------------------------ */
-  /* LOAD USER + DASHBOARD                                                    */
+  /* LOAD USER + DASHBOARD + ROLE                                             */
   /* ------------------------------------------------------------------------ */
 
   useEffect(() => {
-    usersApi
-      .me()
-      .then((profile) => {
-        setCurrentUserId(
-          profile.id,
-        );
-      })
-      .catch(() => {
-        setCurrentUserId(null);
-      });
+    let cancelled = false;
 
-    agencyApi
-      .dashboard(agency.id)
-      .then(setDashboard)
-      .catch(() => {
-        setDashboard(null);
-      });
+    async function load() {
+      try {
+        const profile = await usersApi.me();
+        if (cancelled) return;
+        setCurrentUserId(profile.id);
+
+        // Check if current user is an agent
+        const agents = await agencyApi.agents(agency.id);
+        if (cancelled) return;
+        const userIsAgent = agents.some((a) => a.userId === profile.id);
+        setIsAgent(userIsAgent);
+
+        const dash = await agencyApi.dashboard(agency.id);
+        if (!cancelled) setDashboard(dash);
+      } catch {
+        // ignore
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
   }, [agency.id]);
 
   /* ------------------------------------------------------------------------ */
@@ -250,7 +264,7 @@ export function MyAgencyPanel({
   }
 
   /* ------------------------------------------------------------------------ */
-  /* TABS                                                                     */
+  /* TABS – RBAC                                                             */
   /* ------------------------------------------------------------------------ */
 
   const tabs = [
@@ -267,6 +281,15 @@ export function MyAgencyPanel({
       label: "Agents",
       icon: (
         <UserCog className="h-4 w-4" />
+      ),
+      owner: true,
+    },
+
+    {
+      id: "hosts" as const,              // <-- NEW
+      label: "Hosts",
+      icon: (
+        <Users className="h-4 w-4" />
       ),
       owner: true,
     },
@@ -307,9 +330,21 @@ export function MyAgencyPanel({
       ),
       owner: true,
     },
+
+    {
+      id: "agent-dashboard" as const,   // <-- NEW
+      label: "My Hosts",
+      icon: (
+        <UserCog className="h-4 w-4" />
+      ),
+      agent: true,
+    },
   ].filter(
-    (tab) =>
-      !tab.owner || isOwner,
+    (tab) => {
+      if (tab.owner && !isOwner) return false;
+      if (tab.agent && !isAgent) return false;
+      return true;
+    }
   );
 
   /* ======================================================================== */
@@ -343,6 +378,13 @@ export function MyAgencyPanel({
                   <span className="flex items-center gap-1.5 rounded-full border border-violet-300/15 bg-violet-400/10 px-2.5 py-1 text-[8px] font-black uppercase text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.15)]">
                     <Settings2 className="h-3 w-3" />
                     Owner
+                  </span>
+                )}
+
+                {isAgent && !isOwner && (
+                  <span className="flex items-center gap-1.5 rounded-full border border-violet-300/15 bg-violet-400/10 px-2.5 py-1 text-[8px] font-black uppercase text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.15)]">
+                    <UserCog className="h-3 w-3" />
+                    Agent
                   </span>
                 )}
               </div>
@@ -412,6 +454,13 @@ export function MyAgencyPanel({
             />
           )}
 
+        {subTab === "hosts" &&          // <-- NEW
+          isOwner && (
+            <HostsPanel
+              agencyId={agency.id}
+            />
+          )}
+
         {subTab ===
           "applications" &&
           isOwner && (
@@ -448,6 +497,15 @@ export function MyAgencyPanel({
           isOwner && (
             <PayoutsPanel
               agencyId={agency.id}
+            />
+          )}
+
+        {subTab === "agent-dashboard" &&   // <-- NEW
+          isAgent &&
+          !isOwner && (
+            <AgentDashboardPanel
+              agencyId={agency.id}
+              agentId={currentUserId!}
             />
           )}
       </div>
