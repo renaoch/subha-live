@@ -55,7 +55,7 @@ import charismaRoutes from "./modules/charisma/charisma.routes";
     app.use("/api/v1/cp", cpRoutes);
     app.use("/api/v1/offline-recharge", offlineRechargeRoutes);
     app.use("/api/v1/wallet", walletRoutes);
-       app.use("/api/v1/charisma", charismaRoutes);
+    app.use("/api/v1/charisma", charismaRoutes);
     app.use(errorMiddleware);
 
     export { app };
