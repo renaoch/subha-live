@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Crown, Gift, Sparkles, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Crown, Gift, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 
 import {
   levelsApi,
@@ -10,84 +10,92 @@ import {
   type LevelHistoryItem,
 } from "@/lib/api/levels";
 
+import {
+  charismaApi,
+  type CharismaProgress,
+  type CharismaGiftItem,
+} from "@/lib/api/charisma";
+
 import { LevelHero } from "./level-hero";
 import { LevelRewards } from "./level-rewards";
 import { LevelHistory } from "./level-history";
 import { LevelLoading } from "./level-loading";
 import { LevelError } from "./level-error";
-import { GiftList, type GiftData } from "./gift-list"; // ✅ Import GiftData
+import { CharismaHero } from "../charisma/charisma-hero";
+import { GiftList, type GiftData } from "./gift-list";
 
 type TabType = "level" | "charisma";
+type GiftDirection = "incoming" | "outgoing";
+
+function toGiftData(
+  item: CharismaGiftItem,
+  direction: GiftDirection,
+): GiftData {
+  const isIncoming = direction === "incoming";
+
+  return {
+    id: item.id,
+    senderName: isIncoming ? item.senderName : item.recipientName,
+    senderAvatar: isIncoming ? item.senderAvatar : item.recipientAvatar,
+    senderLevel: isIncoming ? item.senderLevel : item.recipientLevel,
+    giftName: item.giftName,
+    giftIcon: item.giftIcon,
+    value: item.value,
+    timestamp: item.createdAt,
+  };
+}
 
 export function LevelPage() {
   const [progress, setProgress] = useState<LevelProgress | null>(null);
   const [rewards, setRewards] = useState<LevelReward[]>([]);
   const [history, setHistory] = useState<LevelHistoryItem[]>([]);
-  const [incomingGifts, setIncomingGifts] = useState<GiftData[]>([]); // ✅ Use GiftData[]
-  const [outgoingGifts, setOutgoingGifts] = useState<GiftData[]>([]); // ✅ Use GiftData[]
+  const [charisma, setCharisma] = useState<CharismaProgress | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>("level");
-  const [charismaSubTab, setCharismaSubTab] = useState<"incoming" | "outgoing">("incoming");
 
+  const [activeTab, setActiveTab] = useState<TabType>("level");
+  const [charismaSubTab, setCharismaSubTab] = useState<GiftDirection>("incoming");
+
+  const [gifts, setGifts] = useState<Record<GiftDirection, GiftData[]>>({
+    incoming: [],
+    outgoing: [],
+  });
+  const [giftTotals, setGiftTotals] = useState<Record<GiftDirection, number>>({
+    incoming: 0,
+    outgoing: 0,
+  });
+  const [giftsLoaded, setGiftsLoaded] = useState<Record<GiftDirection, boolean>>({
+    incoming: false,
+    outgoing: false,
+  });
+  const [giftsLoading, setGiftsLoading] = useState(false);
+
+  // Initial load: level progress/rewards/history + charisma overview
   useEffect(() => {
     let cancelled = false;
 
-    async function loadLevel() {
+    async function load() {
       try {
         setLoading(true);
         setError(null);
 
-        const [overview, rewardsResult, historyResult] = await Promise.all([
-          levelsApi.me(),
-          levelsApi.rewards(),
-          levelsApi.history(),
-        ]);
+        const [overview, rewardsResult, historyResult, charismaOverview] =
+          await Promise.all([
+            levelsApi.me(),
+            levelsApi.rewards(),
+            levelsApi.history(),
+            charismaApi.me(),
+          ]);
 
         if (cancelled) return;
 
         setProgress(overview.progress);
         setRewards(rewardsResult);
         setHistory(historyResult);
-
-        // Mock data - replace with real API calls
-        setIncomingGifts([
-          {
-            id: "1",
-            senderName: "Leo",
-            senderAvatar: null,
-            senderLevel: 42,
-            giftName: "Super Heart",
-            giftIcon: "heart",
-            value: 500,
-            timestamp: new Date().toISOString(),
-          },
-          {
-            id: "2",
-            senderName: "Mia",
-            senderAvatar: null,
-            senderLevel: 78,
-            giftName: "Royal Crown",
-            giftIcon: "crown",
-            value: 1500,
-            timestamp: new Date(Date.now() - 86400000).toISOString(),
-          },
-        ]);
-
-        setOutgoingGifts([
-          {
-            id: "3",
-            senderName: "Aria Studios",
-            senderAvatar: null,
-            senderLevel: 56,
-            giftName: "Sparkles",
-            giftIcon: "sparkles",
-            value: 300,
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-          },
-        ]);
+        setCharisma(charismaOverview.progress);
       } catch (err) {
-        console.error("LEVEL API ERROR:", err);
+        console.error("LEVEL PAGE ERROR:", err);
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load level data.");
         }
@@ -96,15 +104,52 @@ export function LevelPage() {
       }
     }
 
-    loadLevel();
-    return () => { cancelled = true; };
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  if (loading) return <LevelLoading />;
-  if (error || !progress) return <LevelError message={error ?? "Unable to load level."} />;
+  // Lazy-load gifts for a direction the first time its sub-tab is opened
+  const loadGifts = useCallback(async (direction: GiftDirection) => {
+    setGiftsLoading(true);
 
-  const totalCharisma = incomingGifts.reduce((sum, g) => sum + g.value, 0);
-  const totalGifted = outgoingGifts.reduce((sum, g) => sum + g.value, 0);
+    try {
+      const result = await charismaApi.gifts(direction);
+
+      setGifts((prev) => ({
+        ...prev,
+        [direction]: result.gifts.map((g) => toGiftData(g, direction)),
+      }));
+
+      setGiftTotals((prev) => ({
+        ...prev,
+        [direction]: result.totalValue,
+      }));
+
+      setGiftsLoaded((prev) => ({ ...prev, [direction]: true }));
+    } catch (err) {
+      console.error("GIFT LIST ERROR:", err);
+    } finally {
+      setGiftsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "charisma") return;
+    if (giftsLoaded[charismaSubTab]) return;
+
+    loadGifts(charismaSubTab);
+  }, [activeTab, charismaSubTab, giftsLoaded, loadGifts]);
+
+  if (loading) return <LevelLoading />;
+  if (error || !progress || !charisma) {
+    return <LevelError message={error ?? "Unable to load level."} />;
+  }
+
+  const totalCharisma = charisma.totalCharisma;
+  const incomingCount = gifts.incoming.length;
+  const outgoingCount = gifts.outgoing.length;
 
   return (
     <main className="min-h-dvh bg-[#120E19] text-[#F8F1E6] antialiased">
@@ -157,7 +202,7 @@ export function LevelPage() {
                 relative flex items-center justify-center gap-2.5 rounded-xl px-4 py-3.5
                 text-sm font-bold transition-all duration-300
                 ${activeTab === "charisma"
-                  ? "bg-gradient-to-r from-violet-500/20 to-amber-500/10 text-white shadow-[0_0_30px_rgba(168,108,255,0.15)]"
+                  ? "bg-gradient-to-r from-rose-500/20 to-amber-500/10 text-white shadow-[0_0_30px_rgba(255,108,168,0.15)]"
                   : "text-white/30 hover:bg-white/5 hover:text-white/60"
                 }
               `}
@@ -174,7 +219,7 @@ export function LevelPage() {
                 {totalCharisma.toLocaleString()}
               </span>
               {activeTab === "charisma" && (
-                <div className="absolute bottom-0 left-1/2 h-0.5 w-12 -translate-x-1/2 rounded-full bg-gradient-to-r from-emerald-400 to-amber-300" />
+                <div className="absolute bottom-0 left-1/2 h-0.5 w-12 -translate-x-1/2 rounded-full bg-gradient-to-r from-rose-400 to-amber-300" />
               )}
             </button>
           </div>
@@ -189,17 +234,23 @@ export function LevelPage() {
           </div>
         ) : (
           <div className="space-y-5">
+            <CharismaHero progress={charisma} />
+
             {/* Charisma Overview Stats */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl border border-emerald-400/10 bg-gradient-to-br from-emerald-400/5 to-transparent p-4">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300/60">Received</p>
-                <p className="mt-1 text-2xl font-black text-emerald-300">{totalCharisma.toLocaleString()}</p>
-                <p className="mt-0.5 text-[10px] text-white/20">{incomingGifts.length} gifts</p>
+                <p className="mt-1 text-2xl font-black text-emerald-300">{giftTotals.incoming.toLocaleString()}</p>
+                <p className="mt-0.5 text-[10px] text-white/20">
+                  {giftsLoaded.incoming ? `${incomingCount} gifts` : "—"}
+                </p>
               </div>
               <div className="rounded-2xl border border-amber-400/10 bg-gradient-to-br from-amber-400/5 to-transparent p-4">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300/60">Given</p>
-                <p className="mt-1 text-2xl font-black text-amber-300">{totalGifted.toLocaleString()}</p>
-                <p className="mt-0.5 text-[10px] text-white/20">{outgoingGifts.length} gifts</p>
+                <p className="mt-1 text-2xl font-black text-amber-300">{giftTotals.outgoing.toLocaleString()}</p>
+                <p className="mt-0.5 text-[10px] text-white/20">
+                  {giftsLoaded.outgoing ? `${outgoingCount} gifts` : "—"}
+                </p>
               </div>
             </div>
 
@@ -219,9 +270,11 @@ export function LevelPage() {
                 >
                   <ArrowDownLeft className="h-3.5 w-3.5" />
                   Received
-                  <span className="rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-black text-emerald-300">
-                    {incomingGifts.length}
-                  </span>
+                  {giftsLoaded.incoming && (
+                    <span className="rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-black text-emerald-300">
+                      {incomingCount}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setCharismaSubTab("outgoing")}
@@ -236,17 +289,20 @@ export function LevelPage() {
                 >
                   <ArrowUpRight className="h-3.5 w-3.5" />
                   Given
-                  <span className="rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[8px] font-black text-amber-300">
-                    {outgoingGifts.length}
-                  </span>
+                  {giftsLoaded.outgoing && (
+                    <span className="rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[8px] font-black text-amber-300">
+                      {outgoingCount}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
 
             {/* Charisma Gift List */}
             <GiftList
-              gifts={charismaSubTab === "incoming" ? incomingGifts : outgoingGifts}
+              gifts={gifts[charismaSubTab]}
               isIncoming={charismaSubTab === "incoming"}
+              loading={giftsLoading && !giftsLoaded[charismaSubTab]}
             />
           </div>
         )}

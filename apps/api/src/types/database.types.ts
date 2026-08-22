@@ -434,6 +434,27 @@ export type Database = {
           },
         ]
       }
+      charisma_definitions: {
+        Row: {
+          charisma_required: number
+          created_at: string
+          level: number
+          title: string | null
+        }
+        Insert: {
+          charisma_required: number
+          created_at?: string
+          level: number
+          title?: string | null
+        }
+        Update: {
+          charisma_required?: number
+          created_at?: string
+          level?: number
+          title?: string | null
+        }
+        Relationships: []
+      }
       cp_partnerships: {
         Row: {
           anniversary_date: string | null
@@ -675,6 +696,61 @@ export type Database = {
             columns: ["following_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gifts: {
+        Row: {
+          created_at: string
+          gift_icon: string
+          gift_name: string
+          id: string
+          recipient_id: string
+          sender_id: string
+          stream_id: string | null
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          gift_icon?: string
+          gift_name: string
+          id?: string
+          recipient_id: string
+          sender_id: string
+          stream_id?: string | null
+          value: number
+        }
+        Update: {
+          created_at?: string
+          gift_icon?: string
+          gift_name?: string
+          id?: string
+          recipient_id?: string
+          sender_id?: string
+          stream_id?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gifts_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gifts_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gifts_stream_id_fkey"
+            columns: ["stream_id"]
+            isOneToOne: false
+            referencedRelation: "streams"
             referencedColumns: ["id"]
           },
         ]
@@ -1022,6 +1098,7 @@ export type Database = {
         Row: {
           avatar: string | null
           bio: string | null
+          charisma_level: number
           coins: number | null
           country: string | null
           country_flag: string | null
@@ -1043,6 +1120,7 @@ export type Database = {
         Insert: {
           avatar?: string | null
           bio?: string | null
+          charisma_level?: number
           coins?: number | null
           country?: string | null
           country_flag?: string | null
@@ -1064,6 +1142,7 @@ export type Database = {
         Update: {
           avatar?: string | null
           bio?: string | null
+          charisma_level?: number
           coins?: number | null
           country?: string | null
           country_flag?: string | null
@@ -1381,6 +1460,32 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      user_charisma_progress: {
+        Row: {
+          total_charisma: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          total_charisma?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          total_charisma?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_charisma_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_inventory: {
         Row: {
