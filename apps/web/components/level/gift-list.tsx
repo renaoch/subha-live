@@ -3,7 +3,7 @@
 import { Gift } from "lucide-react";
 import { GiftItem } from "./gift-item";
 
-export interface Gift {
+export interface GiftData {
   id: string;
   senderName: string;
   senderAvatar?: string | null;
@@ -15,7 +15,7 @@ export interface Gift {
 }
 
 interface GiftListProps {
-  gifts: Gift[];
+  gifts: GiftData[];
   isIncoming: boolean;
   loading?: boolean;
 }
@@ -58,6 +58,7 @@ export function GiftList({ gifts, isIncoming, loading = false }: GiftListProps) 
           id={gift.id}
           senderName={gift.senderName}
           senderAvatar={gift.senderAvatar}
+          level={gift.senderLevel}
           giftName={gift.giftName}
           giftIcon={gift.giftIcon}
           value={gift.value}
