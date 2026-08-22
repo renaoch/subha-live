@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
 import { BadgeCheck, Gem, Sparkles } from "lucide-react";
 
@@ -10,6 +10,25 @@ const numberFormat = new Intl.NumberFormat("en-US");
 
 interface ProfileHeroProps {
   profile: PrivateProfile;
+}
+
+/**
+ * Generate a stable 7-digit user ID from a UUID
+ * Simple hash - not CPU intensive, just uses string operations
+ */
+function generateUserId(uuid: string): string {
+  // Remove hyphens and get first 8 chars for a simple hash
+  const clean = uuid.replace(/-/g, "");
+  
+  // Simple hash: sum of character codes with a multiplier
+  let hash = 0;
+  for (let i = 0; i < clean.length; i++) {
+    hash = (hash * 31 + clean.charCodeAt(i)) & 0x7FFFFFFF; // Keep within 31-bit
+  }
+  
+  // Ensure 7 digits (pad with leading zeros if needed)
+  const userId = (hash % 10_000_000).toString().padStart(7, "0");
+  return userId;
 }
 
 /**
@@ -40,6 +59,9 @@ function tierForLevel(level: number) {
 
 export function ProfileHero({ profile }: ProfileHeroProps) {
   const theme = tierForLevel(profile.level);
+  
+  // Generate 7-digit user ID from UUID
+  const userId = useMemo(() => generateUserId(profile.id), [profile.id]);
 
   return (
     <section className="relative pt-4" aria-label="Profile overview">
@@ -90,6 +112,12 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
             <span className="inline-flex items-center gap-1 rounded-full bg-[#2A2238] px-2.5 py-1 text-xs font-semibold tabular-nums text-[#9088A0]">
               <Gem className="h-3 w-3 text-[#7FD8E8]" />
               {numberFormat.format(profile.diamonds)}
+            </span>
+
+            {/* 7-digit User ID */}
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#1D1829] px-2.5 py-1 text-xs font-mono tabular-nums text-[#6A6078] border border-[#2A2238]">
+              <span className="text-[10px]">#</span>
+              {userId}
             </span>
           </div>
         </div>
