@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { logAudit } from "../../lib/audit";
@@ -20,6 +21,7 @@ export async function requestOfflineRecharge(
   const { data, error } = await supabase
     .from("offline_recharges")
     .insert({
+      id: randomUUID(), // generate UUID for primary key
       user_id: userId,
       amount_usd: amountUsd,
       payment_method: paymentMethod,
