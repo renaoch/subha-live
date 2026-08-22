@@ -1,9 +1,7 @@
 export type Provider = "google" | "facebook" | null;
 
-// -----------------------------------------------------------------------------
-// Public Profile
+// ─── Public Profile ──────────────────────────────────────────────
 // Information that can safely be exposed on another user's profile.
-// -----------------------------------------------------------------------------
 
 export interface PublicProfile {
   id: string;
@@ -25,22 +23,20 @@ export interface PublicProfile {
   followers: number;
   following: number;
 
+  role: "user" | "host" | "bd" | "admin"; // ✅ ADD THIS
+
   created_at: string;
 }
 
-// -----------------------------------------------------------------------------
-// Private Profile
+// ─── Private Profile ────────────────────────────────────────────
 // The authenticated user's own profile.
-// -----------------------------------------------------------------------------
 
 export interface PrivateProfile extends PublicProfile {
   coins: number;
   diamonds: number;
 }
 
-// -----------------------------------------------------------------------------
-// Profile API responses
-// -----------------------------------------------------------------------------
+// ─── Profile API responses ─────────────────────────────────────
 
 export interface PrivateProfileResponse {
   status: "ok";
@@ -52,9 +48,7 @@ export interface PublicProfileResponse {
   user: PublicProfile;
 }
 
-// -----------------------------------------------------------------------------
-// Live Rooms
-// -----------------------------------------------------------------------------
+// ─── Live Rooms ─────────────────────────────────────────────────
 
 export type RoomMediaType = "video" | "audio";
 
@@ -71,9 +65,7 @@ export interface LiveRoom {
   category: "nearby" | "popular" | "featured" | "explore";
 }
 
-// -----------------------------------------------------------------------------
-// Chat
-// -----------------------------------------------------------------------------
+// ─── Chat ───────────────────────────────────────────────────────
 
 export interface ChatPreview {
   id: string;
