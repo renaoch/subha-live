@@ -117,6 +117,13 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
                 aria-label="Verified"
               />
             )}
+
+            {/* Country Flag */}
+            {profile.country_flag && (
+              <span className="text-xl leading-none" title={profile.country || undefined}>
+                {profile.country_flag}
+              </span>
+            )}
           </div>
 
           {/* User ID Badge – replaces the handle */}
@@ -124,7 +131,7 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
             <button
               onClick={handleCopy}
               className={cn(
-                "group flex items-center gap-1.5 rounded-full border border-[#2A2238] bg-[#1D1829]/80 px-3 py-1 transition-all duration-200 hover:border-[#CBA35C]/50 hover:bg-[#2A2238] hover:shadow-[0_0_20px_rgba(203,163,92,0.1)]",
+                "group relative flex items-center gap-1.5 rounded-full border border-[#2A2238] bg-[#1D1829]/80 px-3 py-1 transition-all duration-200 hover:border-[#CBA35C]/50 hover:bg-[#2A2238] hover:shadow-[0_0_20px_rgba(203,163,92,0.1)]",
                 copied && "border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_20px_rgba(52,211,153,0.15)]"
               )}
             >
@@ -171,7 +178,13 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
         </div>
       </div>
 
-      <StatsRow following={profile.following} followers={profile.followers} level={profile.level} />
+      <StatsRow
+        following={profile.following}
+        followers={profile.followers}
+        level={profile.level}
+        country={profile.country}
+        countryFlag={profile.country_flag}
+      />
     </section>
   );
 }
@@ -254,14 +267,24 @@ interface StatsRowProps {
   following: number;
   followers: number;
   level: number;
+  country?: string | null;
+  countryFlag?: string | null;
 }
 
-function StatsRow({ following, followers, level }: StatsRowProps) {
+function StatsRow({ following, followers, level, country, countryFlag }: StatsRowProps) {
   const stats = [
     { label: "Followers", value: followers },
     { label: "Following", value: following },
     { label: "Level", value: level },
   ];
+
+  // Add country if available
+  if (countryFlag) {
+    stats.push({
+      label: "Country",
+      value: countryFlag,
+    } as any);
+  }
 
   return (
     <dl className="mt-5 flex items-stretch justify-between rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 px-2 py-3.5">
@@ -272,7 +295,11 @@ function StatsRow({ following, followers, level }: StatsRowProps) {
         >
           <dt className="order-2 text-[11px] text-[#9088A0]">{stat.label}</dt>
           <dd className="relative order-1 text-base font-semibold tabular-nums text-[#F3ECE0]">
-            {numberFormat.format(stat.value)}
+            {stat.label === "Country" ? (
+              <span className="text-2xl leading-none">{stat.value}</span>
+            ) : (
+              numberFormat.format(stat.value)
+            )}
           </dd>
         </div>
       ))}
