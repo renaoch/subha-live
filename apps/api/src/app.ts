@@ -1,55 +1,58 @@
-import express from "express";
-import cors from "cors";
+    import express from "express";
+    import cors from "cors";
 
-import healthRoutes from "./routes/health";
-import authRoutes from "./modules/auth/auth.routes";
-import userRoutes from "./modules/users/users.routes";
-import socialRoutes from "./modules/social/social.routes";
-import levelRoutes from "./modules/levels/levels.routes";
-import roomRoutes from "./modules/rooms/room.routes";
-import tasksRoutes from "./modules/tasks/tasks.routes";
-import vipRoutes from "./modules/vip/vip.routes";
-import familyRoutes from "./modules/family/family.routes";
-import cpRoutes from "./modules/cp/cp.routes";
-import bdRoutes from "./modules/bd/bd.routes";
-import agencyRoutes from "./modules/agency/agency.routes";
-import { errorMiddleware } from "./middleware/error.middleware";
+    import healthRoutes from "./routes/health";
+    import authRoutes from "./modules/auth/auth.routes";
+    import userRoutes from "./modules/users/users.routes";
+    import socialRoutes from "./modules/social/social.routes";
+    import levelRoutes from "./modules/levels/levels.routes";
+    import roomRoutes from "./modules/rooms/room.routes";
+    import tasksRoutes from "./modules/tasks/tasks.routes";
+    import vipRoutes from "./modules/vip/vip.routes";
+    import familyRoutes from "./modules/family/family.routes";
+    import cpRoutes from "./modules/cp/cp.routes";
+    import bdRoutes from "./modules/bd/bd.routes";
+    import agencyRoutes from "./modules/agency/agency.routes";
+    import offlineRechargeRoutes from "./modules/offline-recharge/offline-recharge.routes";
+
+    import { errorMiddleware } from "./middleware/error.middleware";
 
 
 
-const app = express();
+    const app = express();
 
-app.use(
-  cors({
-    origin: [
-      "https://www.subha.fun",
-      "https://subha.fun",
-    ],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-app.use(express.json());
+    app.use(
+    cors({
+        origin: [
+        "https://www.subha.fun",
+        "https://subha.fun",
+        ],
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization"],
+    })
+    );
+    app.use(express.json());
 
-app.use("/health", healthRoutes);
-app.use("/api/v1/auth", authRoutes);
-app.use("/api/v1/users", userRoutes);
-app.use("/api/v1/users", socialRoutes);
-app.use("/api/v1/rooms", roomRoutes);
-app.use("/api/v1/levels", levelRoutes);
-app.use("/api/v1/tasks", tasksRoutes);
-app.use("/api/v1/agency", agencyRoutes);
-app.use(
-  "/api/v1/family",
-  familyRoutes,
-);
-app.use(
-  "/api/v1/vip",
-  vipRoutes,
-);
-app.use("/api/v1/bd", bdRoutes);
-app.use("/api/v1/cp", cpRoutes);
-app.use(errorMiddleware);
+    app.use("/health", healthRoutes);
+    app.use("/api/v1/auth", authRoutes);
+    app.use("/api/v1/users", userRoutes);
+    app.use("/api/v1/users", socialRoutes);
+    app.use("/api/v1/rooms", roomRoutes);
+    app.use("/api/v1/levels", levelRoutes);
+    app.use("/api/v1/tasks", tasksRoutes);
+    app.use("/api/v1/agency", agencyRoutes);
+    app.use(
+    "/api/v1/family",
+    familyRoutes,
+    );
+    app.use(
+    "/api/v1/vip",
+    vipRoutes,
+    );
+    app.use("/api/v1/bd", bdRoutes);
+    app.use("/api/v1/cp", cpRoutes);
+    app.use("/api/v1/offline-recharge", offlineRechargeRoutes);
+    app.use(errorMiddleware);
 
-export { app };
+    export { app };
