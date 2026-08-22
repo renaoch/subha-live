@@ -55,9 +55,9 @@ export function GiftList({ gifts, isIncoming, loading = false }: GiftListProps) 
       {gifts.map((gift) => (
         <GiftItem
           key={gift.id}
+          id={gift.id}
           senderName={gift.senderName}
           senderAvatar={gift.senderAvatar}
-          senderLevel={gift.senderLevel}
           giftName={gift.giftName}
           giftIcon={gift.giftIcon}
           value={gift.value}
