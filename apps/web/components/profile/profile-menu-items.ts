@@ -66,12 +66,6 @@ export const profileMenuItems = [
     Icon: GiftIcon,
   },
   {
-    id: "offline-recharge",
-    label: "Offline Recharge",
-    href: "/offline-recharge",
-    Icon: GameIcon,
-  },
-  {
     id: "host-center",
     label: "Host Center",
     href: "/host-center",

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { profileMenuItems } from "./profile-menu-items";
 import { usersApi } from "@/lib/api/users";
+import type { PrivateProfile } from "@/lib/types";
 
 type UserRole = "user" | "host" | "bd" | "admin";
 
@@ -15,7 +16,6 @@ export function ProfileMenu() {
     async function loadRole() {
       try {
         const profile = await usersApi.me();
-        // The profile has a `role` field from the database
         setUserRole((profile.role as UserRole) || "user");
       } catch {
         setUserRole("user");
@@ -39,7 +39,6 @@ export function ProfileMenu() {
       "agency-center",
       "my-post",
       "my-videos",
-      "offline-recharge",
     ];
     if (alwaysShow.includes(item.id)) {
       return true;
