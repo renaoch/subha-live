@@ -2,8 +2,23 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api/client";
-import { Coins, Diamond, Zap, ArrowUpRight, Wallet, CreditCard, History, Loader2, Plus, Minus, CheckCircle, XCircle, Clock } from "lucide-react";
+import {
+  Coins,
+  Diamond,
+  Zap,
+  ArrowUpRight,
+  Wallet,
+  CreditCard,
+  History,
+  Loader2,
+  Plus,
+  Minus,
+  CheckCircle,
+  XCircle,
+  Clock,
+} from "lucide-react";
 
+// ─── Types ──────────────────────────────────────────────────────────
 type Package = {
   id: string;
   coins: number;
@@ -20,6 +35,19 @@ type Transaction = {
   created_at: string;
 };
 
+type WalletData = {
+  coins: number;
+  diamonds: number;
+  history: Transaction[];
+  packages: Package[];
+};
+
+type ApiResponse<T> = {
+  status: string;
+  data: T;
+};
+
+// ─── Component ────────────────────────────────────────────────────
 export default function WalletPage() {
   const [balance, setBalance] = useState({ coins: 0, diamonds: 0 });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -42,7 +70,8 @@ export default function WalletPage() {
   async function loadWallet() {
     try {
       setLoading(true);
-      const { data } = await api.get("/api/v1/wallet/me");
+      const response = (await api.get("/api/v1/wallet/me")) as ApiResponse<WalletData>;
+      const { data } = response;
       setBalance({ coins: data.coins || 0, diamonds: data.diamonds || 0 });
       setTransactions(data.history || []);
       setPackages(data.packages || []);
@@ -96,12 +125,24 @@ export default function WalletPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
-        return <span className="flex items-center gap-1 text-emerald-400"><CheckCircle className="h-3 w-3" /> Completed</span>;
+        return (
+          <span className="flex items-center gap-1 text-emerald-400">
+            <CheckCircle className="h-3 w-3" /> Completed
+          </span>
+        );
       case "pending":
-        return <span className="flex items-center gap-1 text-amber-400"><Clock className="h-3 w-3" /> Pending</span>;
+        return (
+          <span className="flex items-center gap-1 text-amber-400">
+            <Clock className="h-3 w-3" /> Pending
+          </span>
+        );
       case "failed":
       case "cancelled":
-        return <span className="flex items-center gap-1 text-red-400"><XCircle className="h-3 w-3" /> {status}</span>;
+        return (
+          <span className="flex items-center gap-1 text-red-400">
+            <XCircle className="h-3 w-3" /> {status}
+          </span>
+        );
       default:
         return <span>{status}</span>;
     }
