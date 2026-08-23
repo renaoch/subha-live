@@ -1,11 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
-
-import type {
-  PrivateProfile,
-  PrivateProfileResponse,
-  PublicProfile,
-  PublicProfileResponse,
-} from "@/lib/types";
+import type { PrivateProfile, PublicProfile } from "@/lib/types";
 
 export interface UpdateProfileInput {
   name?: string;
@@ -17,45 +11,47 @@ export interface UpdateProfileInput {
   gender?: string | null;
 }
 
+interface PrivateProfileResponse {
+  status: string;
+  user: PrivateProfile;
+}
+
+interface PublicProfileResponse {
+  status: string;
+  user: PublicProfile;
+}
+
 export const usersApi = {
-  // ---------------------------------------------------------------------------
-  // Private profile
-  // GET /api/v1/users/me
-  // ---------------------------------------------------------------------------
-
-  me(): Promise<PrivateProfile> {
-    return apiFetch<PrivateProfileResponse>(
+  async me(): Promise<PrivateProfile> {
+    const response = await apiFetch<PrivateProfileResponse>(
       "/api/v1/users/me",
-    ).then((response) => response.user);
+    );
+
+    return response.user;
   },
 
-  // ---------------------------------------------------------------------------
-  // Public profile
-  // GET /api/v1/users/:id
-  // ---------------------------------------------------------------------------
+  async getById(id: string): Promise<PublicProfile> {
+    const response = await apiFetch<PublicProfileResponse>(
+      `/api/v1/users/${id}`,
+    );
 
-  publicProfile(
-    id: string,
-  ): Promise<PublicProfile> {
-    return apiFetch<PublicProfileResponse>(
-      `/api/v1/users/${encodeURIComponent(id)}`,
-    ).then((response) => response.user);
+    return response.user;
   },
 
-  // ---------------------------------------------------------------------------
-  // Update private profile
-  // PATCH /api/v1/users/me
-  // ---------------------------------------------------------------------------
-
-  updateMe(
-    input: UpdateProfileInput,
-  ): Promise<PrivateProfile> {
-    return apiFetch<PrivateProfileResponse>(
+  /**
+   * Only send the fields that actually changed — every field on
+   * updateMyProfileSchema is optional, and the endpoint is .strict(),
+   * so partial payloads are exactly what the backend expects.
+   */
+  async updateMe(input: UpdateProfileInput): Promise<PrivateProfile> {
+    const response = await apiFetch<PrivateProfileResponse>(
       "/api/v1/users/me",
       {
         method: "PATCH",
         body: JSON.stringify(input),
       },
-    ).then((response) => response.user);
+    );
+
+    return response.user;
   },
 };

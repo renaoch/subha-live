@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
+import Link from "next/link";
 import Image from "next/image";
-import { BadgeCheck, Gem, Sparkles, Copy, Check } from "lucide-react";
+import { BadgeCheck, Gem, Sparkles, Copy, Check, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import type { PrivateProfile } from "@/lib/types";
@@ -94,6 +95,14 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
     <section className="relative pt-4" aria-label="Profile overview">
       <HeroMotionStyles />
 
+      <Link
+        href="/profile/edit"
+        aria-label="Edit profile"
+        className="absolute right-0 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-[#2A2238] bg-[#1D1829]/80 text-[#9088A0] transition-all duration-200 hover:border-[#CBA35C]/40 hover:bg-[#2A2238] hover:text-[#CBA35C] active:scale-95"
+      >
+        <Pencil className="h-4 w-4" />
+      </Link>
+
       <div className="flex items-center gap-4">
         <AvatarWithHalo
           src={profile.avatar}
@@ -103,7 +112,7 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
         />
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1.5">
+          <div className="flex min-w-0 items-center gap-1.5 pr-10">
             <h1
               className="truncate font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[#F3ECE0]"
               title={profile.name || "User"}
