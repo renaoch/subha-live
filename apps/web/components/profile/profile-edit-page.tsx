@@ -23,7 +23,7 @@ import {
 
 import { usersApi, type UpdateProfileInput } from "@/lib/api/users";
 import { uploadAvatar, AvatarUploadError } from "@/lib/supabase/avatar-upload";
-import { flagFromCode, type Country } from "@/lib/data";
+import { flagFromCode, type Country } from "@/lib/data/countries";
 import { CountryPicker } from "@/components/profile/country-picker";
 import type { PrivateProfile } from "@/lib/types";
 
