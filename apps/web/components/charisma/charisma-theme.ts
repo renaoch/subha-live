@@ -10,7 +10,7 @@ export interface CharismaTheme {
   intensity: number;
 }
 
-const tiers = [
+export const CHARISMA_TIERS = [
   { min: 1, max: 9, tierName: "Newcomer" },
   { min: 10, max: 19, tierName: "Charming" },
   { min: 20, max: 29, tierName: "Magnetic" },
@@ -26,14 +26,22 @@ const tiers = [
   { min: 120, max: 129, tierName: "Celestial" },
   { min: 130, max: 139, tierName: "Divine" },
   { min: 140, max: 149, tierName: "Immortal" },
-  { min: 150, max: 999, tierName: "Eternal Icon" },
+  { min: 150, max: 150, tierName: "Eternal Icon" },
 ] as const;
+
+/**
+ * Highest defined charisma level. Keep this in sync with the highest
+ * `level` seeded into charisma_definitions in charisma_schema.sql.
+ */
+export const CHARISMA_MAX_LEVEL = 150;
+
+const tiers = CHARISMA_TIERS;
 
 function getTier(level: number) {
   return (
     tiers.find(
       (tier) => level >= tier.min && level <= tier.max,
-    ) ?? tiers[0]
+    ) ?? tiers[tiers.length - 1]
   );
 }
 

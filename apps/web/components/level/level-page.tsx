@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Crown, Gift, ArrowUpRight, ArrowDownLeft, X } from "lucide-react";
+import { Crown, Gift, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 
 import {
   levelsApi,
@@ -23,6 +22,7 @@ import { LevelHistory } from "./level-history";
 import { LevelLoading } from "./level-loading";
 import { LevelError } from "./level-error";
 import { CharismaHero } from "../charisma/charisma-hero";
+import { CharismaRewards } from "../charisma/charisma-rewards";
 import { GiftList, type GiftData } from "./gift-list";
 
 type TabType = "level" | "charisma";
@@ -47,8 +47,6 @@ function toGiftData(
 }
 
 export function LevelPage() {
-  const router = useRouter();
-
   const [progress, setProgress] = useState<LevelProgress | null>(null);
   const [rewards, setRewards] = useState<LevelReward[]>([]);
   const [history, setHistory] = useState<LevelHistoryItem[]>([]);
@@ -73,16 +71,6 @@ export function LevelPage() {
     outgoing: false,
   });
   const [giftsLoading, setGiftsLoading] = useState(false);
-
-  const handleClose = useCallback(() => {
-    // If there's history to go back to, use it. Otherwise fall back to
-    // a known route so the X always works, even on a direct deep link.
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-    } else {
-      router.push("/");
-    }
-  }, [router]);
 
   // Initial load: level progress/rewards/history + charisma overview
   useEffect(() => {
@@ -174,14 +162,7 @@ export function LevelPage() {
               <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#D9A94A]/70">Profile</p>
               <h1 className="mt-1 text-3xl font-black tracking-tight">My Level</h1>
             </div>
-            <button
-              type="button"
-              onClick={handleClose}
-              aria-label="Close"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-white/50 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.08] hover:text-white/80 active:scale-95"
-            >
-              <X className="h-4.5 w-4.5" />
-            </button>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-sm text-white/50">✦</div>
           </div>
           <p className="mt-2 text-sm text-white/35">Track your progression and charisma.</p>
         </header>
@@ -255,6 +236,7 @@ export function LevelPage() {
         ) : (
           <div className="space-y-5">
             <CharismaHero progress={charisma} />
+            <CharismaRewards currentLevel={charisma.currentLevel} />
 
             {/* Charisma Overview Stats */}
             <div className="grid grid-cols-2 gap-3">
