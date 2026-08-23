@@ -1,6 +1,9 @@
 import { supabase } from "../../lib/supabase";
 import type { Database } from "../../types/database.types";
-import type { PrivateProfile, PublicProfile } from "./users.types";
+import type {
+  PrivateProfile,
+  PublicProfile,
+} from "./users.types";
 import { AppError } from "../../errors/app-error";
 
 type ProfileUpdate =
@@ -13,6 +16,7 @@ type UserId =
 // Returned only for the authenticated user's own profile.
 const PRIVATE_PROFILE_FIELDS = `
   id,
+  public_id,
   name,
   handle,
   avatar,
@@ -31,13 +35,11 @@ const PRIVATE_PROFILE_FIELDS = `
   gender
 `;
 
-// -----------------------------------------------------------------------------
 // Public profile fields
 // Safe profile information that can be viewed by other users.
-// -----------------------------------------------------------------------------
-
 const PUBLIC_PROFILE_FIELDS = `
   id,
+  public_id,
   name,
   handle,
   avatar,
@@ -75,8 +77,6 @@ export async function getCurrentUser(
   );
 
   if (error) {
-    // User authenticated successfully but their application
-    // profile does not exist.
     if (error.code === "PGRST116") {
       throw new AppError(
         404,
@@ -87,7 +87,6 @@ export async function getCurrentUser(
       );
     }
 
-    // Unexpected database/infrastructure error.
     throw error;
   }
 
@@ -158,7 +157,6 @@ export async function updateCurrentUser(
       );
     }
 
-    // Example: handle/username unique constraint.
     if (error.code === "23505") {
       throw new AppError(
         409,

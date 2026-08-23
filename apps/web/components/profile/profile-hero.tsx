@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import {
   BadgeCheck,
@@ -18,21 +18,6 @@ const numberFormat = new Intl.NumberFormat("en-US");
 
 interface ProfileHeroProps {
   profile: PrivateProfile;
-}
-
-/**
- * Generate a stable 7-digit user ID from a UUID.
- */
-function generateUserId(uuid: string): string {
-  const clean = uuid.replace(/-/g, "");
-
-  let hash = 0;
-
-  for (let i = 0; i < clean.length; i++) {
-    hash = (hash * 31 + clean.charCodeAt(i)) & 0x7fffffff;
-  }
-
-  return (hash % 10_000_000).toString().padStart(7, "0");
 }
 
 const TIER_PALETTE = [
@@ -63,14 +48,18 @@ function tierForLevel(level: number) {
 export function ProfileHero({ profile }: ProfileHeroProps) {
   const theme = tierForLevel(profile.level);
 
-  const userId = useMemo(
-    () => generateUserId(profile.id),
-    [profile.id],
-  );
+  /*
+   * public_id is now the canonical profile User ID
+   * stored in public.profiles.public_id.
+   *
+   * Do NOT generate it from profile.id anymore.
+   */
+  const userId = profile.public_id;
 
   const [copied, setCopied] = useState(false);
 
-  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyTimeoutRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCopy = async () => {
     try {
@@ -204,11 +193,13 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
                 className="h-3 w-3"
                 style={{ color: theme.primary }}
               />
+
               Lv.{profile.level}
             </span>
 
             <span className="inline-flex items-center gap-1 rounded-full bg-[#2A2238] px-2.5 py-1 text-xs font-semibold tabular-nums text-[#9088A0]">
               <Gem className="h-3 w-3 text-[#7FD8E8]" />
+
               {numberFormat.format(profile.diamonds)}
             </span>
           </div>
