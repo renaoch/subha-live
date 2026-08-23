@@ -20,6 +20,7 @@ export type Database = {
           commission_rate: number | null
           created_at: string | null
           id: string
+          is_active: boolean
           monthly_revenue: number | null
           name: string
           owner_id: string
@@ -30,6 +31,7 @@ export type Database = {
           commission_rate?: number | null
           created_at?: string | null
           id: string
+          is_active?: boolean
           monthly_revenue?: number | null
           name: string
           owner_id: string
@@ -40,6 +42,7 @@ export type Database = {
           commission_rate?: number | null
           created_at?: string | null
           id?: string
+          is_active?: boolean
           monthly_revenue?: number | null
           name?: string
           owner_id?: string
@@ -1113,6 +1116,7 @@ export type Database = {
           is_verified: boolean | null
           level: number | null
           name: string
+          public_id: string | null
           role: Database["public"]["Enums"]["user_role"]
           svip: boolean | null
           vip_level: number | null
@@ -1135,6 +1139,7 @@ export type Database = {
           is_verified?: boolean | null
           level?: number | null
           name: string
+          public_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           svip?: boolean | null
           vip_level?: number | null
@@ -1157,6 +1162,7 @@ export type Database = {
           is_verified?: boolean | null
           level?: number | null
           name?: string
+          public_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           svip?: boolean | null
           vip_level?: number | null
