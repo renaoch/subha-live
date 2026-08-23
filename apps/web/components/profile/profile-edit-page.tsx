@@ -145,7 +145,7 @@ export function ProfileEditPage() {
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
     } else {
-      router.push("/profile");
+      router.push("/home/me");
     }
   };
 
