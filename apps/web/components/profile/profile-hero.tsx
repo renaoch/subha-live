@@ -2,8 +2,14 @@
 
 import { useState, useMemo, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import { BadgeCheck, Gem, Sparkles, Copy, Check, Pencil } from "lucide-react";
+import {
+  BadgeCheck,
+  Gem,
+  Sparkles,
+  Copy,
+  Check,
+  Pencil,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import type { PrivateProfile } from "@/lib/types";
@@ -15,23 +21,20 @@ interface ProfileHeroProps {
 }
 
 /**
- * Generate a stable 7-digit user ID from a UUID
- * Simple hash - not CPU intensive, just uses string operations
+ * Generate a stable 7-digit user ID from a UUID.
  */
 function generateUserId(uuid: string): string {
   const clean = uuid.replace(/-/g, "");
-  
+
   let hash = 0;
+
   for (let i = 0; i < clean.length; i++) {
-    hash = (hash * 31 + clean.charCodeAt(i)) & 0x7FFFFFFF;
+    hash = (hash * 31 + clean.charCodeAt(i)) & 0x7fffffff;
   }
-  
+
   return (hash % 10_000_000).toString().padStart(7, "0");
 }
 
-/**
- * Same 10-tier palette used on the Level Rewards card
- */
 const TIER_PALETTE = [
   { name: "Bronze", primary: "#D98F4E", accent: "#FFCF9E" },
   { name: "Silver", primary: "#AEB9C7", accent: "#EAF0F6" },
@@ -49,42 +52,57 @@ const TIER_SIZE = 10;
 const MAX_LEVEL = 100;
 
 function tierForLevel(level: number) {
-  const idx = Math.min(TIER_PALETTE.length - 1, Math.floor((Math.max(1, level) - 1) / TIER_SIZE));
-  return TIER_PALETTE[idx];
+  const index = Math.min(
+    TIER_PALETTE.length - 1,
+    Math.floor((Math.max(1, level) - 1) / TIER_SIZE),
+  );
+
+  return TIER_PALETTE[index];
 }
 
 export function ProfileHero({ profile }: ProfileHeroProps) {
   const theme = tierForLevel(profile.level);
-  const userId = useMemo(() => generateUserId(profile.id), [profile.id]);
+
+  const userId = useMemo(
+    () => generateUserId(profile.id),
+    [profile.id],
+  );
+
   const [copied, setCopied] = useState(false);
-  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(userId);
       setCopied(true);
-      
+
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
       }
-      
+
       copyTimeoutRef.current = setTimeout(() => {
         setCopied(false);
       }, 2000);
     } catch {
-      // Fallback for older browsers
       const input = document.createElement("input");
+
       input.value = userId;
+
       document.body.appendChild(input);
+
       input.select();
+
       document.execCommand("copy");
+
       document.body.removeChild(input);
+
       setCopied(true);
-      
+
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
       }
-      
+
       copyTimeoutRef.current = setTimeout(() => {
         setCopied(false);
       }, 2000);
@@ -92,7 +110,10 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
   };
 
   return (
-    <section className="relative pt-4" aria-label="Profile overview">
+    <section
+      className="relative pt-4"
+      aria-label="Profile overview"
+    >
       <HeroMotionStyles />
 
       <Link
@@ -127,26 +148,30 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
               />
             )}
 
-            {/* Country Flag */}
             {profile.country_flag && (
-              <span className="text-xl leading-none" title={profile.country || undefined}>
+              <span
+                className="text-xl leading-none"
+                title={profile.country || undefined}
+              >
                 {profile.country_flag}
               </span>
             )}
           </div>
 
-          {/* User ID Badge – replaces the handle */}
           <div className="mt-1 flex items-center gap-2">
             <button
+              type="button"
               onClick={handleCopy}
               className={cn(
                 "group relative flex items-center gap-1.5 rounded-full border border-[#2A2238] bg-[#1D1829]/80 px-3 py-1 transition-all duration-200 hover:border-[#CBA35C]/50 hover:bg-[#2A2238] hover:shadow-[0_0_20px_rgba(203,163,92,0.1)]",
-                copied && "border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_20px_rgba(52,211,153,0.15)]"
+                copied &&
+                  "border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_20px_rgba(52,211,153,0.15)]",
               )}
             >
               <span className="font-mono text-xs font-bold tracking-wider text-[#9088A0] transition-colors group-hover:text-[#F3ECE0]">
                 #{userId}
               </span>
+
               <span className="text-[#9088A0] transition-colors group-hover:text-[#CBA35C]">
                 {copied ? (
                   <Check className="h-3.5 w-3.5 text-emerald-400" />
@@ -154,11 +179,11 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </span>
-              {/* Copy feedback tooltip */}
+
               <span
                 className={cn(
                   "absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-[#2A2238] px-2 py-0.5 text-[9px] font-medium text-[#F3ECE0] opacity-0 transition-all duration-200",
-                  copied && "opacity-100"
+                  copied && "opacity-100",
                 )}
               >
                 Copied!
@@ -175,7 +200,10 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
                 background: `linear-gradient(135deg, ${theme.primary}30, ${theme.primary}0C)`,
               }}
             >
-              <Sparkles className="h-3 w-3" style={{ color: theme.primary }} />
+              <Sparkles
+                className="h-3 w-3"
+                style={{ color: theme.primary }}
+              />
               Lv.{profile.level}
             </span>
 
@@ -201,21 +229,44 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
 function HeroMotionStyles() {
   return (
     <style>{`
-      @keyframes ph-rainbow-spin { to { --ph-angle: 360deg; } }
+      @keyframes ph-rainbow-spin {
+        to {
+          --ph-angle: 360deg;
+        }
+      }
+
       @property --ph-angle {
         syntax: '<angle>';
         initial-value: 0deg;
         inherits: false;
       }
+
       @keyframes ph-glow-pulse {
-        0%, 100% { opacity: 0.55; }
-        50% { opacity: 1; }
+        0%, 100% {
+          opacity: 0.55;
+        }
+
+        50% {
+          opacity: 1;
+        }
       }
+
       .ph-max-ring {
-        background: conic-gradient(from var(--ph-angle), #F5B93F, #FF6CA8, #A86CFF, #57C2FF, #F5B93F);
+        background: conic-gradient(
+          from var(--ph-angle),
+          #F5B93F,
+          #FF6CA8,
+          #A86CFF,
+          #57C2FF,
+          #F5B93F
+        );
+
         animation: ph-rainbow-spin 5s linear infinite;
       }
-      .ph-glow { animation: ph-glow-pulse 2.6s ease-in-out infinite; }
+
+      .ph-glow {
+        animation: ph-glow-pulse 2.6s ease-in-out infinite;
+      }
     `}</style>
   );
 }
@@ -224,37 +275,66 @@ interface AvatarWithHaloProps {
   src: string | null | undefined;
   name: string;
   level: number;
-  theme: { primary: string; accent: string };
+  theme: {
+    primary: string;
+    accent: string;
+  };
 }
 
-function AvatarWithHalo({ src, name, level, theme }: AvatarWithHaloProps) {
+function AvatarWithHalo({
+  src,
+  name,
+  level,
+  theme,
+}: AvatarWithHaloProps) {
   const [failed, setFailed] = useState(false);
+
   const isMax = level >= MAX_LEVEL;
-  const showImage = Boolean(src) && !failed;
-  const initial = name.trim().charAt(0).toUpperCase() || "?";
+
+  const showImage = Boolean(src?.trim()) && !failed;
+
+  const initial =
+    name.trim().charAt(0).toUpperCase() || "?";
 
   return (
-    <div className="relative shrink-0" style={{ width: 76, height: 76 }}>
+    <div
+      className="relative shrink-0"
+      style={{
+        width: 76,
+        height: 76,
+      }}
+    >
       <div
-        className={`absolute inset-0 rounded-full ${isMax ? "ph-max-ring" : "ph-glow"} p-[2px]`}
-        style={isMax ? undefined : { background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})` }}
+        className={`absolute inset-0 rounded-full ${
+          isMax ? "ph-max-ring" : "ph-glow"
+        } p-[2px]`}
+        style={
+          isMax
+            ? undefined
+            : {
+                background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})`,
+              }
+        }
       >
         <div className="h-full w-full rounded-full bg-[#17131F]" />
       </div>
 
       <div
         className="absolute inset-[6px] overflow-hidden rounded-full"
-        style={{ boxShadow: `0 0 18px ${theme.primary}55` }}
+        style={{
+          boxShadow: `0 0 18px ${theme.primary}55`,
+        }}
       >
         {showImage ? (
-          <Image
+          <img
             src={src as string}
             alt={`${name}'s profile photo`}
-            fill
-            sizes="64px"
-            className="object-cover"
-            priority
-            onError={() => setFailed(true)}
+            className="h-full w-full object-cover"
+            loading="eager"
+            decoding="async"
+            onError={() => {
+              setFailed(true);
+            }}
           />
         ) : (
           <div
@@ -280,19 +360,36 @@ interface StatsRowProps {
   countryFlag?: string | null;
 }
 
-function StatsRow({ following, followers, level, country, countryFlag }: StatsRowProps) {
-  const stats = [
-    { label: "Followers", value: followers },
-    { label: "Following", value: following },
-    { label: "Level", value: level },
+function StatsRow({
+  following,
+  followers,
+  level,
+  country,
+  countryFlag,
+}: StatsRowProps) {
+  const stats: Array<{
+    label: string;
+    value: string | number;
+  }> = [
+    {
+      label: "Followers",
+      value: followers,
+    },
+    {
+      label: "Following",
+      value: following,
+    },
+    {
+      label: "Level",
+      value: level,
+    },
   ];
 
-  // Add country if available
   if (countryFlag) {
     stats.push({
-      label: "Country",
+      label: country || "Country",
       value: countryFlag,
-    } as any);
+    });
   }
 
   return (
@@ -300,15 +397,18 @@ function StatsRow({ following, followers, level, country, countryFlag }: StatsRo
       {stats.map((stat, index) => (
         <div
           key={stat.label}
-          className={`flex flex-1 flex-col items-center gap-0.5 ${index !== 0 ? "border-l border-[#2A2238]" : ""}`}
+          className={cn(
+            "flex flex-1 flex-col items-center justify-center gap-1",
+            index !== stats.length - 1 &&
+              "border-r border-[#2A2238]",
+          )}
         >
-          <dt className="order-2 text-[11px] text-[#9088A0]">{stat.label}</dt>
-          <dd className="relative order-1 text-base font-semibold tabular-nums text-[#F3ECE0]">
-            {stat.label === "Country" ? (
-              <span className="text-2xl leading-none">{stat.value}</span>
-            ) : (
-              numberFormat.format(stat.value)
-            )}
+          <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#9088A0]">
+            {stat.label}
+          </dt>
+
+          <dd className="text-sm font-bold tabular-nums text-[#F3ECE0]">
+            {stat.value}
           </dd>
         </div>
       ))}
