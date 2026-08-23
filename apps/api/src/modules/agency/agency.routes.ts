@@ -75,7 +75,8 @@ import {
   getPayouts,
   updatePayoutStatusController,
 
-  joinAgencyByCodeController
+  joinAgencyByCodeController,
+  getAgencyHostsController
 } from "./agency.controller";
 
 const router = Router();
@@ -148,6 +149,12 @@ router.get(
   "/me/invitations",
   authMiddleware,
   getMyInvitations,
+);
+
+router.get(
+  "/:id/hosts",
+  authMiddleware,
+  getAgencyHostsController,
 );
 
 /*

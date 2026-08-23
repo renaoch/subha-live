@@ -3766,3 +3766,100 @@ if (status === "paid") {
     data as PayoutRow,
   );
 }
+
+export async function getAgencyHosts(
+  agencyId: string,
+): Promise<AgencyMember[]> {
+  const {
+    data: membershipData,
+    error: membershipError,
+  } = await supabase
+    .from("agency_hosts")
+    .select(`
+      agency_id,
+      host_id,
+      status,
+      joined_at,
+      agent_id
+    `)
+    .eq("agency_id", agencyId)
+    .eq("status", "approved")
+    .order("joined_at", {
+      ascending: true,
+    });
+
+  if (membershipError) {
+    throw membershipError;
+  }
+
+  const memberships =
+    (membershipData ?? []) as AgencyHostRow[];
+
+  if (memberships.length === 0) {
+    return [];
+  }
+
+  const hostIds = memberships.map(
+    (membership) => membership.host_id,
+  );
+
+  const {
+    data: profileData,
+    error: profileError,
+  } = await supabase
+    .from("profiles")
+    .select(`
+      id,
+      name,
+      handle,
+      avatar,
+      country,
+      country_flag,
+      level
+    `)
+    .in("id", hostIds);
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  const profiles =
+    (profileData ?? []) as AgencyProfileRow[];
+
+  const profileMap =
+    new Map<string, AgencyProfileRow>(
+      profiles.map((profile) => [
+        profile.id,
+        profile,
+      ]),
+    );
+
+  return memberships
+    .map((membership): AgencyMember | null => {
+      const profile =
+        profileMap.get(membership.host_id);
+
+      if (!profile) {
+        return null;
+      }
+
+      return {
+        userId: profile.id,
+        name: profile.name,
+        handle: profile.handle,
+        avatar: profile.avatar,
+        country: profile.country,
+        countryFlag: profile.country_flag,
+        level: profile.level ?? 1,
+        status: membership.status,
+        joinedAt: membership.joined_at,
+        agentId: membership.agent_id ?? null,
+      };
+    })
+    .filter(
+      (
+        host,
+      ): host is AgencyMember =>
+        host !== null,
+    );
+}

@@ -13,6 +13,7 @@ import {
   getMyAgency,
   getAgencyById,
 
+  getAgencyHosts,
   requestAgencyJoin,
   leaveAgency,
 
@@ -392,7 +393,33 @@ export async function rejectApplication(
     next(error);
   }
 }
+/* ========================================================================== */
+/* HOSTS                                                                      */
+/* ========================================================================== */
 
+export async function getAgencyHostsController(
+  req: Request<{
+    id: string;
+  }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    requireUser(req);
+
+    const hosts =
+      await getAgencyHosts(
+        req.params.id,
+      );
+
+    return res.status(200).json({
+      status: "ok",
+      hosts,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
 /* ========================================================================== */
 /* AGENTS                                                                     */
 /* ========================================================================== */
