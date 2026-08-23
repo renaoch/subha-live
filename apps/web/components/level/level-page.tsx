@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Crown, Gift, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Crown, Gift, ArrowUpRight, ArrowDownLeft, X } from "lucide-react";
 
 import {
   levelsApi,
@@ -47,6 +48,8 @@ function toGiftData(
 }
 
 export function LevelPage() {
+  const router = useRouter();
+
   const [progress, setProgress] = useState<LevelProgress | null>(null);
   const [rewards, setRewards] = useState<LevelReward[]>([]);
   const [history, setHistory] = useState<LevelHistoryItem[]>([]);
@@ -71,6 +74,17 @@ export function LevelPage() {
     outgoing: false,
   });
   const [giftsLoading, setGiftsLoading] = useState(false);
+
+  const handleClose = useCallback(() => {
+    // Prefer browser history so we land back exactly where the user
+    // came from. Fall back to a known route for direct/deep links
+    // where there's no history to go back to.
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/");
+    }
+  }, [router]);
 
   // Initial load: level progress/rewards/history + charisma overview
   useEffect(() => {
@@ -162,7 +176,14 @@ export function LevelPage() {
               <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#D9A94A]/70">Profile</p>
               <h1 className="mt-1 text-3xl font-black tracking-tight">My Level</h1>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-sm text-white/50">✦</div>
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label="Close"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-white/50 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.08] hover:text-white/80 active:scale-95"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
           <p className="mt-2 text-sm text-white/35">Track your progression and charisma.</p>
         </header>
