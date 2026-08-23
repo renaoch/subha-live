@@ -1,10 +1,30 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
-import { X, Loader2, Check, User as UserIcon } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Check,
+  User as UserIcon,
+  Camera,
+  ChevronRight,
+  AtSign,
+  MapPin,
+  AlertCircle,
+} from "lucide-react";
 
 import { usersApi, type UpdateProfileInput } from "@/lib/api/users";
+import { uploadAvatar, AvatarUploadError } from "@/lib/supabase/avatar-upload";
+import { flagFromCode, type Country } from "@/lib/data";
+import { CountryPicker } from "@/components/profile/country-picker";
 import type { PrivateProfile } from "@/lib/types";
 
 const GENDER_OPTIONS = [
@@ -37,32 +57,42 @@ function toFormState(profile: PrivateProfile): FormState {
 }
 
 const inputClass =
-  "mt-1 w-full rounded-lg border border-[#2A2238] bg-[#17131F] px-3 py-2.5 text-sm text-[#F3ECE0] placeholder:text-[#9088A0]/50 focus:border-[#CBA35C]/50 focus:outline-none";
+  "mt-1 w-full rounded-lg border border-[#2A2238] bg-[#17131F] px-3 py-2.5 text-sm text-[#F3ECE0] placeholder:text-[#9088A0]/50 transition-colors focus:border-[#CBA35C]/50 focus:outline-none";
 
 interface FieldProps {
   label: string;
+  icon?: ReactNode;
   error?: string;
   hint?: string;
   children: ReactNode;
 }
 
-function Field({ label, error, hint, children }: FieldProps) {
+function Field({ label, icon, error, hint, children }: FieldProps) {
   return (
-    <div className="rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 p-4">
+    <div className="rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 p-4 transition-colors focus-within:border-[#3A3050]">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-[#9088A0]">{label}</label>
+        <label className="flex items-center gap-1.5 text-xs font-medium text-[#9088A0]">
+          {icon}
+          {label}
+        </label>
         {hint && (
           <span className="text-[10px] text-[#9088A0]/60">{hint}</span>
         )}
       </div>
       {children}
-      {error && <p className="mt-1 text-xs text-rose-400">{error}</p>}
+      {error && (
+        <p className="mt-1.5 flex items-center gap-1 text-xs text-rose-400">
+          <AlertCircle className="h-3 w-3 shrink-0" />
+          {error}
+        </p>
+      )}
     </div>
   );
 }
 
 export function ProfileEditPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [profile, setProfile] = useState<PrivateProfile | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
@@ -74,6 +104,11 @@ export function ProfileEditPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
+
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +162,33 @@ export function ProfileEditPage() {
     });
   }
 
+  function handleSelectCountry(country: Country) {
+    updateField("country", country.name);
+    updateField("country_flag", flagFromCode(country.code));
+  }
+
+  async function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file || !profile) return;
+
+    setAvatarError(null);
+    setUploadingAvatar(true);
+
+    try {
+      const url = await uploadAvatar(file, profile.id);
+      updateField("avatar", url);
+    } catch (err) {
+      setAvatarError(
+        err instanceof AvatarUploadError
+          ? err.message
+          : "Failed to upload avatar. Please try again.",
+      );
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
 
@@ -170,17 +232,17 @@ export function ProfileEditPage() {
     if (Object.keys(payload).length === 0) {
       setSaving(false);
       setSaved(true);
-      setTimeout(() => setSaved(false), 1500);
+      setTimeout(() => router.push("/profile"), 500);
       return;
     }
 
     try {
-      const updated = await usersApi.updateMe(payload);
+      await usersApi.updateMe(payload);
 
-      setProfile(updated);
-      setForm(toFormState(updated));
       setSaved(true);
-      setTimeout(() => setSaved(false), 1500);
+      // Give the "Saved" state a beat to register, then head back to the
+      // profile so the person sees their changes reflected immediately.
+      setTimeout(() => router.push("/profile"), 600);
     } catch (err) {
       // If your apiFetch surfaces the backend's `details` (field-level
       // errors from updateMyProfileSchema) on the thrown error, this
@@ -200,7 +262,6 @@ export function ProfileEditPage() {
       setSaveError(
         err instanceof Error ? err.message : "Failed to update profile.",
       );
-    } finally {
       setSaving(false);
     }
   }
@@ -210,7 +271,7 @@ export function ProfileEditPage() {
       <main className="min-h-dvh bg-[#17131F] text-[#F3ECE0]">
         <div className="mx-auto max-w-md space-y-4 px-4 pb-10 pt-6">
           <div className="h-9 w-full animate-pulse rounded-xl bg-[#1D1829]" />
-          <div className="h-24 animate-pulse rounded-2xl bg-[#1D1829]" />
+          <div className="mx-auto h-24 w-24 animate-pulse rounded-full bg-[#1D1829]" />
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
@@ -239,14 +300,14 @@ export function ProfileEditPage() {
 
   return (
     <main className="min-h-dvh bg-[#17131F] font-[family-name:var(--font-body)] text-[#F3ECE0] antialiased">
-      <div className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-16 pt-6">
-        {/* Header */}
-        <header className="flex items-center justify-between">
+      {/* Sticky header */}
+      <header className="sticky top-0 z-20 border-b border-[#2A2238]/80 bg-[#17131F]/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-md items-center justify-between px-4 py-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#CBA35C]/70">
               Profile
             </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight">
+            <h1 className="mt-0.5 text-xl font-black tracking-tight">
               Edit Profile
             </h1>
           </div>
@@ -259,56 +320,81 @@ export function ProfileEditPage() {
           >
             <X className="h-4 w-4" />
           </button>
-        </header>
+        </div>
+      </header>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Avatar */}
-          <div className="flex items-center gap-4 rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 p-4">
-            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-[#2A2238] bg-[#2A2238]">
-              {form.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={form.avatar}
-                  alt="Avatar preview"
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display =
-                      "none";
-                  }}
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-[#9088A0]">
-                  <UserIcon className="h-6 w-6" />
-                </div>
-              )}
-            </div>
+      <div className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-32 pt-6">
+        <form
+          id="profile-edit-form"
+          onSubmit={handleSubmit}
+          className="space-y-5"
+        >
+          {/* Avatar — centered hero style */}
+          <div className="flex flex-col items-center gap-3 py-2">
+            <div className="relative">
+              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-[#2A2238] bg-[#2A2238] shadow-[0_0_0_4px_rgba(203,163,92,0.08)]">
+                {form.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={form.avatar}
+                    alt="Avatar preview"
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display =
+                        "none";
+                    }}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[#9088A0]">
+                    <UserIcon className="h-9 w-9" />
+                  </div>
+                )}
 
-            <div className="min-w-0 flex-1">
-              <label
-                htmlFor="avatar"
-                className="text-xs font-medium text-[#9088A0]"
+                {uploadingAvatar && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                    <Loader2 className="h-6 w-6 animate-spin text-[#CBA35C]" />
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                aria-label="Change avatar"
+                className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#17131F] bg-[#CBA35C] text-[#17131F] shadow-md transition-transform duration-150 hover:bg-[#DBB870] active:scale-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Avatar URL
-              </label>
+                <Camera className="h-3.5 w-3.5" />
+              </button>
+
               <input
-                id="avatar"
-                type="url"
-                inputMode="url"
-                placeholder="https://..."
-                value={form.avatar}
-                onChange={(e) => updateField("avatar", e.target.value)}
-                className={inputClass}
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleAvatarChange}
+                className="hidden"
               />
-              {fieldErrors.avatar && (
-                <p className="mt-1 text-xs text-rose-400">
-                  {fieldErrors.avatar}
-                </p>
-              )}
             </div>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="text-xs font-semibold text-[#CBA35C] transition-colors hover:text-[#DBB870] disabled:opacity-60"
+            >
+              {uploadingAvatar ? "Uploading..." : "Change photo"}
+            </button>
+
+            {avatarError && (
+              <p className="flex items-center gap-1 text-xs text-rose-400">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {avatarError}
+              </p>
+            )}
           </div>
 
           {/* Name */}
-          <Field label="Name" error={fieldErrors.name}>
+          <Field label="Name" icon={<UserIcon className="h-3 w-3" />} error={fieldErrors.name}>
             <input
               type="text"
               maxLength={50}
@@ -320,7 +406,7 @@ export function ProfileEditPage() {
           </Field>
 
           {/* Handle */}
-          <Field label="Handle" error={fieldErrors.handle}>
+          <Field label="Handle" icon={<AtSign className="h-3 w-3" />} error={fieldErrors.handle}>
             <div className="mt-1 flex items-center gap-1 rounded-lg border border-[#2A2238] bg-[#17131F] px-3 py-2.5">
               <span className="text-sm text-[#9088A0]">@</span>
               <input
@@ -355,34 +441,30 @@ export function ProfileEditPage() {
             />
           </Field>
 
-          {/* Country + flag */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <Field label="Country" error={fieldErrors.country}>
-                <input
-                  type="text"
-                  maxLength={100}
-                  value={form.country}
-                  onChange={(e) => updateField("country", e.target.value)}
-                  placeholder="India"
-                  className={inputClass}
-                />
-              </Field>
-            </div>
-
-            <Field label="Flag" error={fieldErrors.country_flag}>
-              <input
-                type="text"
-                maxLength={10}
-                value={form.country_flag}
-                onChange={(e) =>
-                  updateField("country_flag", e.target.value)
-                }
-                placeholder="🇮🇳"
-                className={`${inputClass} text-center text-lg`}
-              />
-            </Field>
-          </div>
+          {/* Country — opens picker, flag is derived automatically */}
+          <Field label="Country" icon={<MapPin className="h-3 w-3" />} error={fieldErrors.country}>
+            <button
+              type="button"
+              onClick={() => setCountryPickerOpen(true)}
+              className="mt-1 flex w-full items-center gap-2.5 rounded-lg border border-[#2A2238] bg-[#17131F] px-3 py-2.5 text-left transition-colors hover:border-[#3A3050]"
+            >
+              {form.country_flag ? (
+                <span className="text-lg leading-none">
+                  {form.country_flag}
+                </span>
+              ) : (
+                <MapPin className="h-4 w-4 text-[#9088A0]" />
+              )}
+              <span
+                className={`flex-1 text-sm ${
+                  form.country ? "text-[#F3ECE0]" : "text-[#9088A0]/50"
+                }`}
+              >
+                {form.country || "Select your country"}
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-[#9088A0]" />
+            </button>
+          </Field>
 
           {/* Gender */}
           <div>
@@ -409,23 +491,30 @@ export function ProfileEditPage() {
               ))}
             </div>
             {fieldErrors.gender && (
-              <p className="mt-1 text-xs text-rose-400">
+              <p className="mt-1.5 flex items-center gap-1 text-xs text-rose-400">
+                <AlertCircle className="h-3 w-3 shrink-0" />
                 {fieldErrors.gender}
               </p>
             )}
           </div>
 
           {saveError && (
-            <div className="rounded-xl border border-rose-400/20 bg-rose-400/5 px-4 py-3 text-sm text-rose-300">
+            <div className="flex items-start gap-2 rounded-xl border border-rose-400/20 bg-rose-400/5 px-4 py-3 text-sm text-rose-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               {saveError}
             </div>
           )}
+        </form>
+      </div>
 
-          {/* Save */}
+      {/* Sticky save bar */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[#2A2238]/80 bg-[#17131F]/95 backdrop-blur-md">
+        <div className="mx-auto max-w-md px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3">
           <button
             type="submit"
-            disabled={saving}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#CBA35C] py-3.5 text-sm font-black uppercase tracking-wider text-[#17131F] transition-all duration-200 hover:bg-[#DBB870] disabled:cursor-not-allowed disabled:opacity-60"
+            form="profile-edit-form"
+            disabled={saving || uploadingAvatar}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#CBA35C] py-3.5 text-sm font-black uppercase tracking-wider text-[#17131F] shadow-[0_8px_24px_-8px_rgba(203,163,92,0.5)] transition-all duration-200 hover:bg-[#DBB870] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? (
               <>
@@ -441,8 +530,15 @@ export function ProfileEditPage() {
               "Save Changes"
             )}
           </button>
-        </form>
+        </div>
       </div>
+
+      <CountryPicker
+        open={countryPickerOpen}
+        value={form.country}
+        onClose={() => setCountryPickerOpen(false)}
+        onSelect={handleSelectCountry}
+      />
     </main>
   );
 }
