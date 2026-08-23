@@ -244,59 +244,164 @@ export async function getAgencies(): Promise<AgencyListResult> {
 export async function getMyAgency(
   userId: string,
 ): Promise<MyAgencyResult> {
-  // 1. Try to find the user as a host (pending or approved)
-  const { data: hostRows, error: hostError } = await supabase
+  /*
+   * 1. Check whether the user is already a host.
+   *
+   * Pending and approved memberships both count here.
+   * This preserves your existing approval workflow.
+   */
+  const {
+    data: hostRows,
+    error: hostError,
+  } = await supabase
     .from("agency_hosts")
-    .select("agency_id, host_id, status, joined_at")
+    .select(
+      "agency_id, host_id, status, joined_at",
+    )
     .eq("host_id", userId)
-    .in("status", ["pending", "approved"])
-    .order("joined_at", { ascending: false })
+    .in("status", [
+      "pending",
+      "approved",
+    ])
+    .order("joined_at", {
+      ascending: false,
+    })
     .limit(1);
 
-  if (hostError) throw hostError;
+  if (hostError) {
+    throw hostError;
+  }
 
-  // hostRows is an array (even with limit 1)
-  const membership = (hostRows && hostRows.length > 0) ? hostRows[0] : null;
+  const membership =
+    hostRows &&
+    hostRows.length > 0
+      ? hostRows[0]
+      : null;
 
-  // 2. If not a host, check if they own an agency
+  /*
+   * 2. If the user is not a host, check whether
+   *    they own an ACTIVE agency.
+   *
+   * IMPORTANT:
+   * is_active = true is required.
+   *
+   * Previously this query searched only by owner_id,
+   * which allowed old inactive agencies such as
+   * "Aria Studios" to be returned.
+   */
   if (!membership) {
-    const { data: ownerRows, error: ownerError } = await supabase
+    const {
+      data: ownerRows,
+      error: ownerError,
+    } = await supabase
       .from("agencies")
-      .select("id, code, name, owner_id, commission_rate, monthly_revenue, total_hosts, created_at")
+      .select(
+        `
+          id,
+          code,
+          name,
+          owner_id,
+          commission_rate,
+          monthly_revenue,
+          total_hosts,
+          created_at
+        `,
+      )
       .eq("owner_id", userId)
+      .eq("is_active", true)
+      .order("created_at", {
+        ascending: false,
+      })
       .limit(1);
 
-    if (ownerError) throw ownerError;
+    if (ownerError) {
+      throw ownerError;
+    }
 
-    const ownerData = (ownerRows && ownerRows.length > 0) ? ownerRows[0] : null;
+    const ownerData =
+      ownerRows &&
+      ownerRows.length > 0
+        ? ownerRows[0]
+        : null;
 
+    /*
+     * User owns an active agency.
+     */
     if (ownerData) {
       return {
-        agency: toAgencySummary(ownerData as AgencyRow),
-        membershipStatus: "approved", // owner has full access
+        agency:
+          toAgencySummary(
+            ownerData as AgencyRow,
+          ),
+        membershipStatus:
+          "approved",
       };
     }
 
-    return { agency: null, membershipStatus: null };
+    /*
+     * User is neither an agency host
+     * nor the owner of an active agency.
+     */
+    return {
+      agency: null,
+      membershipStatus: null,
+    };
   }
 
-  // 3. Host case – fetch the agency details
-  const { data: agencyData, error: agencyError } = await supabase
+  /*
+   * 3. Host case.
+   *
+   * Fetch the agency associated with the
+   * user's membership.
+   */
+  const {
+    data: agencyData,
+    error: agencyError,
+  } = await supabase
     .from("agencies")
-    .select("id, code, name, owner_id, commission_rate, monthly_revenue, total_hosts, created_at")
+    .select(
+      `
+        id,
+        code,
+        name,
+        owner_id,
+        commission_rate,
+        monthly_revenue,
+        total_hosts,
+        created_at
+      `,
+    )
     .eq("id", membership.agency_id)
+    .eq("is_active", true)
     .single();
 
   if (agencyError) {
-    if (agencyError.code === "PGRST116") {
-      throw new AppError(404, "Agency not found", { code: "AGENCY_NOT_FOUND" });
+    if (
+      agencyError.code ===
+      "PGRST116"
+    ) {
+      throw new AppError(
+        404,
+        "Agency not found",
+        {
+          code:
+            "AGENCY_NOT_FOUND",
+        },
+      );
     }
+
     throw agencyError;
   }
 
   return {
-    agency: toAgencySummary(agencyData as AgencyRow),
-    membershipStatus: toAgencyMembershipStatus(membership.status),
+    agency:
+      toAgencySummary(
+        agencyData as AgencyRow,
+      ),
+    membershipStatus:
+      toAgencyMembershipStatus(
+        membership.status,
+      ),
   };
 }
 /* ========================================================================== */
