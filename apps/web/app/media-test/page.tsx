@@ -67,6 +67,14 @@ interface PublishTracksResponse {
   };
 }
 
+interface MediaTrackInput {
+  trackName: string;
+
+  kind: "audio" | "video";
+
+  direction: "publish";
+}
+
 export default function MediaTestPage() {
   const videoRef =
     useRef<HTMLVideoElement | null>(
@@ -93,16 +101,12 @@ export default function MediaTestPage() {
     useState("");
 
   const [iceState, setIceState] =
-    useState(
-      "new",
-    );
+    useState("new");
 
   const [
     connectionState,
     setConnectionState,
-  ] = useState(
-    "new",
-  );
+  ] = useState("new");
 
   const [
     localDescriptionReady,
@@ -110,9 +114,7 @@ export default function MediaTestPage() {
   ] = useState(false);
 
   async function start() {
-    if (
-      peerRef.current
-    ) {
+    if (peerRef.current) {
       return;
     }
 
@@ -120,12 +122,8 @@ export default function MediaTestPage() {
       setError("");
       setSessionId("");
       setIceState("new");
-      setConnectionState(
-        "new",
-      );
-      setLocalDescriptionReady(
-        false,
-      );
+      setConnectionState("new");
+      setLocalDescriptionReady(false);
 
       /*
        * ----------------------------------------------------------
@@ -191,18 +189,13 @@ export default function MediaTestPage() {
 
           if (
             peer.connectionState ===
-              "failed" ||
-            peer.connectionState ===
-              "closed"
+            "failed"
           ) {
-            if (
-              peer.connectionState ===
-              "failed"
-            ) {
-              setStatus(
-                "error",
-              );
-            }
+            setStatus("error");
+
+            setError(
+              "WebRTC connection failed.",
+            );
           }
         };
 
@@ -236,7 +229,7 @@ export default function MediaTestPage() {
 
       /*
        * ----------------------------------------------------------
-       * 3. Add local media tracks
+       * 3. Add actual MediaStream tracks
        * ----------------------------------------------------------
        */
 
@@ -252,7 +245,27 @@ export default function MediaTestPage() {
 
       /*
        * ----------------------------------------------------------
-       * 4. Create SDP offer
+       * 4. Build track descriptors from actual stream
+       * ----------------------------------------------------------
+       */
+
+      const tracks =
+        buildPublishTracks(stream);
+
+      if (tracks.length === 0) {
+        throw new Error(
+          "No audio or video tracks were captured.",
+        );
+      }
+
+      console.log(
+        "[media-test] Tracks:",
+        tracks,
+      );
+
+      /*
+       * ----------------------------------------------------------
+       * 5. Create SDP offer
        * ----------------------------------------------------------
        */
 
@@ -268,7 +281,7 @@ export default function MediaTestPage() {
       );
 
       /*
-       * Wait until ICE gathering has completed.
+       * Wait until ICE gathering completes.
        *
        * This gives us a complete SDP containing
        * the gathered ICE candidates.
@@ -299,11 +312,10 @@ export default function MediaTestPage() {
 
       /*
        * ----------------------------------------------------------
-       * 5. Create Cloudflare session
+       * 6. Create Cloudflare session
        * ----------------------------------------------------------
        *
-       * Session creation is separate from track
-       * negotiation.
+       * Session creation receives the browser SDP.
        */
 
       setStatus(
@@ -316,6 +328,9 @@ export default function MediaTestPage() {
           {
             roomId:
               "phase1-browser-test",
+
+            offerSdp:
+              localDescription.sdp,
           },
         );
 
@@ -339,7 +354,7 @@ export default function MediaTestPage() {
 
       /*
        * ----------------------------------------------------------
-       * 6. Send SDP + tracks to Cloudflare
+       * 7. Publish actual captured tracks
        * ----------------------------------------------------------
        */
 
@@ -347,7 +362,7 @@ export default function MediaTestPage() {
         "publishing-tracks",
       );
 
-      const tracks =
+      const tracksResponse =
         await api.post<PublishTracksResponse>(
           "/api/v1/media/test/tracks",
           {
@@ -357,34 +372,12 @@ export default function MediaTestPage() {
             offerSdp:
               localDescription.sdp,
 
-            tracks: [
-              {
-                trackName:
-                  "phase1-test-video",
-
-                kind:
-                  "video",
-
-                direction:
-                  "publish",
-              },
-
-              {
-                trackName:
-                  "phase1-test-audio",
-
-                kind:
-                  "audio",
-
-                direction:
-                  "publish",
-              },
-            ],
+            tracks,
           },
         );
 
       const answerSdp =
-        tracks.data.answerSdp;
+        tracksResponse.data.answerSdp;
 
       if (!answerSdp) {
         throw new Error(
@@ -396,9 +389,14 @@ export default function MediaTestPage() {
         "[media-test] Cloudflare SDP answer received.",
       );
 
+      console.log(
+        "[media-test] Cloudflare tracks:",
+        tracksResponse.data.tracks,
+      );
+
       /*
        * ----------------------------------------------------------
-       * 7. Apply Cloudflare SDP answer
+       * 8. Apply Cloudflare SDP answer
        * ----------------------------------------------------------
        */
 
@@ -414,7 +412,7 @@ export default function MediaTestPage() {
 
       /*
        * ----------------------------------------------------------
-       * 8. Wait for WebRTC connection
+       * 9. Wait for WebRTC connection
        * ----------------------------------------------------------
        */
 
@@ -427,16 +425,12 @@ export default function MediaTestPage() {
         caughtError,
       );
 
-      setStatus(
-        "error",
-      );
+      setStatus("error");
 
       setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : String(
-              caughtError,
-            ),
+        getErrorMessage(
+          caughtError,
+        ),
       );
 
       cleanupConnection();
@@ -446,17 +440,13 @@ export default function MediaTestPage() {
   function stop() {
     cleanupConnection();
 
-    setStatus(
-      "stopped",
-    );
+    setStatus("stopped");
 
     setConnectionState(
       "closed",
     );
 
-    setIceState(
-      "closed",
-    );
+    setIceState("closed");
 
     setSessionId("");
 
@@ -714,9 +704,7 @@ export default function MediaTestPage() {
           }}
         >
           <video
-            ref={
-              videoRef
-            }
+            ref={videoRef}
             autoPlay
             muted
             playsInline
@@ -744,9 +732,7 @@ export default function MediaTestPage() {
         >
           <button
             type="button"
-            onClick={
-              start
-            }
+            onClick={start}
             disabled={
               status !==
                 "idle" &&
@@ -793,9 +779,7 @@ export default function MediaTestPage() {
 
           <button
             type="button"
-            onClick={
-              stop
-            }
+            onClick={stop}
             style={{
               padding:
                 "12px 20px",
@@ -822,6 +806,93 @@ export default function MediaTestPage() {
       </div>
     </main>
   );
+}
+
+/**
+ * Build provider-agnostic track descriptors
+ * from the actual browser MediaStream.
+ *
+ * No hard-coded audio/video track names.
+ */
+function buildPublishTracks(
+  stream: MediaStream,
+): MediaTrackInput[] {
+  return stream
+    .getTracks()
+    .map(
+      (track): MediaTrackInput => ({
+        trackName:
+          createTrackName(
+            track,
+          ),
+
+        kind:
+          track.kind ===
+          "video"
+            ? "video"
+            : "audio",
+
+        direction:
+          "publish",
+      }),
+    );
+}
+
+/**
+ * Create a stable track name for the
+ * current browser track.
+ *
+ * The provider receives the name, while
+ * the actual MediaStreamTrack remains the
+ * source of truth on the browser.
+ */
+function createTrackName(
+  track: MediaStreamTrack,
+): string {
+  const normalizedKind =
+    track.kind ===
+    "video"
+      ? "video"
+      : "audio";
+
+  const normalizedId =
+    track.id
+      .replace(
+        /[^a-zA-Z0-9_-]/g,
+        "",
+      )
+      .slice(0, 32);
+
+  return normalizedId
+    ? `phase1-${normalizedKind}-${normalizedId}`
+    : `phase1-${normalizedKind}`;
+}
+
+function getErrorMessage(
+  error: unknown,
+): string {
+  if (
+    error instanceof Error
+  ) {
+    return error.message;
+  }
+
+  if (
+    typeof error ===
+    "string"
+  ) {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(
+      error,
+      null,
+      2,
+    );
+  } catch {
+    return String(error);
+  }
 }
 
 function StatusRow({
