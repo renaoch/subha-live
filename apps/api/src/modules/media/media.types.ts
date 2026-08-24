@@ -91,8 +91,10 @@ export interface MediaTrack {
   kind: MediaTrackKind;
 
   direction: MediaTrackDirection;
-}
 
+  
+  mid?: string;
+}
 export interface RemoteMediaTrack {
   sessionId: string;
 

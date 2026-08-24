@@ -17,8 +17,8 @@ import type {
   MediaSessionInfo,
   MediaTrack,
   PublishTracksInput,
-  RenegotiateInput,
   RemoteMediaTrack,
+  RenegotiateInput,
   SubscribeTracksInput,
   UpdateTracksInput,
 } from "../../../modules/media/media.types";
@@ -82,7 +82,8 @@ export class CloudflareRealtimeProvider
           appSecret:
             this.appSecret,
 
-          timeoutMs: 10_000,
+          timeoutMs:
+            10_000,
 
           maxAttempts:
             mediaConfig.retry
@@ -101,9 +102,9 @@ export class CloudflareRealtimeProvider
     }
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * CONFIGURATION
-   * ========================================================== */
+   * ======================================================================== */
 
   isConfigured(): boolean {
     return Boolean(
@@ -157,9 +158,9 @@ export class CloudflareRealtimeProvider
     return this.http;
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * SESSION
-   * ========================================================== */
+   * ======================================================================== */
 
   async createSession(
     input: CreateMediaSessionInput,
@@ -170,17 +171,35 @@ export class CloudflareRealtimeProvider
     > = {};
 
     /*
-     * If the caller already has an SDP offer,
-     * forward it to Cloudflare.
-     *
-     * This is useful for the current API flow
-     * where Cloudflare validates sessionDescription.
+     * Cloudflare requires a valid browser-generated
+     * SDP offer when creating the session.
      */
     if (input.offerSdp) {
+      const offerSdp =
+        input.offerSdp.trim();
+
+      if (!offerSdp) {
+        throw new MediaProviderError(
+          "offerSdp is required. Generate it from a browser RTCPeerConnection before creating the Cloudflare media session.",
+          {
+            code:
+              "MEDIA_SDP_OFFER_REQUIRED",
+          },
+        );
+      }
+
       body.sessionDescription = {
         type: "offer",
-        sdp: input.offerSdp,
+        sdp: offerSdp,
       };
+    } else {
+      throw new MediaProviderError(
+        "offerSdp is required. Generate it from a browser RTCPeerConnection before creating the Cloudflare media session.",
+        {
+          code:
+            "MEDIA_SDP_OFFER_REQUIRED",
+        },
+      );
     }
 
     const response =
@@ -209,32 +228,31 @@ export class CloudflareRealtimeProvider
     const timestamp =
       Date.now();
 
-    const session: MediaSession =
-      {
-        sessionId:
-          response.sessionId,
+    const session: MediaSession = {
+      sessionId:
+        response.sessionId,
 
-        roomId:
-          input.roomId,
+      roomId:
+        input.roomId,
 
-        userId:
-          input.userId,
+      userId:
+        input.userId,
 
-        role:
-          input.role,
+      role:
+        input.role,
 
-        generation:
-          input.generation,
+      generation:
+        input.generation,
 
-        status:
-          "connecting",
+      status:
+        "connecting",
 
-        createdAt:
-          timestamp,
+      createdAt:
+        timestamp,
 
-        lastHeartbeatAt:
-          timestamp,
-      };
+      lastHeartbeatAt:
+        timestamp,
+    };
 
     return {
       session,
@@ -244,17 +262,88 @@ export class CloudflareRealtimeProvider
     };
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * PUBLISH TRACKS
-   * ========================================================== */
+   * ======================================================================== */
 
   async publishTracks(
     input: PublishTracksInput,
   ): Promise<MediaNegotiationResult> {
+    if (
+      !input.sessionId ||
+      !input.sessionId.trim()
+    ) {
+      throw new MediaProviderError(
+        "sessionId is required",
+        {
+          code:
+            "MEDIA_SESSION_ID_REQUIRED",
+        },
+      );
+    }
+
+    if (
+      !input.offerSdp ||
+      !input.offerSdp.trim()
+    ) {
+      throw new MediaProviderError(
+        "offerSdp is required",
+        {
+          code:
+            "MEDIA_SDP_OFFER_REQUIRED",
+        },
+      );
+    }
+
+    if (
+      !Array.isArray(
+        input.tracks,
+      ) ||
+      input.tracks.length === 0
+    ) {
+      throw new MediaProviderError(
+        "At least one track is required",
+        {
+          code:
+            "MEDIA_TRACKS_REQUIRED",
+        },
+      );
+    }
+
+    /*
+     * Convert our internal MediaTrack
+     * representation into Cloudflare's
+     * local-track representation.
+     *
+     * IMPORTANT:
+     *
+     * mid comes from the browser's
+     * RTCRtpTransceiver and must be sent
+     * to Cloudflare.
+     */
     const tracks =
       this.mapPublishTracks(
         input.tracks,
       );
+
+    console.log(
+      "[cloudflare-realtime] Publishing tracks:",
+      tracks.map(
+        (track) => ({
+          location:
+            track.location,
+
+          mid:
+            track.mid,
+
+          trackName:
+            track.trackName,
+
+          kind:
+            track.kind,
+        }),
+      ),
+    );
 
     const response =
       await this.getHttp().request<CloudflareTracksResponse>(
@@ -306,13 +395,33 @@ export class CloudflareRealtimeProvider
     };
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * SUBSCRIBE TRACKS
-   * ========================================================== */
+   * ======================================================================== */
 
   async subscribeTracks(
     input: SubscribeTracksInput,
   ): Promise<MediaNegotiationResult> {
+    if (
+      !input.sessionId ||
+      !input.sessionId.trim()
+    ) {
+      throw new MediaProviderError(
+        "sessionId is required",
+      );
+    }
+
+    if (
+      !Array.isArray(
+        input.tracks,
+      ) ||
+      input.tracks.length === 0
+    ) {
+      throw new MediaProviderError(
+        "At least one track is required",
+      );
+    }
+
     const body: Record<
       string,
       unknown
@@ -323,7 +432,10 @@ export class CloudflareRealtimeProvider
         ),
     };
 
-    if (input.offerSdp) {
+    if (
+      input.offerSdp &&
+      input.offerSdp.trim()
+    ) {
       body.sessionDescription = {
         sdp:
           input.offerSdp,
@@ -375,13 +487,31 @@ export class CloudflareRealtimeProvider
     };
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * RENEGOTIATION
-   * ========================================================== */
+   * ======================================================================== */
 
   async renegotiate(
     input: RenegotiateInput,
   ): Promise<void> {
+    if (
+      !input.sessionId ||
+      !input.sessionId.trim()
+    ) {
+      throw new MediaProviderError(
+        "sessionId is required",
+      );
+    }
+
+    if (
+      !input.answerSdp ||
+      !input.answerSdp.trim()
+    ) {
+      throw new MediaProviderError(
+        "answerSdp is required",
+      );
+    }
+
     await this.getHttp().request(
       `/sessions/${encodeURIComponent(
         input.sessionId,
@@ -401,13 +531,22 @@ export class CloudflareRealtimeProvider
     );
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * CLOSE TRACKS
-   * ========================================================== */
+   * ======================================================================== */
 
   async closeTracks(
     input: CloseTracksInput,
   ): Promise<void> {
+    if (
+      !input.sessionId ||
+      !input.sessionId.trim()
+    ) {
+      throw new MediaProviderError(
+        "sessionId is required",
+      );
+    }
+
     if (
       input.trackNames.length ===
       0
@@ -425,7 +564,9 @@ export class CloudflareRealtimeProvider
         body: JSON.stringify({
           tracks:
             input.trackNames.map(
-              (trackName) => ({
+              (
+                trackName,
+              ) => ({
                 trackName,
               }),
             ),
@@ -436,13 +577,27 @@ export class CloudflareRealtimeProvider
     );
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * UPDATE TRACKS
-   * ========================================================== */
+   * ======================================================================== */
 
   async updateTracks(
     input: UpdateTracksInput,
   ): Promise<void> {
+    if (
+      !input.sessionId ||
+      !input.sessionId.trim()
+    ) {
+      throw new MediaProviderError(
+        "sessionId is required",
+      );
+    }
+
+    const tracks =
+      this.mapUpdateTracks(
+        input.tracks,
+      );
+
     await this.getHttp().request(
       `/sessions/${encodeURIComponent(
         input.sessionId,
@@ -451,22 +606,28 @@ export class CloudflareRealtimeProvider
         method: "PUT",
 
         body: JSON.stringify({
-          tracks:
-            this.mapUpdateTracks(
-              input.tracks,
-            ),
+          tracks,
         }),
       },
     );
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * GET SESSION
-   * ========================================================== */
+   * ======================================================================== */
 
   async getSession(
     sessionId: string,
   ): Promise<MediaSessionInfo> {
+    if (
+      !sessionId ||
+      !sessionId.trim()
+    ) {
+      throw new MediaProviderError(
+        "sessionId is required",
+      );
+    }
+
     const response =
       await this.getHttp().request<CloudflareSessionInfo>(
         `/sessions/${encodeURIComponent(
@@ -492,9 +653,9 @@ export class CloudflareRealtimeProvider
     };
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * CLOSE SESSION
-   * ========================================================== */
+   * ======================================================================== */
 
   async closeSession(
     sessionId: string,
@@ -553,9 +714,9 @@ export class CloudflareRealtimeProvider
     }
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * TRACK MAPPING
-   * ========================================================== */
+   * ======================================================================== */
 
   private mapCloudflareTracks(
     tracks: CloudflareTrack[],
@@ -563,39 +724,151 @@ export class CloudflareRealtimeProvider
     return tracks.map(
       (
         track,
-      ): MediaTrack => ({
-        trackName:
-          track.trackName,
-
-        kind:
-          this.getTrackKind(
-            track.trackName,
-          ),
-
-        direction:
+      ): MediaTrack => {
+        const direction =
           track.location ===
           "local"
             ? "publish"
-            : "subscribe",
-      }),
+            : "subscribe";
+
+        return {
+          trackName:
+            track.trackName,
+
+          kind:
+            this.getTrackKind(
+              track.trackName,
+            ),
+
+          direction,
+
+          /*
+           * Preserve Cloudflare's MID
+           * when it returns one.
+           */
+          mid:
+            track.mid,
+        };
+      },
     );
   }
 
+  /*
+   * Convert our application track
+   * into Cloudflare's local track.
+   *
+   * BEFORE:
+   *
+   * {
+   *   location: "local",
+   *   trackName: "..."
+   * }
+   *
+   * AFTER:
+   *
+   * {
+   *   location: "local",
+   *   mid: "0",
+   *   trackName: "...",
+   *   kind: "video"
+   * }
+   */
   private mapPublishTracks(
     tracks: MediaTrack[],
   ): Array<{
     location: "local";
 
+    mid: string;
+
     trackName: string;
+
+    kind:
+      | "audio"
+      | "video";
   }> {
     return tracks.map(
-      (track) => ({
-        location:
-          "local",
+      (
+        track,
+        index,
+      ) => {
+        const trackName =
+          String(
+            track.trackName ??
+              "",
+          ).trim();
 
-        trackName:
-          track.trackName,
-      }),
+        if (!trackName) {
+          throw new MediaProviderError(
+            `Track ${index} is missing trackName`,
+            {
+              code:
+                "MEDIA_TRACK_NAME_REQUIRED",
+
+              trackIndex:
+                index,
+            },
+          );
+        }
+
+        const mid =
+          typeof track.mid ===
+          "string"
+            ? track.mid.trim()
+            : "";
+
+        if (!mid) {
+          throw new MediaProviderError(
+            `Track "${trackName}" is missing mid`,
+            {
+              code:
+                "MEDIA_TRACK_MID_REQUIRED",
+
+              trackIndex:
+                index,
+
+              trackName,
+            },
+          );
+        }
+
+        if (
+          track.direction !==
+          "publish"
+        ) {
+          throw new MediaProviderError(
+            `Track "${trackName}" must have direction "publish"`,
+            {
+              code:
+                "MEDIA_TRACK_DIRECTION_INVALID",
+
+              trackIndex:
+                index,
+
+              trackName,
+
+              direction:
+                track.direction,
+            },
+          );
+        }
+
+        const kind =
+          track.kind ===
+          "video"
+            ? "video"
+            : "audio";
+
+        return {
+          location:
+            "local",
+
+          mid,
+
+          trackName,
+
+          kind,
+        };
+      },
     );
   }
 
@@ -609,16 +882,61 @@ export class CloudflareRealtimeProvider
     trackName: string;
   }> {
     return tracks.map(
-      (track) => ({
-        location:
-          "remote",
+      (
+        track,
+        index,
+      ) => {
+        const sessionId =
+          String(
+            track.sessionId ??
+              "",
+          ).trim();
 
-        sessionId:
-          track.sessionId,
+        const trackName =
+          String(
+            track.trackName ??
+              "",
+          ).trim();
 
-        trackName:
-          track.trackName,
-      }),
+        if (!sessionId) {
+          throw new MediaProviderError(
+            `Remote track ${index} is missing sessionId`,
+            {
+              code:
+                "MEDIA_REMOTE_TRACK_SESSION_ID_REQUIRED",
+
+              trackIndex:
+                index,
+
+              trackName,
+            },
+          );
+        }
+
+        if (!trackName) {
+          throw new MediaProviderError(
+            `Remote track ${index} is missing trackName`,
+            {
+              code:
+                "MEDIA_REMOTE_TRACK_NAME_REQUIRED",
+
+              trackIndex:
+                index,
+
+              sessionId,
+            },
+          );
+        }
+
+        return {
+          location:
+            "remote",
+
+          sessionId,
+
+          trackName,
+        };
+      },
     );
   }
 
@@ -626,14 +944,53 @@ export class CloudflareRealtimeProvider
     tracks: MediaTrack[],
   ): Array<{
     trackName: string;
+
+    mid?: string;
+
+    kind?:
+      | "audio"
+      | "video";
   }> {
     return tracks.map(
-      (track) => ({
-        trackName:
-          track.trackName,
-      }),
+      (
+        track,
+        index,
+      ) => {
+        const trackName =
+          String(
+            track.trackName ??
+              "",
+          ).trim();
+
+        if (!trackName) {
+          throw new MediaProviderError(
+            `Track ${index} is missing trackName`,
+            {
+              code:
+                "MEDIA_TRACK_NAME_REQUIRED",
+
+              trackIndex:
+                index,
+            },
+          );
+        }
+
+        return {
+          trackName,
+
+          mid:
+            track.mid,
+
+          kind:
+            track.kind,
+        };
+      },
     );
   }
+
+  /* ==========================================================================
+   * TRACK KIND
+   * ======================================================================== */
 
   private getTrackKind(
     trackName: string,
@@ -644,17 +1001,31 @@ export class CloudflareRealtimeProvider
       trackName.toLowerCase();
 
     if (
-      normalized.includes("video")
+      normalized.includes(
+        "video",
+      )
     ) {
       return "video";
     }
 
     if (
-      normalized.includes("audio")
+      normalized.includes(
+        "audio",
+      )
     ) {
       return "audio";
     }
 
+    /*
+     * Your frontend creates names
+     * such as:
+     *
+     * phase1-video-...
+     * phase1-audio-...
+     *
+     * so this should normally
+     * resolve correctly.
+     */
     throw new MediaProviderError(
       `Unable to determine media track kind for track "${trackName}"`,
       {
@@ -663,9 +1034,9 @@ export class CloudflareRealtimeProvider
     );
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * STATUS
-   * ========================================================== */
+   * ======================================================================== */
 
   private normalizeStatus(
     status:
@@ -689,9 +1060,9 @@ export class CloudflareRealtimeProvider
     }
   }
 
-  /* ============================================================
+  /* ==========================================================================
    * CONFIGURATION
-   * ========================================================== */
+   * ======================================================================== */
 
   getConfiguration() {
     return {
