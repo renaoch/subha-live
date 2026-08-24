@@ -6,25 +6,26 @@ import { profileMenuItems } from "./profile-menu-items";
 import { usersApi } from "@/lib/api/users";
 import type { PrivateProfile } from "@/lib/types";
 
-type UserRole = "user" | "host" | "bd" | "admin";
-
 export function ProfileMenu() {
-  const [userRole, setUserRole] = useState<UserRole>("user");
+  const [profile, setProfile] = useState<PrivateProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadRole() {
+    async function loadProfile() {
       try {
-        const profile = await usersApi.me();
-        setUserRole((profile.role as UserRole) || "user");
+        const data = await usersApi.me();
+        setProfile(data);
       } catch {
-        setUserRole("user");
+        setProfile(null);
       } finally {
         setLoading(false);
       }
     }
-    loadRole();
+    loadProfile();
   }, []);
+
+  const role = profile?.role ?? "user";
+  const isAdmin = Boolean(profile?.is_admin);
 
   // Filter menu items based on role
   const filteredItems = profileMenuItems.filter((item) => {
@@ -44,14 +45,24 @@ export function ProfileMenu() {
       return true;
     }
 
-    // Host Center – only for hosts or admins
+    // Host Center – hosts, agency staff, or admins
     if (item.id === "host-center") {
-      return userRole === "host" || userRole === "admin";
+      return (
+        role === "agency_owner" ||
+        role === "agency_admin" ||
+        role === "agency_agent" ||
+        isAdmin
+      );
     }
 
-    // BD Center – only for BD or admins
+    // BD Center – agency owners or admins
     if (item.id === "bd-center") {
-      return userRole === "bd" || userRole === "admin";
+      return role === "agency_owner" || isAdmin;
+    }
+
+    // Admin Panel – platform admins / engineers only
+    if (item.id === "admin-panel") {
+      return isAdmin;
     }
 
     // Default: show all other items

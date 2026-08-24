@@ -16,3 +16,30 @@ export interface BdApplicationResult {
 export interface BdOverview {
   application: BdApplicationResult | null;
 }
+
+/* ========================================================================== */
+/* ADMIN                                                                      */
+/* ========================================================================== */
+
+export interface BdApplicant {
+  id: string;
+  name: string | null;
+  handle: string | null;
+  avatar: string | null;
+  publicId: string | null;
+}
+
+export interface BdApplicationAdminResult extends BdApplicationResult {
+  userId: string;
+  applicant: BdApplicant | null;
+}
+
+export interface ApproveBdApplicationResult {
+  application: BdApplicationResult;
+  agency: {
+    id: string;
+    name: string;
+    code: string;
+    ownerId: string;
+  };
+}

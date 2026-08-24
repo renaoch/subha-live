@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { useAgency } from "@/hooks/use-agency";
 import { MyAgencyPanel } from "@/components/agency/my-agency-panel";
 import { type Agency } from "@/lib/api/agency";   // <-- ADD THIS IMPORT
-
+import { BdApplySection } from "@/components/agency/bd-apply-section";
 // ─── Main Component ────────────────────────────────────────────────────────
 
 export default function AgencyCenterPage() {
@@ -239,7 +239,7 @@ export default function AgencyCenterPage() {
                         </div>
                     </div>
                 </section>
-
+<BdApplySection />
                 {/* Footer */}
                 <p className="mt-6 text-[10.5px] text-ink-muted/40 animate-[fadeIn_0.6s_ease-out_0.4s_both]">
                     Need an agency? Contact your creator network administrator.

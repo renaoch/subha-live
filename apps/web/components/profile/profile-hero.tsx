@@ -9,6 +9,9 @@ import {
   Copy,
   Check,
   Pencil,
+  Crown,
+  Wrench,
+  UsersRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -45,8 +48,54 @@ function tierForLevel(level: number) {
   return TIER_PALETTE[index];
 }
 
+/*
+ * Role -> profile badge.
+ *
+ * profiles.role drives three badges:
+ *   - "agency_owner"                -> Agency Owner
+ *   - "agency_admin" / "agency_agent" -> Host Manager
+ *   - "admin" / "super_admin"       -> Engineer (site owner / engineers)
+ */
+type RoleBadge = {
+  label: string;
+  Icon: typeof Crown;
+  primary: string;
+  accent: string;
+} | null;
+
+function badgeForRole(role: string | null | undefined): RoleBadge {
+  switch (role) {
+    case "agency_owner":
+      return {
+        label: "Agency Owner",
+        Icon: Crown,
+        primary: "#F5B93F",
+        accent: "#FFE29E",
+      };
+    case "agency_admin":
+    case "agency_agent":
+      return {
+        label: "Host Manager",
+        Icon: UsersRound,
+        primary: "#57C2FF",
+        accent: "#B3E6FF",
+      };
+    case "admin":
+    case "super_admin":
+      return {
+        label: "Engineer",
+        Icon: Wrench,
+        primary: "#A86CFF",
+        accent: "#DCC2FF",
+      };
+    default:
+      return null;
+  }
+}
+
 export function ProfileHero({ profile }: ProfileHeroProps) {
   const theme = tierForLevel(profile.level);
+  const roleBadge = badgeForRole(profile.role);
 
   /*
    * public_id is now the canonical profile User ID
@@ -158,7 +207,7 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
               )}
             >
               <span className="font-mono text-xs font-bold tracking-wider text-[#9088A0] transition-colors group-hover:text-[#F3ECE0]">
-                #{userId}
+                {userId}
               </span>
 
               <span className="text-[#9088A0] transition-colors group-hover:text-[#CBA35C]">
@@ -202,6 +251,24 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
 
               {numberFormat.format(profile.diamonds)}
             </span>
+
+            {roleBadge && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
+                style={{
+                  color: roleBadge.accent,
+                  borderColor: `${roleBadge.primary}55`,
+                  background: `linear-gradient(135deg, ${roleBadge.primary}30, ${roleBadge.primary}0C)`,
+                }}
+              >
+                <roleBadge.Icon
+                  className="h-3 w-3"
+                  style={{ color: roleBadge.primary }}
+                />
+
+                {roleBadge.label}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -210,8 +277,7 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
         following={profile.following}
         followers={profile.followers}
         level={profile.level}
-        country={profile.country}
-        countryFlag={profile.country_flag}
+        visitorCount={profile.visitor_count}
       />
     </section>
   );
@@ -347,20 +413,19 @@ interface StatsRowProps {
   following: number;
   followers: number;
   level: number;
-  country?: string | null;
-  countryFlag?: string | null;
+  visitorCount: number;
 }
 
 function StatsRow({
   following,
   followers,
   level,
-  country,
-  countryFlag,
+  visitorCount,
 }: StatsRowProps) {
   const stats: Array<{
     label: string;
     value: string | number;
+    href?: string;
   }> = [
     {
       label: "Followers",
@@ -373,36 +438,56 @@ function StatsRow({
     {
       label: "Level",
       value: level,
+      href: "/level",
+    },
+    {
+      label: "Visitors",
+      value: visitorCount,
     },
   ];
 
-  if (countryFlag) {
-    stats.push({
-      label: country || "Country",
-      value: countryFlag,
-    });
-  }
-
   return (
     <dl className="mt-5 flex items-stretch justify-between rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 px-2 py-3.5">
-      {stats.map((stat, index) => (
-        <div
-          key={stat.label}
-          className={cn(
-            "flex flex-1 flex-col items-center justify-center gap-1",
-            index !== stats.length - 1 &&
-              "border-r border-[#2A2238]",
-          )}
-        >
-          <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#9088A0]">
-            {stat.label}
-          </dt>
+      {stats.map((stat, index) => {
+        const content = (
+          <div
+            className={cn(
+              "flex flex-1 flex-col items-center justify-center gap-1",
+              index !== stats.length - 1 &&
+                "border-r border-[#2A2238]",
+              stat.href &&
+                "cursor-pointer transition-colors active:opacity-70",
+            )}
+          >
+            <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#9088A0]">
+              {stat.label}
+            </dt>
 
-          <dd className="text-sm font-bold tabular-nums text-[#F3ECE0]">
-            {stat.value}
-          </dd>
-        </div>
-      ))}
+            <dd className="text-sm font-bold tabular-nums text-[#F3ECE0]">
+              {stat.value}
+            </dd>
+          </div>
+        );
+
+        if (stat.href) {
+          return (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              className="flex flex-1"
+              aria-label={`View ${stat.label}`}
+            >
+              {content}
+            </Link>
+          );
+        }
+
+        return (
+          <div key={stat.label} className="flex flex-1">
+            {content}
+          </div>
+        );
+      })}
     </dl>
   );
 }

@@ -77,4 +77,10 @@ export const profileMenuItems = [
     href: "/videos",
     Icon: GiftIcon,
   },
+  {
+    id: "admin-panel",
+    label: "Admin Panel",
+    href: "/admin/bd-applications",
+    Icon: ShieldIcon,
+  },
 ] as const;

@@ -8,7 +8,7 @@ import type {
   BdApplication,
   BdApplicationResult,
   BdOverview,
-  BdApplicationAdminResult,
+  
   ApproveBdApplicationResult,
 } from "./bd.types";
 
@@ -224,7 +224,7 @@ async function assertAdmin(
  */
 export async function listBdApplications(
   adminUserId: string,
-): Promise<BdApplicationAdminResult[]> {
+): Promise<BdApplicationResult[]> {
   await assertAdmin(adminUserId);
 
   const { data, error } = await (

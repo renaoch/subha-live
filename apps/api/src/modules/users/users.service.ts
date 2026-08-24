@@ -32,7 +32,9 @@ const PRIVATE_PROFILE_FIELDS = `
   followers,
   following,
   created_at,
-  gender
+  gender,
+  role,
+  is_admin
 `;
 
 // Public profile fields
@@ -53,7 +55,8 @@ const PUBLIC_PROFILE_FIELDS = `
   followers,
   following,
   created_at,
-  gender
+  gender,
+  role
 `;
 
 // -----------------------------------------------------------------------------
@@ -90,7 +93,12 @@ export async function getCurrentUser(
     throw error;
   }
 
-  return data as PrivateProfile;
+  const visitorCount = await getVisitorCount(userId);
+
+  return {
+    ...(data as any),
+    visitor_count: visitorCount,
+  } as PrivateProfile;
 }
 
 // -----------------------------------------------------------------------------
@@ -170,5 +178,76 @@ export async function updateCurrentUser(
     throw error;
   }
 
-  return data as PrivateProfile;
+  const visitorCount = await getVisitorCount(userId);
+
+  return {
+    ...(data as any),
+    visitor_count: visitorCount,
+  } as PrivateProfile;
+}
+
+// -----------------------------------------------------------------------------
+// Profile visits
+// -----------------------------------------------------------------------------
+
+/**
+ * Total number of times other users have visited this profile.
+ * Used to populate PrivateProfile.visitor_count.
+ */
+async function getVisitorCount(
+  profileId: UserId,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("profile_visits")
+    .select("id", { count: "exact", head: true })
+    .eq("profile_id", profileId);
+
+  if (error) {
+    console.error(
+      "Failed to count profile visits:",
+      error,
+    );
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
+/**
+ * Records that `visitorId` viewed `profileId`'s public profile.
+ *
+ * - Never records a self-visit.
+ * - Never records an anonymous (unauthenticated) visit, since
+ *   profile_visits.visitor_id has no value to store in that case.
+ * - Never throws — this is called fire-and-forget from the controller
+ *   and must not affect the response to the caller.
+ */
+export async function recordProfileVisit(
+  visitorId: string | undefined,
+  profileId: UserId,
+): Promise<void> {
+  if (!visitorId || visitorId === profileId) {
+    return;
+  }
+
+  try {
+    const { error } = await supabase
+      .from("profile_visits")
+      .insert({
+        visitor_id: visitorId,
+        profile_id: profileId,
+      });
+
+    if (error) {
+      console.error(
+        "Failed to record profile visit:",
+        error,
+      );
+    }
+  } catch (err) {
+    console.error(
+      "Failed to record profile visit:",
+      err,
+    );
+  }
 }
