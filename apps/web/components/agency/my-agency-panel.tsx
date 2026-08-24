@@ -59,12 +59,12 @@ interface Props {
 type SubTab =
   | "overview"
   | "agents"
-  | "hosts"              // <-- NEW
+  | "hosts"
   | "applications"
   | "invitations"
   | "tasks"
   | "payouts"
-  | "agent-dashboard";   // <-- NEW
+  | "agent-dashboard";
 
 type Application = {
   userId: string;
@@ -118,10 +118,15 @@ export function MyAgencyPanel({
     setAppBusy,
   ] = useState<string | null>(null);
 
-  const [isAgent, setIsAgent] = useState(false); // <-- NEW
+  const [isAgent, setIsAgent] = useState(false);
+
+  const [
+    ownerName,
+    setOwnerName,
+  ] = useState<string | null>(null);
 
   /* ------------------------------------------------------------------------ */
-  /* LOAD USER + DASHBOARD + ROLE                                             */
+  /* LOAD USER + DASHBOARD + ROLE + OWNER                                    */
   /* ------------------------------------------------------------------------ */
 
   useEffect(() => {
@@ -129,26 +134,67 @@ export function MyAgencyPanel({
 
     async function load() {
       try {
-        const profile = await usersApi.me();
+        const profile =
+          await usersApi.me();
+
         if (cancelled) return;
-        setCurrentUserId(profile.id);
+
+        setCurrentUserId(
+          profile.id,
+        );
+
+        // Load the agency owner name.
+        // This is based on agency.ownerId, so every
+        // RBAC role sees the same agency owner.
+        const owner =
+          await usersApi.getById(
+            agency.ownerId,
+          );
+
+        if (cancelled) return;
+
+        setOwnerName(
+          owner.name,
+        );
 
         // Check if current user is an agent
-        const agents = await agencyApi.agents(agency.id);
-        if (cancelled) return;
-        const userIsAgent = agents.some((a) => a.userId === profile.id);
-        setIsAgent(userIsAgent);
+        const agents =
+          await agencyApi.agents(
+            agency.id,
+          );
 
-        const dash = await agencyApi.dashboard(agency.id);
-        if (!cancelled) setDashboard(dash);
+        if (cancelled) return;
+
+        const userIsAgent =
+          agents.some(
+            (a) =>
+              a.userId ===
+              profile.id,
+          );
+
+        setIsAgent(
+          userIsAgent,
+        );
+
+        const dash =
+          await agencyApi.dashboard(
+            agency.id,
+          );
+
+        if (!cancelled) {
+          setDashboard(dash);
+        }
       } catch {
         // ignore
       }
     }
 
     load();
-    return () => { cancelled = true; };
-  }, [agency.id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agency.id, agency.ownerId]);
 
   /* ------------------------------------------------------------------------ */
   /* OWNER                                                                    */
@@ -156,7 +202,8 @@ export function MyAgencyPanel({
 
   const isOwner =
     currentUserId !== null &&
-    currentUserId === agency.ownerId;
+    currentUserId ===
+      agency.ownerId;
 
   /* ------------------------------------------------------------------------ */
   /* APPLICATIONS                                                             */
@@ -164,7 +211,8 @@ export function MyAgencyPanel({
 
   useEffect(() => {
     if (
-      subTab !== "applications" ||
+      subTab !==
+        "applications" ||
       !isOwner
     ) {
       return;
@@ -181,31 +229,45 @@ export function MyAgencyPanel({
           return;
         }
 
-        const mapped: Application[] = results.map(
-          (application) => ({
-            userId: application.userId,
+        const mapped: Application[] =
+          results.map(
+            (application) => ({
+              userId:
+                application.userId,
 
-            name: application.name,
+              name:
+                application.name,
 
-            handle: application.handle,
+              handle:
+                application.handle,
 
-            avatar: application.avatar ?? null,
+              avatar:
+                application.avatar ??
+                null,
 
-            country: application.country ?? null,
+              country:
+                application.country ??
+                null,
 
-            countryFlag:
-              application.countryFlag ?? null,
+              countryFlag:
+                application.countryFlag ??
+                null,
 
-            level: application.level,
+              level:
+                application.level,
 
-            status: application.status,
+              status:
+                application.status,
 
-            createdAt:
-              application.createdAt ?? null,
-          }),
+              createdAt:
+                application.createdAt ??
+                null,
+            }),
+          );
+
+        setApplications(
+          mapped,
         );
-
-        setApplications(mapped);
       })
       .catch(() => {
         if (!cancelled) {
@@ -233,12 +295,17 @@ export function MyAgencyPanel({
 
   async function review(
     userId: string,
-    action: "approve" | "reject",
+    action:
+      | "approve"
+      | "reject",
   ) {
     try {
       setAppBusy(userId);
 
-      if (action === "approve") {
+      if (
+        action ===
+        "approve"
+      ) {
         await agencyApi.approveApplication(
           agency.id,
           userId,
@@ -264,7 +331,7 @@ export function MyAgencyPanel({
   }
 
   /* ------------------------------------------------------------------------ */
-  /* TABS – RBAC                                                             */
+  /* TABS – RBAC                                                              */
   /* ------------------------------------------------------------------------ */
 
   const tabs = [
@@ -286,7 +353,7 @@ export function MyAgencyPanel({
     },
 
     {
-      id: "hosts" as const,              // <-- NEW
+      id: "hosts" as const,
       label: "Hosts",
       icon: (
         <Users className="h-4 w-4" />
@@ -332,7 +399,7 @@ export function MyAgencyPanel({
     },
 
     {
-      id: "agent-dashboard" as const,   // <-- NEW
+      id: "agent-dashboard" as const,
       label: "My Hosts",
       icon: (
         <UserCog className="h-4 w-4" />
@@ -341,10 +408,22 @@ export function MyAgencyPanel({
     },
   ].filter(
     (tab) => {
-      if (tab.owner && !isOwner) return false;
-      if (tab.agent && !isAgent) return false;
+      if (
+        tab.owner &&
+        !isOwner
+      ) {
+        return false;
+      }
+
+      if (
+        tab.agent &&
+        !isAgent
+      ) {
+        return false;
+      }
+
       return true;
-    }
+    },
   );
 
   /* ======================================================================== */
@@ -354,7 +433,7 @@ export function MyAgencyPanel({
   return (
     <section className="mt-7 overflow-hidden rounded-[32px] border border-white/[0.07] bg-[#110e16] shadow-[0_30px_120px_rgba(0,0,0,0.4)]">
       {/* ------------------------------------------------------------------ */}
-      {/* HEADER with gradient                                             */}
+      {/* HEADER                                                             */}
       {/* ------------------------------------------------------------------ */}
 
       <div className="relative border-b border-white/[0.06] bg-[radial-gradient(circle_at_80%_20%,rgba(139,92,246,0.10),transparent_40%),#110e16] p-6 sm:p-8">
@@ -381,20 +460,32 @@ export function MyAgencyPanel({
                   </span>
                 )}
 
-                {isAgent && !isOwner && (
-                  <span className="flex items-center gap-1.5 rounded-full border border-violet-300/15 bg-violet-400/10 px-2.5 py-1 text-[8px] font-black uppercase text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.15)]">
-                    <UserCog className="h-3 w-3" />
-                    Agent
-                  </span>
-                )}
+                {isAgent &&
+                  !isOwner && (
+                    <span className="flex items-center gap-1.5 rounded-full border border-violet-300/15 bg-violet-400/10 px-2.5 py-1 text-[8px] font-black uppercase text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.15)]">
+                      <UserCog className="h-3 w-3" />
+                      Agent
+                    </span>
+                  )}
               </div>
 
               <h2 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">
                 {agency.name}
               </h2>
 
+              <p className="mt-1 text-xs text-white/40">
+                Owner:{" "}
+                <span className="font-semibold text-white/70">
+                  {ownerName ??
+                    "Unknown"}
+                </span>
+              </p>
+
               <p className="text-xs text-white/30">
-                Code: <span className="font-mono font-bold text-white/50">{agency.code}</span>
+                Code:{" "}
+                <span className="font-mono font-bold text-white/50">
+                  {agency.code}
+                </span>
               </p>
             </div>
           </div>
@@ -414,23 +505,30 @@ export function MyAgencyPanel({
         {/* ---------------------------------------------------------------- */}
 
         <div className="mt-6 flex gap-1 overflow-x-auto pb-0.5">
-          {tabs.map((tab) => (
-            <TabButton
-              key={tab.id}
-              active={
-                subTab === tab.id
-              }
-              onClick={() =>
-                setSubTab(
-                  tab.id,
-                )
-              }
-              icon={tab.icon}
-              badge={tab.badge}
-            >
-              {tab.label}
-            </TabButton>
-          ))}
+          {tabs.map(
+            (tab) => (
+              <TabButton
+                key={tab.id}
+                active={
+                  subTab ===
+                  tab.id
+                }
+                onClick={() =>
+                  setSubTab(
+                    tab.id,
+                  )
+                }
+                icon={
+                  tab.icon
+                }
+                badge={
+                  tab.badge
+                }
+              >
+                {tab.label}
+              </TabButton>
+            ),
+          )}
         </div>
       </div>
 
@@ -438,26 +536,37 @@ export function MyAgencyPanel({
       {/* CONTENT                                                            */}
       {/* ------------------------------------------------------------------ */}
 
-      <div className="p-5 sm:p-7 transition-all duration-300">
-        {subTab === "overview" && (
+      <div className="p-5 transition-all duration-300 sm:p-7">
+        {subTab ===
+          "overview" && (
           <Overview
             agency={agency}
-            dashboard={dashboard}
-            isOwner={isOwner}
+            dashboard={
+              dashboard
+            }
+            isOwner={
+              isOwner
+            }
           />
         )}
 
-        {subTab === "agents" &&
+        {subTab ===
+          "agents" &&
           isOwner && (
             <AgentsPanel
-              agencyId={agency.id}
+              agencyId={
+                agency.id
+              }
             />
           )}
 
-        {subTab === "hosts" &&          // <-- NEW
+        {subTab ===
+          "hosts" &&
           isOwner && (
             <HostsPanel
-              agencyId={agency.id}
+              agencyId={
+                agency.id
+              }
             />
           )}
 
@@ -482,30 +591,45 @@ export function MyAgencyPanel({
           "invitations" &&
           isOwner && (
             <InvitationsPanel
-              agencyId={agency.id}
+              agencyId={
+                agency.id
+              }
             />
           )}
 
-        {subTab === "tasks" && (
+        {subTab ===
+          "tasks" && (
           <AgencyTasksPanel
-            agencyId={agency.id}
-            isOwner={isOwner}
+            agencyId={
+              agency.id
+            }
+            isOwner={
+              isOwner
+            }
           />
         )}
 
-        {subTab === "payouts" &&
+        {subTab ===
+          "payouts" &&
           isOwner && (
             <PayoutsPanel
-              agencyId={agency.id}
+              agencyId={
+                agency.id
+              }
             />
           )}
 
-        {subTab === "agent-dashboard" &&   // <-- NEW
+        {subTab ===
+          "agent-dashboard" &&
           isAgent &&
           !isOwner && (
             <AgentDashboardPanel
-              agencyId={agency.id}
-              agentId={currentUserId!}
+              agencyId={
+                agency.id
+              }
+              agentId={
+                currentUserId!
+              }
             />
           )}
       </div>
@@ -523,7 +647,9 @@ function Overview({
   isOwner,
 }: {
   agency: Agency;
-  dashboard: AgencyDashboard | null;
+  dashboard:
+    | AgencyDashboard
+    | null;
   isOwner: boolean;
 }) {
   const activeHosts =
@@ -546,13 +672,21 @@ function Overview({
     );
 
   const taskCompletion =
-    dashboard && dashboard.activeTasks > 0
-      ? (dashboard.activeTasks > 5 ? 72 : 58)
+    dashboard &&
+    dashboard.activeTasks >
+      0
+      ? dashboard.activeTasks >
+        5
+        ? 72
+        : 58
       : 0;
 
   const payoutProgress =
     dashboard
-      ? (dashboard.pendingPayouts > 0 ? 45 : 100)
+      ? dashboard.pendingPayouts >
+        0
+        ? 45
+        : 100
       : 0;
 
   return (
@@ -614,7 +748,7 @@ function Overview({
       </div>
 
       {/* ---------------------------------------------------------------- */}
-      {/* HEALTH + QUICK ACTIONS                                            */}
+      {/* HEALTH + QUICK ACTIONS                                           */}
       {/* ---------------------------------------------------------------- */}
 
       <div className="grid gap-5 lg:grid-cols-[1.3fr_0.7fr]">
@@ -659,7 +793,9 @@ function Overview({
 
         <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-violet-400/[0.08] to-amber-400/[0.04] p-5 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
           <p className="text-[9px] font-black uppercase tracking-[0.18em] text-white/25">
-            {isOwner ? "Owner Tools" : "Host Actions"}
+            {isOwner
+              ? "Owner Tools"
+              : "Host Actions"}
           </p>
 
           <div className="mt-4 space-y-3 text-xs text-white/45">
@@ -778,7 +914,9 @@ function Applications({
   if (!applications.length) {
     return (
       <Empty
-        icon={<FileCheck2 />}
+        icon={
+          <FileCheck2 />
+        }
         title="No pending applications"
         text="New join requests will appear here for review."
       />
@@ -809,7 +947,9 @@ function Applications({
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-sm font-black text-violet-200">
                   {application.name
-                    ?.charAt(0)
+                    ?.charAt(
+                      0,
+                    )
                     ?.toUpperCase() ||
                     "?"}
                 </div>
@@ -822,7 +962,10 @@ function Applications({
                   </p>
 
                   <p className="mt-0.5 text-[10px] text-white/30">
-                    @{application.handle}
+                    @
+                    {
+                      application.handle
+                    }
                     {" · "}
                     Level{" "}
                     {
