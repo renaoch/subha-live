@@ -175,10 +175,18 @@ export class CloudflareRealtimeProvider
      * SDP offer when creating the session.
      */
     if (input.offerSdp) {
-      const offerSdp =
-        input.offerSdp.trim();
-
-      if (!offerSdp) {
+      /*
+       * IMPORTANT:
+       *
+       * Only use .trim() to check for
+       * emptiness. Do NOT send the trimmed
+       * value to Cloudflare — trim() strips
+       * the trailing \r\n that terminates the
+       * last SDP line, and Cloudflare's SDP
+       * parser requires that terminator. Send
+       * the original, untouched SDP string.
+       */
+      if (!input.offerSdp.trim()) {
         throw new MediaProviderError(
           "offerSdp is required. Generate it from a browser RTCPeerConnection before creating the Cloudflare media session.",
           {
@@ -190,7 +198,7 @@ export class CloudflareRealtimeProvider
 
       body.sessionDescription = {
         type: "offer",
-        sdp: offerSdp,
+        sdp: input.offerSdp,
       };
     } else {
       throw new MediaProviderError(
