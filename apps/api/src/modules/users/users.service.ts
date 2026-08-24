@@ -1,5 +1,5 @@
 import { supabase } from "../../lib/supabase";
-
+import { getOrSetCache, cacheDel } from "../../lib/redis";
 import type { Database } from "../../types/database.types";
 
 import type {
@@ -61,9 +61,14 @@ const PRIVATE_PROFILE_FIELDS = `
   role,
   is_admin
 `;
-
+const PROFILE_CACHE_TTL_SECONDS = 20;
+const profileCacheKey = (userId: UserId) => `profile:me:${userId}`;
 // Public profile fields
 // Safe profile information that can be viewed by other users.
+
+const STORE_CACHE_TTL_SECONDS = 300; // catalog rarely changes
+const INVENTORY_CACHE_TTL_SECONDS = 20;
+const inventoryCacheKey = (userId: string) => `inventory:${userId}`;
 const PUBLIC_PROFILE_FIELDS = `
   id,
   public_id,
@@ -289,51 +294,56 @@ async function getFriendCount(
 export async function getCurrentUser(
   userId: UserId,
 ): Promise<PrivateProfile> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(PRIVATE_PROFILE_FIELDS)
-    .eq("id", userId)
-    .single();
+  return getOrSetCache(
+    profileCacheKey(userId),
+    PROFILE_CACHE_TTL_SECONDS,
+    async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(PRIVATE_PROFILE_FIELDS)
+        .eq("id", userId)
+        .single();
 
-  if (error) {
-    if (error.code === "PGRST116") {
-      throw new AppError(
-        404,
-        "User profile not found",
-        {
-          code: "PROFILE_NOT_FOUND",
-        },
-      );
-    }
+      if (error) {
+        if (error.code === "PGRST116") {
+          throw new AppError(
+            404,
+            "User profile not found",
+            {
+              code: "PROFILE_NOT_FOUND",
+            },
+          );
+        }
 
-    throw error;
-  }
+        throw error;
+      }
 
-  const profile = data as any;
+      const profile = data as any;
 
-  const [
-    resolvedRole,
-    visitorCount,
-    friendCount,
-  ] = await Promise.all([
-    resolveProfileRole(
-      userId,
-      profile.role,
-    ),
+      const [
+        resolvedRole,
+        visitorCount,
+        friendCount,
+      ] = await Promise.all([
+        resolveProfileRole(
+          userId,
+          profile.role,
+        ),
 
-    getVisitorCount(userId),
+        getVisitorCount(userId),
 
-    getFriendCount(userId),
-  ]);
+        getFriendCount(userId),
+      ]);
 
-  return {
-    ...profile,
-    role: resolvedRole,
-    visitor_count: visitorCount,
-    friend_count: friendCount,
-  } as PrivateProfile;
+      return {
+        ...profile,
+        role: resolvedRole,
+        visitor_count: visitorCount,
+        friend_count: friendCount,
+      } as PrivateProfile;
+    },
+  );
 }
-
 // -----------------------------------------------------------------------------
 // Get public user profile
 // GET /api/v1/users/:id
@@ -433,12 +443,16 @@ export async function updateCurrentUser(
     getFriendCount(userId),
   ]);
 
-  return {
+  const result = {
     ...profile,
     role: resolvedRole,
     visitor_count: visitorCount,
     friend_count: friendCount,
   } as PrivateProfile;
+
+  await cacheDel(profileCacheKey(userId));
+
+  return result;
 }
 
 // -----------------------------------------------------------------------------

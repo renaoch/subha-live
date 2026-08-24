@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
+import { getOrSetCache, cacheDel } from "../../lib/redis";
 
 import type {
   StoreItem,
@@ -53,47 +54,46 @@ function toStoreItem(
   };
 }
 
+
+const STORE_CACHE_TTL_SECONDS = 300; // catalog rarely changes
+const INVENTORY_CACHE_TTL_SECONDS = 20;
+const inventoryCacheKey = (userId: string) => `inventory:${userId}`;
 /**
  * Get all store items.
  */
 export async function getStore(): Promise<StoreResult> {
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("store_items")
-    .select(
-      `
-        id,
-        name,
-        category,
-        price,
-        icon,
-        preview_url,
-        duration_days,
-        is_vip
-      `,
-    )
-    .order("category", {
-      ascending: true,
-    })
-    .order("price", {
-      ascending: true,
-    });
+  return getOrSetCache(
+    "store:items",
+    STORE_CACHE_TTL_SECONDS,
+    async () => {
+      const { data, error } = await supabase
+        .from("store_items")
+        .select(
+          `
+            id,
+            name,
+            category,
+            price,
+            icon,
+            preview_url,
+            duration_days,
+            is_vip
+          `,
+        )
+        .order("category", { ascending: true })
+        .order("price", { ascending: true });
 
-  if (error) {
-    throw error;
-  }
+      if (error) {
+        throw error;
+      }
 
-  const items: StoreItemResult[] =
-    (data ?? []).map(
-      (item: StoreItemRow) =>
-        toStoreItem(item),
-    );
+      const items: StoreItemResult[] = (data ?? []).map(
+        (item: StoreItemRow) => toStoreItem(item),
+      );
 
-  return {
-    items,
-  };
+      return { items };
+    },
+  );
 }
 
 /**
@@ -145,90 +145,74 @@ async function getStoreItem(
 export async function getMyInventory(
   userId: string,
 ): Promise<InventoryResult> {
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("user_inventory")
-    .select(
-      `
-        id,
-        user_id,
-        item_id,
-        is_equipped,
-        expires_at,
-        created_at,
-        store_items (
-          id,
-          name,
-          category,
-          price,
-          icon,
-          preview_url,
-          duration_days,
-          is_vip
+  return getOrSetCache(
+    inventoryCacheKey(userId),
+    INVENTORY_CACHE_TTL_SECONDS,
+    async () => {
+      const { data, error } = await supabase
+        .from("user_inventory")
+        .select(
+          `
+            id,
+            user_id,
+            item_id,
+            is_equipped,
+            expires_at,
+            created_at,
+            store_items (
+              id,
+              name,
+              category,
+              price,
+              icon,
+              preview_url,
+              duration_days,
+              is_vip
+            )
+          `,
         )
-      `,
-    )
-    .eq("user_id", userId)
-    .order("created_at", {
-      ascending: false,
-    });
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
 
-  if (error) {
-    throw error;
-  }
+      if (error) {
+        throw error;
+      }
 
-  const rows =
-    (data ?? []) as InventoryWithStoreItemRow[];
+      const rows = (data ?? []) as InventoryWithStoreItemRow[];
 
-  const items: InventoryItemResult[] =
-    rows.map(
-      (
-        row: InventoryWithStoreItemRow,
-      ) => {
-        const item =
-          row.store_items;
+      const items: InventoryItemResult[] = rows.map(
+        (row: InventoryWithStoreItemRow) => {
+          const item = row.store_items;
 
-        if (!item) {
-          throw new AppError(
-            500,
-            "Inventory item references a missing store item",
-            {
-              code:
-                "INVENTORY_ITEM_REFERENCE_INVALID",
-            },
-          );
-        }
+          if (!item) {
+            throw new AppError(
+              500,
+              "Inventory item references a missing store item",
+              { code: "INVENTORY_ITEM_REFERENCE_INVALID" },
+            );
+          }
 
-        return {
-          id: row.id,
-          itemId: row.item_id,
-          name: item.name,
-          category: item.category,
-          price: item.price,
-          icon: item.icon,
-          previewUrl:
-            item.preview_url,
-          durationDays:
-            item.duration_days,
-          isVip:
-            item.is_vip ?? false,
-          isEquipped:
-            row.is_equipped ?? false,
-          expiresAt:
-            row.expires_at,
-          createdAt:
-            row.created_at,
-        };
-      },
-    );
+          return {
+            id: row.id,
+            itemId: row.item_id,
+            name: item.name,
+            category: item.category,
+            price: item.price,
+            icon: item.icon,
+            previewUrl: item.preview_url,
+            durationDays: item.duration_days,
+            isVip: item.is_vip ?? false,
+            isEquipped: row.is_equipped ?? false,
+            expiresAt: row.expires_at,
+            createdAt: row.created_at,
+          };
+        },
+      );
 
-  return {
-    items,
-  };
+      return { items };
+    },
+  );
 }
-
 /**
  * Purchase a store item using coins.
  *
@@ -356,20 +340,16 @@ export async function purchaseStoreItem(
     throw inventoryError;
   }
 
+    await cacheDel(inventoryCacheKey(userId));
+
   return {
-    purchaseId:
-      inventoryItem.id,
-
-    item:
-      toStoreItem(item),
-
-    pricePaid:
-      price,
-
+    purchaseId: inventoryItem.id,
+    item: toStoreItem(item),
+    pricePaid: price,
     remainingCoins,
-
     expiresAt,
   };
+
 }
 
 /**
@@ -579,34 +559,20 @@ export async function equipInventoryItem(
       },
     );
   }
+  await cacheDel(inventoryCacheKey(userId));
 
   return {
     id: updatedRow.id,
-    itemId:
-      updatedRow.item_id,
-    name:
-      updatedRow.store_items.name,
-    category:
-      updatedRow.store_items.category,
-    price:
-      updatedRow.store_items.price,
-    icon:
-      updatedRow.store_items.icon,
-    previewUrl:
-      updatedRow.store_items
-        .preview_url,
-    durationDays:
-      updatedRow.store_items
-        .duration_days,
-    isVip:
-      updatedRow.store_items
-        .is_vip ?? false,
-    isEquipped:
-      updatedRow.is_equipped ??
-      false,
-    expiresAt:
-      updatedRow.expires_at,
-    createdAt:
-      updatedRow.created_at,
+    itemId: updatedRow.item_id,
+    name: updatedRow.store_items.name,
+    category: updatedRow.store_items.category,
+    price: updatedRow.store_items.price,
+    icon: updatedRow.store_items.icon,
+    previewUrl: updatedRow.store_items.preview_url,
+    durationDays: updatedRow.store_items.duration_days,
+    isVip: updatedRow.store_items.is_vip ?? false,
+    isEquipped: updatedRow.is_equipped ?? false,
+    expiresAt: updatedRow.expires_at,
+    createdAt: updatedRow.created_at,
   };
 }
