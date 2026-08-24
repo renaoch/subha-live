@@ -124,7 +124,7 @@ export function BdApplySection() {
         <span className="flex items-center gap-2.5">
           <Building2 className="h-4 w-4 text-accent" />
           <span className="text-sm font-bold text-ink">
-            Don't have a code? Apply to open your own agency
+            Apply to open your own agency
           </span>
         </span>
         {open ? (

@@ -69,23 +69,36 @@ type RoleBadge = {
 } | null;
 
 function badgeForRole(role: string | null | undefined): RoleBadge {
+  console.log("[BADGE DEBUG] badgeForRole received:", {
+    role,
+    type: typeof role,
+  });
+
   switch (role) {
     case "agency_owner":
+      console.log("[BADGE DEBUG] Agency Owner badge matched");
+
       return {
         label: "Agency Owner",
         Icon: Crown,
         primary: "#F5B93F",
         accent: "#FFE29E",
       };
+
     case "agency_admin":
     case "agency_agent":
+      console.log("[BADGE DEBUG] Host Manager badge matched");
+
       return {
         label: "Host Manager",
         Icon: UsersRound,
         primary: "#57C2FF",
         accent: "#B3E6FF",
       };
+
     default:
+      console.log("[BADGE DEBUG] No role badge matched");
+
       return null;
   }
 }
@@ -97,20 +110,68 @@ function badgeForRole(role: string | null | undefined): RoleBadge {
  * their `role` value.
  */
 function badgeForAdmin(isAdmin: boolean): RoleBadge {
-  if (!isAdmin) return null;
+  console.log("[BADGE DEBUG] badgeForAdmin received:", {
+    isAdmin,
+    type: typeof isAdmin,
+    isTrue: isAdmin === true,
+    isFalse: isAdmin === false,
+  });
 
-  return {
+  if (!isAdmin) {
+    console.log(
+      "[BADGE DEBUG] isAdmin is falsy, returning null",
+    );
+
+    return null;
+  }
+
+  const badge = {
     label: "Engineer",
     Icon: Wrench,
     primary: "#A86CFF",
     accent: "#DCC2FF",
   };
+
+  console.log("[BADGE DEBUG] Engineer badge CREATED:", badge);
+
+  return badge;
 }
 
 export function ProfileHero({ profile }: ProfileHeroProps) {
+  console.log("[BADGE DEBUG] =============================");
+  console.log("[BADGE DEBUG] ProfileHero rendered");
+  console.log("[BADGE DEBUG] Full profile:", profile);
+  console.log(
+    "[BADGE DEBUG] profile.is_admin:",
+    profile.is_admin,
+  );
+  console.log(
+    "[BADGE DEBUG] profile.is_admin type:",
+    typeof profile.is_admin,
+  );
+  console.log(
+    "[BADGE DEBUG] profile.role:",
+    profile.role,
+  );
+  console.log("[BADGE DEBUG] =============================");
+
   const theme = tierForLevel(profile.level);
+
   const roleBadge = badgeForRole(profile.role);
+
   const engineerBadge = badgeForAdmin(profile.is_admin);
+
+  console.log("[BADGE DEBUG] roleBadge:", roleBadge);
+
+  console.log(
+    "[BADGE DEBUG] engineerBadge:",
+    engineerBadge,
+  );
+
+  console.log(
+    "[BADGE DEBUG] WILL RENDER ENGINEER:",
+    Boolean(engineerBadge),
+  );
 
   /*
    * public_id is now the canonical profile User ID
@@ -267,22 +328,52 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
               {numberFormat.format(profile.diamonds)}
             </span>
 
-            {engineerBadge && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
-                style={{
-                  color: engineerBadge.accent,
-                  borderColor: `${engineerBadge.primary}55`,
-                  background: `linear-gradient(135deg, ${engineerBadge.primary}30, ${engineerBadge.primary}0C)`,
-                }}
-              >
-                <engineerBadge.Icon
-                  className="h-3 w-3"
-                  style={{ color: engineerBadge.primary }}
-                />
+        {(() => {
+          console.log("[BADGE DEBUG] JSX engineerBadge:", engineerBadge);
 
-                {engineerBadge.label}
-              </span>
+          return null;
+        })()}
+
+        {engineerBadge && (
+          <>
+            {(() => {
+              console.log(
+                "[BADGE DEBUG] ENGINEER JSX IS RENDERING:",
+                engineerBadge.label,
+              );
+
+              return null;
+            })()}
+
+            <span>
+              ...
+            </span>
+          </>
+        )}
+
+            {engineerBadge && (
+              <>
+                {console.log(
+                  "[BADGE DEBUG] ENGINEER JSX IS RENDERING:",
+                  engineerBadge.label,
+                )}
+
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
+                  style={{
+                    color: engineerBadge.accent,
+                    borderColor: `${engineerBadge.primary}55`,
+                    background: `linear-gradient(135deg, ${engineerBadge.primary}30, ${engineerBadge.primary}0C)`,
+                  }}
+                >
+                  <engineerBadge.Icon
+                    className="h-3 w-3"
+                    style={{ color: engineerBadge.primary }}
+                  />
+
+                  {engineerBadge.label}
+                </span>
+              </>
             )}
 
             {!engineerBadge && roleBadge && (
