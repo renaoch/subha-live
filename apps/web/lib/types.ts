@@ -49,9 +49,7 @@ export interface PublicProfile {
    * Agency:
    *   agency_owner
    *   agency_agent
-   *
-   * The API resolves agency roles from the actual
-   * agencies / agency_agents / agency_hosts relationships.
+   *   agency_host
    */
   role: string;
 
@@ -77,17 +75,26 @@ export interface PrivateProfile extends PublicProfile {
    * this profile.
    */
   visitor_count: number;
+
+  /**
+   * Number of mutual follows.
+   *
+   * A friend means both users follow each other.
+   */
+  friend_count: number;
 }
 
 // ─── Profile API responses ─────────────────────────────────────
 
 export interface PrivateProfileResponse {
   status: "ok";
+
   user: PrivateProfile;
 }
 
 export interface PublicProfileResponse {
   status: "ok";
+
   user: PublicProfile;
 }
 

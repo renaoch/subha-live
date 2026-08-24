@@ -163,32 +163,12 @@ async function resolveAgencyBadgeRole(
     throw hostError;
   }
 
-  /*
-   * Owner takes highest agency priority.
-   *
-   * If somebody is somehow both:
-   *
-   *   agencies.owner_id
-   *
-   * and:
-   *
-   *   agency_agents.user_id
-   *
-   * they are still displayed as Agency Owner.
-   */
+  // Owner has the highest agency priority.
   if ((ownedAgencies ?? []).length > 0) {
     return "agency_owner";
   }
 
-  /*
-   * A user is a Host Manager if:
-   *
-   * 1. They are registered in agency_agents
-   *
-   * OR
-   *
-   * 2. They are assigned as agent_id on agency_hosts.
-   */
+  // Agency manager / agent.
   if (
     (agentRows ?? []).length > 0 ||
     (managedHosts ?? []).length > 0
@@ -196,10 +176,7 @@ async function resolveAgencyBadgeRole(
     return "agency_agent";
   }
 
-  /*
-   * A user is an actual Host if their profile ID
-   * exists as agency_hosts.host_id.
-   */
+  // Actual host.
   if ((hostRows ?? []).length > 0) {
     return "agency_host";
   }
@@ -211,9 +188,7 @@ async function resolveAgencyBadgeRole(
  * Convert the database role into the role exposed by the
  * profile API.
  *
- * We preserve the existing profile role for ordinary users
- * and override it when the actual agency relationship
- * proves the user is an owner, manager, or host.
+ * Agency relationships are the source of truth for agency roles.
  */
 async function resolveProfileRole(
   userId: UserId,
@@ -237,6 +212,75 @@ async function resolveProfileRole(
   return profileRole;
 }
 
+/**
+ * Count mutual follows.
+ *
+ * A friend exists when:
+ *
+ *   user A follows user B
+ *   AND
+ *   user B follows user A
+ *
+ * We do NOT store friend_count in profiles.
+ * It is derived from the follows relationship.
+ */
+async function getFriendCount(
+  userId: UserId,
+): Promise<number> {
+  const {
+    data: followingRows,
+    error: followingError,
+  } = await supabase
+    .from("follows")
+    .select("following_id")
+    .eq("follower_id", userId);
+
+  if (followingError) {
+    console.error(
+      "Failed to get following users for friend count:",
+      followingError,
+    );
+
+    return 0;
+  }
+
+  if (
+    !followingRows ||
+    followingRows.length === 0
+  ) {
+    return 0;
+  }
+
+  const followingIds: string[] =
+    followingRows.map(
+      (row: {
+        following_id: string;
+      }) => row.following_id,
+    );
+
+  const {
+    data: mutualRows,
+    error: mutualError,
+  } = await supabase
+    .from("follows")
+    .select("follower_id")
+    .eq("following_id", userId)
+    .in(
+      "follower_id",
+      followingIds,
+    );
+
+  if (mutualError) {
+    console.error(
+      "Failed to get mutual follows:",
+      mutualError,
+    );
+
+    return 0;
+  }
+
+  return mutualRows?.length ?? 0;
+}
 // -----------------------------------------------------------------------------
 // Get current authenticated user's private profile
 // GET /api/v1/users/me
@@ -267,19 +311,26 @@ export async function getCurrentUser(
 
   const profile = data as any;
 
-  const resolvedRole =
-    await resolveProfileRole(
+  const [
+    resolvedRole,
+    visitorCount,
+    friendCount,
+  ] = await Promise.all([
+    resolveProfileRole(
       userId,
       profile.role,
-    );
+    ),
 
-  const visitorCount =
-    await getVisitorCount(userId);
+    getVisitorCount(userId),
+
+    getFriendCount(userId),
+  ]);
 
   return {
     ...profile,
     role: resolvedRole,
     visitor_count: visitorCount,
+    friend_count: friendCount,
   } as PrivateProfile;
 }
 
@@ -367,19 +418,26 @@ export async function updateCurrentUser(
 
   const profile = data as any;
 
-  const resolvedRole =
-    await resolveProfileRole(
+  const [
+    resolvedRole,
+    visitorCount,
+    friendCount,
+  ] = await Promise.all([
+    resolveProfileRole(
       userId,
       profile.role,
-    );
+    ),
 
-  const visitorCount =
-    await getVisitorCount(userId);
+    getVisitorCount(userId),
+
+    getFriendCount(userId),
+  ]);
 
   return {
     ...profile,
     role: resolvedRole,
     visitor_count: visitorCount,
+    friend_count: friendCount,
   } as PrivateProfile;
 }
 

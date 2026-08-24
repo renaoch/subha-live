@@ -24,16 +24,56 @@ interface ProfileHeroProps {
 }
 
 const TIER_PALETTE = [
-  { name: "Bronze", primary: "#D98F4E", accent: "#FFCF9E" },
-  { name: "Silver", primary: "#AEB9C7", accent: "#EAF0F6" },
-  { name: "Gold", primary: "#F5B93F", accent: "#FFE29E" },
-  { name: "Platinum", primary: "#5FD9C4", accent: "#B4F5E7" },
-  { name: "Diamond", primary: "#57C2FF", accent: "#B3E6FF" },
-  { name: "Master", primary: "#A86CFF", accent: "#DCC2FF" },
-  { name: "Grandmaster", primary: "#FF6CA8", accent: "#FFC0DA" },
-  { name: "Elite", primary: "#FF8A5C", accent: "#FFCBAE" },
-  { name: "Legend", primary: "#FFD24C", accent: "#FFF0B8" },
-  { name: "Mythic", primary: "#F5B93F", accent: "#F8F1E6" },
+  {
+    name: "Bronze",
+    primary: "#D98F4E",
+    accent: "#FFCF9E",
+  },
+  {
+    name: "Silver",
+    primary: "#AEB9C7",
+    accent: "#EAF0F6",
+  },
+  {
+    name: "Gold",
+    primary: "#F5B93F",
+    accent: "#FFE29E",
+  },
+  {
+    name: "Platinum",
+    primary: "#5FD9C4",
+    accent: "#B4F5E7",
+  },
+  {
+    name: "Diamond",
+    primary: "#57C2FF",
+    accent: "#B3E6FF",
+  },
+  {
+    name: "Master",
+    primary: "#A86CFF",
+    accent: "#DCC2FF",
+  },
+  {
+    name: "Grandmaster",
+    primary: "#FF6CA8",
+    accent: "#FFC0DA",
+  },
+  {
+    name: "Elite",
+    primary: "#FF8A5C",
+    accent: "#FFCBAE",
+  },
+  {
+    name: "Legend",
+    primary: "#FFD24C",
+    accent: "#FFF0B8",
+  },
+  {
+    name: "Mythic",
+    primary: "#F5B93F",
+    accent: "#F8F1E6",
+  },
 ] as const;
 
 const TIER_SIZE = 10;
@@ -42,7 +82,10 @@ const MAX_LEVEL = 100;
 function tierForLevel(level: number) {
   const index = Math.min(
     TIER_PALETTE.length - 1,
-    Math.floor((Math.max(1, level) - 1) / TIER_SIZE),
+    Math.floor(
+      (Math.max(1, level) - 1) /
+        TIER_SIZE,
+    ),
   );
 
   return TIER_PALETTE[index];
@@ -107,20 +150,23 @@ function badgeForAdmin(
 export function ProfileHero({
   profile,
 }: ProfileHeroProps) {
-  const theme = tierForLevel(profile.level);
+  const theme =
+    tierForLevel(profile.level);
 
-  const roleBadge = badgeForRole(profile.role);
+  const roleBadge =
+    badgeForRole(profile.role);
 
-  const engineerBadge = badgeForAdmin(
-    profile.is_admin,
-  );
+  const engineerBadge =
+    badgeForAdmin(profile.is_admin);
 
   /*
    * public_id is the canonical public User ID.
    */
-  const userId = profile.public_id;
+  const userId =
+    profile.public_id;
 
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] =
+    useState(false);
 
   const copyTimeoutRef =
     useRef<ReturnType<typeof setTimeout> | null>(
@@ -129,17 +175,22 @@ export function ProfileHero({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(userId);
+      await navigator.clipboard.writeText(
+        userId,
+      );
 
       setCopied(true);
 
       if (copyTimeoutRef.current) {
-        clearTimeout(copyTimeoutRef.current);
+        clearTimeout(
+          copyTimeoutRef.current,
+        );
       }
 
-      copyTimeoutRef.current = setTimeout(() => {
-        setCopied(false);
-      }, 2000);
+      copyTimeoutRef.current =
+        setTimeout(() => {
+          setCopied(false);
+        }, 2000);
     } catch {
       const input =
         document.createElement("input");
@@ -157,12 +208,15 @@ export function ProfileHero({
       setCopied(true);
 
       if (copyTimeoutRef.current) {
-        clearTimeout(copyTimeoutRef.current);
+        clearTimeout(
+          copyTimeoutRef.current,
+        );
       }
 
-      copyTimeoutRef.current = setTimeout(() => {
-        setCopied(false);
-      }, 2000);
+      copyTimeoutRef.current =
+        setTimeout(() => {
+          setCopied(false);
+        }, 2000);
     }
   };
 
@@ -184,7 +238,9 @@ export function ProfileHero({
       <div className="flex items-center gap-4">
         <AvatarWithHalo
           src={profile.avatar}
-          name={profile.name || "User"}
+          name={
+            profile.name || "User"
+          }
           level={profile.level}
           theme={theme}
         />
@@ -193,9 +249,13 @@ export function ProfileHero({
           <div className="flex min-w-0 items-center gap-1.5 pr-10">
             <h1
               className="truncate font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-[#F3ECE0]"
-              title={profile.name || "User"}
+              title={
+                profile.name ||
+                "User"
+              }
             >
-              {profile.name || "User"}
+              {profile.name ||
+                "User"}
             </h1>
 
             {profile.is_verified && (
@@ -213,7 +273,9 @@ export function ProfileHero({
                   undefined
                 }
               >
-                {profile.country_flag}
+                {
+                  profile.country_flag
+                }
               </span>
             )}
           </div>
@@ -243,7 +305,8 @@ export function ProfileHero({
               <span
                 className={cn(
                   "absolute -top-8 left-1/2 -translate-x-1/2 rounded bg-[#2A2238] px-2 py-0.5 text-[9px] font-medium text-[#F3ECE0] opacity-0 transition-all duration-200",
-                  copied && "opacity-100",
+                  copied &&
+                    "opacity-100",
                 )}
               >
                 Copied!
@@ -282,7 +345,8 @@ export function ProfileHero({
               <span
                 className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
                 style={{
-                  color: engineerBadge.accent,
+                  color:
+                    engineerBadge.accent,
                   borderColor: `${engineerBadge.primary}55`,
                   background: `linear-gradient(135deg, ${engineerBadge.primary}30, ${engineerBadge.primary}0C)`,
                 }}
@@ -295,7 +359,9 @@ export function ProfileHero({
                   }}
                 />
 
-                {engineerBadge.label}
+                {
+                  engineerBadge.label
+                }
               </span>
             )}
 
@@ -304,7 +370,8 @@ export function ProfileHero({
                 <span
                   className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
                   style={{
-                    color: roleBadge.accent,
+                    color:
+                      roleBadge.accent,
                     borderColor: `${roleBadge.primary}55`,
                     background: `linear-gradient(135deg, ${roleBadge.primary}30, ${roleBadge.primary}0C)`,
                   }}
@@ -325,9 +392,15 @@ export function ProfileHero({
       </div>
 
       <StatsRow
-        following={profile.following}
-        followers={profile.followers}
-        level={profile.level}
+        following={
+          profile.following
+        }
+        followers={
+          profile.followers
+        }
+        friendCount={
+          profile.friend_count
+        }
         visitorCount={
           profile.visitor_count
         }
@@ -382,9 +455,15 @@ function HeroMotionStyles() {
 }
 
 interface AvatarWithHaloProps {
-  src: string | null | undefined;
+  src:
+    | string
+    | null
+    | undefined;
+
   name: string;
+
   level: number;
+
   theme: {
     primary: string;
     accent: string;
@@ -473,8 +552,11 @@ function AvatarWithHalo({
 
 interface StatsRowProps {
   following: number;
+
   followers: number;
-  level: number;
+
+  friendCount: number;
+
   visitorCount:
     | number
     | null
@@ -484,7 +566,7 @@ interface StatsRowProps {
 function StatsRow({
   following,
   followers,
-  level,
+  friendCount,
   visitorCount,
 }: StatsRowProps) {
   const stats: Array<{
@@ -503,9 +585,9 @@ function StatsRow({
       href: "/home/me/connections?tab=following",
     },
     {
-      label: "Level",
-      value: level,
-      href: "/level",
+      label: "Friends",
+      value: friendCount,
+      href: "/home/me/connections?tab=friends",
     },
     {
       label: "Visitors",
@@ -515,50 +597,52 @@ function StatsRow({
 
   return (
     <dl className="mt-5 flex items-stretch justify-between rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 px-2 py-3.5">
-      {stats.map((stat, index) => {
-        const content = (
-          <div
-            className={cn(
-              "flex flex-1 flex-col items-center justify-center gap-1",
-              index !==
-                stats.length - 1 &&
-                "border-r border-[#2A2238]",
-              stat.href &&
-                "cursor-pointer transition-colors active:opacity-70",
-            )}
-          >
-            <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#9088A0]">
-              {stat.label}
-            </dt>
+      {stats.map(
+        (stat, index) => {
+          const content = (
+            <div
+              className={cn(
+                "flex flex-1 flex-col items-center justify-center gap-1",
+                index !==
+                  stats.length - 1 &&
+                  "border-r border-[#2A2238]",
+                stat.href &&
+                  "cursor-pointer transition-colors active:opacity-70",
+              )}
+            >
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#9088A0]">
+                {stat.label}
+              </dt>
 
-            <dd className="text-sm font-bold tabular-nums text-[#F3ECE0]">
-              {stat.value}
-            </dd>
-          </div>
-        );
+              <dd className="text-sm font-bold tabular-nums text-[#F3ECE0]">
+                {stat.value}
+              </dd>
+            </div>
+          );
 
-        if (stat.href) {
+          if (stat.href) {
+            return (
+              <Link
+                key={stat.label}
+                href={stat.href}
+                className="flex flex-1"
+                aria-label={`View ${stat.label}`}
+              >
+                {content}
+              </Link>
+            );
+          }
+
           return (
-            <Link
+            <div
               key={stat.label}
-              href={stat.href}
               className="flex flex-1"
-              aria-label={`View ${stat.label}`}
             >
               {content}
-            </Link>
+            </div>
           );
-        }
-
-        return (
-          <div
-            key={stat.label}
-            className="flex flex-1"
-          >
-            {content}
-          </div>
-        );
-      })}
+        },
+      )}
     </dl>
   );
 }
