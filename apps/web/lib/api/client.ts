@@ -11,9 +11,9 @@ if (!API_URL) {
   );
 }
 
-/* ========================================================================== */
-/* FETCH                                                                      */
-/* ========================================================================== */
+/* ==========================================================================
+ * FETCH
+ * ========================================================================== */
 
 export async function apiFetch<T>(
   path: string,
@@ -25,7 +25,8 @@ export async function apiFetch<T>(
   const {
     data: { session },
     error,
-  } = await supabase.auth.getSession();
+  } =
+    await supabase.auth.getSession();
 
   if (error) {
     throw error;
@@ -35,7 +36,9 @@ export async function apiFetch<T>(
     new Headers(options.headers);
 
   if (
-    !headers.has("Content-Type") &&
+    !headers.has(
+      "Content-Type",
+    ) &&
     options.body
   ) {
     headers.set(
@@ -68,27 +71,98 @@ export async function apiFetch<T>(
       const data =
         await response.json();
 
-      message =
-        data?.message ??
-        data?.error ??
-        message;
+      /*
+       * Handle:
+       *
+       * {
+       *   message: "..."
+       * }
+       *
+       * OR:
+       *
+       * {
+       *   error: "..."
+       * }
+       *
+       * OR:
+       *
+       * {
+       *   error: {
+       *     code: "...",
+       *     message: "..."
+       *   }
+       * }
+       */
+
+      if (
+        typeof data?.message ===
+        "string"
+      ) {
+        message =
+          data.message;
+      } else if (
+        typeof data?.error ===
+        "string"
+      ) {
+        message =
+          data.error;
+      } else if (
+        data?.error &&
+        typeof data.error ===
+          "object"
+      ) {
+        if (
+          typeof data.error
+            .message ===
+          "string"
+        ) {
+          message =
+            data.error.message;
+        } else if (
+          typeof data.error
+            .code ===
+          "string"
+        ) {
+          message =
+            data.error.code;
+        } else {
+          message =
+            JSON.stringify(
+              data.error,
+            );
+        }
+      } else if (
+        data &&
+        typeof data ===
+          "object"
+      ) {
+        message =
+          JSON.stringify(
+            data,
+          );
+      }
     } catch {
       // Response was not JSON.
     }
 
-    throw new Error(message);
+    throw new Error(
+      message,
+    );
   }
 
-  if (response.status === 204) {
+  if (
+    response.status ===
+    204
+  ) {
     return undefined as T;
   }
 
   return response.json() as Promise<T>;
 }
 
-/* ========================================================================== */
-/* API CLIENT                                                                 */
-/* ========================================================================== */
+/* ==========================================================================
+ * API CLIENT
+ * ========================================================================== */
 
 export const api = {
   get<T = unknown>(
@@ -114,10 +188,13 @@ export const api = {
       {
         ...options,
         method: "POST",
+
         body:
           body === undefined
             ? undefined
-            : JSON.stringify(body),
+            : JSON.stringify(
+                body,
+              ),
       },
     );
   },
@@ -132,10 +209,13 @@ export const api = {
       {
         ...options,
         method: "PATCH",
+
         body:
           body === undefined
             ? undefined
-            : JSON.stringify(body),
+            : JSON.stringify(
+                body,
+              ),
       },
     );
   },
@@ -150,10 +230,13 @@ export const api = {
       {
         ...options,
         method: "PUT",
+
         body:
           body === undefined
             ? undefined
-            : JSON.stringify(body),
+            : JSON.stringify(
+                body,
+              ),
       },
     );
   },
