@@ -64,12 +64,11 @@ export async function testCreateSession(
           "phase1-test-room",
       ).trim();
 
-    const offerSdp =
-      typeof req.body?.offerSdp ===
-      "string"
-        ? req.body.offerSdp.trim()
-        : "";
-
+  const offerSdp =
+  typeof req.body?.offerSdp ===
+  "string"
+    ? req.body.offerSdp
+    : "";
     if (!offerSdp) {
       res.status(400).json({
         status: "error",
@@ -154,11 +153,11 @@ export async function testPublishTracks(
         req.body?.sessionId ?? "",
       ).trim();
 
-    const offerSdp =
-      typeof req.body?.offerSdp ===
-      "string"
-        ? req.body.offerSdp.trim()
-        : "";
+const offerSdp =
+  typeof req.body?.offerSdp ===
+  "string"
+    ? req.body.offerSdp
+    : "";
 
     if (!sessionId) {
       res.status(400).json({

@@ -40,32 +40,54 @@ function createEmptyRoomState(
 ): RoomMediaState {
   return {
     roomId,
+
     status: "idle",
+
     generation: 0,
+
     sequence: 0,
+
     host: null,
+
     speakers: {},
+
     viewerCount: 0,
+
     updatedAt: now(),
   };
+}
+
+function parseRedisJson<T>(
+  value: unknown,
+): T {
+  if (typeof value !== "string") {
+    throw new TypeError(
+      "Expected Redis value to be a string",
+    );
+  }
+
+  return JSON.parse(value) as T;
 }
 
 export function createMediaService(
   dependencies: MediaServiceDependencies,
 ) {
-  const { provider } = dependencies;
+  const { provider } =
+    dependencies;
 
   return {
     async getRoomState(
       roomId: string,
     ): Promise<RoomMediaState> {
-      const raw = await redis.hGetAll(
-        mediaKeys.media(roomId),
-      );
+      const raw =
+        await redis.hGetAll(
+          mediaKeys.media(roomId),
+        );
 
       if (
         !raw ||
-        Object.keys(raw).length === 0
+        Object.keys(raw).length ===
+          0
       ) {
         return createEmptyRoomState(
           roomId,
@@ -77,15 +99,23 @@ export function createMediaService(
         | null = null;
 
       if (raw.host) {
-        host = JSON.parse(raw.host);
+        host =
+          parseRedisJson<
+            NonNullable<
+              RoomMediaState["host"]
+            >
+          >(raw.host);
       }
 
-      const speakers: RoomMediaState["speakers"] =
+      const speakers:
+        RoomMediaState["speakers"] =
         {};
 
       const speakerEntries =
         await redis.hGetAll(
-          mediaKeys.speakers(roomId),
+          mediaKeys.speakers(
+            roomId,
+          ),
         );
 
       for (const [
@@ -94,33 +124,50 @@ export function createMediaService(
       ] of Object.entries(
         speakerEntries,
       )) {
-        speakers[userId] = JSON.parse(
-          value,
-        );
+        speakers[userId] =
+          parseRedisJson(
+            value,
+          );
       }
 
       const viewerCount =
         await redis.sCard(
-          mediaKeys.viewers(roomId),
+          mediaKeys.viewers(
+            roomId,
+          ),
         );
 
       return {
         roomId,
+
         status:
-          (raw.status as RoomMediaState["status"]) ??
+          (raw.status as
+            RoomMediaState["status"]) ??
           "idle",
-        generation: Number(
-          raw.generation ?? 0,
-        ),
-        sequence: Number(
-          raw.sequence ?? 0,
-        ),
+
+        generation:
+          Number(
+            raw.generation ??
+              0,
+          ),
+
+        sequence:
+          Number(
+            raw.sequence ??
+              0,
+          ),
+
         host,
+
         speakers,
+
         viewerCount,
-        updatedAt: Number(
-          raw.updatedAt ?? now(),
-        ),
+
+        updatedAt:
+          Number(
+            raw.updatedAt ??
+              now(),
+          ),
       };
     },
 
@@ -133,8 +180,10 @@ export function createMediaService(
         );
 
       if (
-        existing.status !== "idle" &&
-        existing.status !== "ended"
+        existing.status !==
+          "idle" &&
+        existing.status !==
+          "ended"
       ) {
         return existing;
       }
@@ -145,23 +194,34 @@ export function createMediaService(
         );
 
       await redis.hSet(
-        mediaKeys.media(roomId),
+        mediaKeys.media(
+          roomId,
+        ),
         {
-          status: state.status,
-          generation: String(
-            state.generation,
-          ),
-          sequence: String(
-            state.sequence,
-          ),
-          updatedAt: String(
-            state.updatedAt,
-          ),
+          status:
+            state.status,
+
+          generation:
+            String(
+              state.generation,
+            ),
+
+          sequence:
+            String(
+              state.sequence,
+            ),
+
+          updatedAt:
+            String(
+              state.updatedAt,
+            ),
         },
       );
 
       await redis.expire(
-        mediaKeys.media(roomId),
+        mediaKeys.media(
+          roomId,
+        ),
         mediaConfig.redis
           .roomStateTtlSeconds,
       );
@@ -174,17 +234,21 @@ export function createMediaService(
       status: RoomMediaState["status"],
     ): Promise<void> {
       await redis.hSet(
-        mediaKeys.media(roomId),
+        mediaKeys.media(
+          roomId,
+        ),
         {
           status,
-          updatedAt: String(
-            now(),
-          ),
+
+          updatedAt:
+            String(now()),
         },
       );
 
       await redis.expire(
-        mediaKeys.media(roomId),
+        mediaKeys.media(
+          roomId,
+        ),
         mediaConfig.redis
           .roomStateTtlSeconds,
       );
@@ -195,22 +259,27 @@ export function createMediaService(
     ): Promise<number> {
       const generation =
         await redis.hIncrBy(
-          mediaKeys.media(roomId),
+          mediaKeys.media(
+            roomId,
+          ),
           "generation",
           1,
         );
 
       await redis.hSet(
-        mediaKeys.media(roomId),
+        mediaKeys.media(
+          roomId,
+        ),
         {
-          updatedAt: String(
-            now(),
-          ),
+          updatedAt:
+            String(now()),
         },
       );
 
       await redis.expire(
-        mediaKeys.media(roomId),
+        mediaKeys.media(
+          roomId,
+        ),
         mediaConfig.redis
           .roomStateTtlSeconds,
       );
@@ -223,11 +292,15 @@ export function createMediaService(
     ): Promise<number> {
       const value =
         await redis.hGet(
-          mediaKeys.media(roomId),
+          mediaKeys.media(
+            roomId,
+          ),
           "generation",
         );
 
-      return Number(value ?? 0);
+      return Number(
+        value ?? 0,
+      );
     },
 
     async assertGeneration(
@@ -240,7 +313,8 @@ export function createMediaService(
         );
 
       if (
-        current !== expectedGeneration
+        current !==
+        expectedGeneration
       ) {
         throw new MediaGenerationMismatchError(
           current,
@@ -260,23 +334,30 @@ export function createMediaService(
       await redis.hSet(
         key,
         {
-          status: session.status,
-          generation: String(
-            session.generation,
-          ),
-          updatedAt: String(
-            now(),
-          ),
+          status:
+            session.status,
+
+          generation:
+            String(
+              session.generation,
+            ),
+
+          updatedAt:
+            String(now()),
         },
       );
 
-      if (session.role === "host") {
+      if (
+        session.role ===
+        "host"
+      ) {
         await redis.hSet(
           key,
           {
-            host: JSON.stringify(
-              session,
-            ),
+            host:
+              JSON.stringify(
+                session,
+              ),
           },
         );
       }
@@ -293,7 +374,8 @@ export function createMediaService(
       audioTrackName: string,
     ): Promise<void> {
       if (
-        session.role !== "speaker"
+        session.role !==
+        "speaker"
       ) {
         throw new MediaStateConflictError(
           "Only speaker sessions can be stored as speaker media state",
@@ -306,16 +388,23 @@ export function createMediaService(
         ),
         session.userId,
         JSON.stringify({
-          userId: session.userId,
+          userId:
+            session.userId,
+
           sessionId:
             session.sessionId,
+
           audioTrackName,
+
           generation:
             session.generation,
+
           status:
             session.status,
+
           joinedAt:
             session.createdAt,
+
           lastHeartbeatAt:
             session.lastHeartbeatAt,
         }),
@@ -346,7 +435,8 @@ export function createMediaService(
       session: MediaSession,
     ): Promise<void> {
       if (
-        session.role !== "viewer"
+        session.role !==
+        "viewer"
       ) {
         throw new MediaStateConflictError(
           "Only viewer sessions can be stored as viewer media state",
@@ -359,17 +449,24 @@ export function createMediaService(
         ),
         session.userId,
         JSON.stringify({
-          userId: session.userId,
+          userId:
+            session.userId,
+
           sessionId:
             session.sessionId,
+
           generation:
             session.generation,
+
           status:
             session.status,
+
           joinedAt:
             session.createdAt,
+
           lastHeartbeatAt:
             session.lastHeartbeatAt,
+
           lastSequence: 0,
         }),
       );
@@ -414,14 +511,15 @@ export function createMediaService(
       );
 
       await redis.hSet(
-        mediaKeys.media(roomId),
+        mediaKeys.media(
+          roomId,
+        ),
         {
-          sequence: String(
-            sequence,
-          ),
-          updatedAt: String(
-            now(),
-          ),
+          sequence:
+            String(sequence),
+
+          updatedAt:
+            String(now()),
         },
       );
 
@@ -458,9 +556,13 @@ export function createMediaService(
 
       return createMediaEvent({
         roomId,
+
         sequence,
+
         generation,
+
         type,
+
         payload,
       });
     },
@@ -498,18 +600,26 @@ export function createMediaService(
         {
           participantId:
             userId,
+
           sessionId,
+
           role,
-          generation: String(
-            generation,
-          ),
+
+          generation:
+            String(
+              generation,
+            ),
+
           lastHeartbeatAt:
             String(now()),
-          expiresAt: String(
-            now() +
-              mediaConfig.heartbeat
-                .timeoutMs,
-          ),
+
+          expiresAt:
+            String(
+              now() +
+                mediaConfig
+                  .heartbeat
+                  .timeoutMs,
+            ),
         },
       );
 
@@ -517,7 +627,8 @@ export function createMediaService(
         key,
         Math.ceil(
           mediaConfig.heartbeat
-            .timeoutMs / 1000,
+            .timeoutMs /
+            1000,
         ),
       );
     },
