@@ -51,10 +51,15 @@ function tierForLevel(level: number) {
 /*
  * Role -> profile badge.
  *
- * profiles.role drives three badges:
- *   - "agency_owner"                -> Agency Owner
- *   - "agency_admin" / "agency_agent" -> Host Manager
- *   - "admin" / "super_admin"       -> Engineer (site owner / engineers)
+ * profiles.role drives two of the three badges:
+ *   - "agency_owner"                   -> Agency Owner
+ *   - "agency_admin" / "agency_agent"  -> Host Manager
+ *
+ * The "Engineer" badge is intentionally NOT driven by role (agency_admin's
+ * role literally contains the word "admin" and could be confused for a
+ * platform admin). It is driven exclusively by profiles.is_admin, a
+ * separate DB column that is only ever true for the site owner/engineers.
+ * See badgeForAdmin() below.
  */
 type RoleBadge = {
   label: string;
@@ -80,22 +85,32 @@ function badgeForRole(role: string | null | undefined): RoleBadge {
         primary: "#57C2FF",
         accent: "#B3E6FF",
       };
-    case "admin":
-    case "super_admin":
-      return {
-        label: "Engineer",
-        Icon: Wrench,
-        primary: "#A86CFF",
-        accent: "#DCC2FF",
-      };
     default:
       return null;
   }
 }
 
+/*
+ * Engineer badge — gated ONLY by profiles.is_admin.
+ * This flag is set on exactly one account (the platform owner/engineer),
+ * so this badge never shows on anyone else's profile, regardless of
+ * their `role` value.
+ */
+function badgeForAdmin(isAdmin: boolean): RoleBadge {
+  if (!isAdmin) return null;
+
+  return {
+    label: "Engineer",
+    Icon: Wrench,
+    primary: "#A86CFF",
+    accent: "#DCC2FF",
+  };
+}
+
 export function ProfileHero({ profile }: ProfileHeroProps) {
   const theme = tierForLevel(profile.level);
   const roleBadge = badgeForRole(profile.role);
+  const engineerBadge = badgeForAdmin(profile.is_admin);
 
   /*
    * public_id is now the canonical profile User ID
@@ -252,7 +267,25 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
               {numberFormat.format(profile.diamonds)}
             </span>
 
-            {roleBadge && (
+            {engineerBadge && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
+                style={{
+                  color: engineerBadge.accent,
+                  borderColor: `${engineerBadge.primary}55`,
+                  background: `linear-gradient(135deg, ${engineerBadge.primary}30, ${engineerBadge.primary}0C)`,
+                }}
+              >
+                <engineerBadge.Icon
+                  className="h-3 w-3"
+                  style={{ color: engineerBadge.primary }}
+                />
+
+                {engineerBadge.label}
+              </span>
+            )}
+
+            {!engineerBadge && roleBadge && (
               <span
                 className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
                 style={{
@@ -413,7 +446,7 @@ interface StatsRowProps {
   following: number;
   followers: number;
   level: number;
-  visitorCount: number;
+  visitorCount: number | null | undefined;
 }
 
 function StatsRow({
@@ -430,10 +463,12 @@ function StatsRow({
     {
       label: "Followers",
       value: followers,
+      href: "/home/me/connections?tab=followers",
     },
     {
       label: "Following",
       value: following,
+      href: "/home/me/connections?tab=following",
     },
     {
       label: "Level",
@@ -441,8 +476,11 @@ function StatsRow({
       href: "/level",
     },
     {
+      // visitorCount defaults to 0 when there are no visitors yet, or if
+      // the backend hasn't populated it for some reason — it should never
+      // render as blank/undefined/NaN.
       label: "Visitors",
-      value: visitorCount,
+      value: visitorCount ?? 0,
     },
   ];
 

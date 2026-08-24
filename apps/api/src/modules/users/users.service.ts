@@ -193,6 +193,10 @@ export async function updateCurrentUser(
 /**
  * Total number of times other users have visited this profile.
  * Used to populate PrivateProfile.visitor_count.
+ *
+ * Always resolves to a number (0 when there are no visits, or if the
+ * count query fails) — never null/undefined — so the frontend never has
+ * to guard against a missing visitor count.
  */
 async function getVisitorCount(
   profileId: UserId,
@@ -250,4 +254,88 @@ export async function recordProfileVisit(
       err,
     );
   }
+}
+
+// -----------------------------------------------------------------------------
+// Followers / Following lists
+// -----------------------------------------------------------------------------
+
+export interface FollowListEntry {
+  id: string;
+  public_id: string;
+  name: string | null;
+  handle: string | null;
+  avatar: string | null;
+  is_verified: boolean;
+  level: number;
+}
+
+const FOLLOW_ENTRY_FIELDS = `
+  id,
+  public_id,
+  name,
+  handle,
+  avatar,
+  is_verified,
+  level
+`;
+
+/**
+ * Users who follow `userId` (i.e. rows in `follows` where
+ * following_id = userId), newest first.
+ */
+export async function getFollowers(
+  userId: UserId,
+): Promise<FollowListEntry[]> {
+  const { data, error } = await (
+    supabase.from("follows" as any) as any
+  )
+    .select(
+      `
+        created_at,
+        profiles!follows_follower_id_fkey (
+          ${FOLLOW_ENTRY_FIELDS}
+        )
+      `,
+    )
+    .eq("following_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? [])
+    .map((row: any) => row.profiles)
+    .filter(Boolean) as FollowListEntry[];
+}
+
+/**
+ * Users that `userId` follows (i.e. rows in `follows` where
+ * follower_id = userId), newest first.
+ */
+export async function getFollowing(
+  userId: UserId,
+): Promise<FollowListEntry[]> {
+  const { data, error } = await (
+    supabase.from("follows" as any) as any
+  )
+    .select(
+      `
+        created_at,
+        profiles!follows_following_id_fkey (
+          ${FOLLOW_ENTRY_FIELDS}
+        )
+      `,
+    )
+    .eq("follower_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? [])
+    .map((row: any) => row.profiles)
+    .filter(Boolean) as FollowListEntry[];
 }

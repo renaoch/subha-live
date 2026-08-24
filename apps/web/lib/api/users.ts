@@ -15,6 +15,16 @@ export interface UpdateProfileInput {
   gender?: string | null;
 }
 
+export interface FollowListEntry {
+  id: string;
+  public_id: string;
+  name: string | null;
+  handle: string | null;
+  avatar: string | null;
+  is_verified: boolean;
+  level: number;
+}
+
 interface PrivateProfileResponse {
   status: string;
   user: PrivateProfile;
@@ -23,6 +33,11 @@ interface PrivateProfileResponse {
 interface PublicProfileResponse {
   status: string;
   user: PublicProfile;
+}
+
+interface FollowListResponse {
+  status: string;
+  users: FollowListEntry[];
 }
 
 export const usersApi = {
@@ -59,5 +74,27 @@ export const usersApi = {
       );
 
     return response.user;
+  },
+
+  async getFollowers(
+    id: string,
+  ): Promise<FollowListEntry[]> {
+    const response =
+      await apiFetch<FollowListResponse>(
+        `/api/v1/users/${id}/followers`,
+      );
+
+    return response.users ?? [];
+  },
+
+  async getFollowing(
+    id: string,
+  ): Promise<FollowListEntry[]> {
+    const response =
+      await apiFetch<FollowListResponse>(
+        `/api/v1/users/${id}/following`,
+      );
+
+    return response.users ?? [];
   },
 };

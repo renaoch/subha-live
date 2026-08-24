@@ -5,6 +5,8 @@ import {
   getUserById,
   updateCurrentUser,
   recordProfileVisit,
+  getFollowers,
+  getFollowing,
 } from "./users.service";
 
 import {
@@ -129,6 +131,70 @@ export async function updateMyProfile(
     };
 
     return res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// GET /api/v1/users/:id/followers
+// List of users who follow the given user
+
+export async function getUserFollowers(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      throw new AppError(
+        400,
+        "User ID is required",
+        {
+          code: "USER_ID_REQUIRED",
+        },
+      );
+    }
+
+    const followers = await getFollowers(id);
+
+    return res.status(200).json({
+      status: "ok",
+      users: followers,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// GET /api/v1/users/:id/following
+// List of users the given user follows
+
+export async function getUserFollowing(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      throw new AppError(
+        400,
+        "User ID is required",
+        {
+          code: "USER_ID_REQUIRED",
+        },
+      );
+    }
+
+    const following = await getFollowing(id);
+
+    return res.status(200).json({
+      status: "ok",
+      users: following,
+    });
   } catch (error) {
     next(error);
   }
