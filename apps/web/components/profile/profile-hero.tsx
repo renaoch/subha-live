@@ -76,6 +76,14 @@ function badgeForRole(
         accent: "#B3E6FF",
       };
 
+    case "agency_host":
+      return {
+        label: "Host",
+        Icon: UsersRound,
+        primary: "#5FD9C4",
+        accent: "#B4F5E7",
+      };
+
     default:
       return null;
   }

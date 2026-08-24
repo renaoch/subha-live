@@ -1,9 +1,12 @@
 import { supabase } from "../../lib/supabase";
+
 import type { Database } from "../../types/database.types";
+
 import type {
   PrivateProfile,
   PublicProfile,
 } from "./users.types";
+
 import { AppError } from "../../errors/app-error";
 
 type ProfileUpdate =
@@ -21,6 +24,8 @@ type UserId =
  *   ↓
  * host manager
  *   ↓
+ * host
+ *   ↓
  * normal profile role
  *
  * Engineer is NOT handled here.
@@ -29,6 +34,7 @@ type UserId =
 type AgencyBadgeRole =
   | "agency_owner"
   | "agency_agent"
+  | "agency_host"
   | null;
 
 // Private profile fields
@@ -90,6 +96,9 @@ const PUBLIC_PROFILE_FIELDS = `
  *   OR
  *   agency_hosts.agent_id = profiles.id
  *
+ * Host:
+ *   agency_hosts.host_id = profiles.id
+ *
  * This function does not modify the database.
  */
 async function resolveAgencyBadgeRole(
@@ -99,23 +108,42 @@ async function resolveAgencyBadgeRole(
     { data: ownedAgencies, error: ownerError },
     { data: agentRows, error: agentError },
     { data: managedHosts, error: hostManagerError },
+    { data: hostRows, error: hostError },
   ] = await Promise.all([
+    // -------------------------------------------------------------
+    // Agency Owner
+    // -------------------------------------------------------------
     supabase
       .from("agencies")
       .select("id")
       .eq("owner_id", userId)
       .limit(1),
 
+    // -------------------------------------------------------------
+    // Host Manager / Agency Agent
+    // -------------------------------------------------------------
     supabase
       .from("agency_agents")
       .select("id")
       .eq("user_id", userId)
       .limit(1),
 
+    // -------------------------------------------------------------
+    // Host Manager assigned to hosts
+    // -------------------------------------------------------------
     supabase
       .from("agency_hosts")
       .select("agency_id")
       .eq("agent_id", userId)
+      .limit(1),
+
+    // -------------------------------------------------------------
+    // Actual Host
+    // -------------------------------------------------------------
+    supabase
+      .from("agency_hosts")
+      .select("agency_id")
+      .eq("host_id", userId)
       .limit(1),
   ]);
 
@@ -131,12 +159,22 @@ async function resolveAgencyBadgeRole(
     throw hostManagerError;
   }
 
+  if (hostError) {
+    throw hostError;
+  }
+
   /*
-   * Owner takes priority.
+   * Owner takes highest agency priority.
    *
-   * This means if somebody somehow exists in both
-   * agencies.owner_id and agency_agents, they are still
-   * displayed as Agency Owner.
+   * If somebody is somehow both:
+   *
+   *   agencies.owner_id
+   *
+   * and:
+   *
+   *   agency_agents.user_id
+   *
+   * they are still displayed as Agency Owner.
    */
   if ((ownedAgencies ?? []).length > 0) {
     return "agency_owner";
@@ -146,7 +184,9 @@ async function resolveAgencyBadgeRole(
    * A user is a Host Manager if:
    *
    * 1. They are registered in agency_agents
+   *
    * OR
+   *
    * 2. They are assigned as agent_id on agency_hosts.
    */
   if (
@@ -154,6 +194,14 @@ async function resolveAgencyBadgeRole(
     (managedHosts ?? []).length > 0
   ) {
     return "agency_agent";
+  }
+
+  /*
+   * A user is an actual Host if their profile ID
+   * exists as agency_hosts.host_id.
+   */
+  if ((hostRows ?? []).length > 0) {
+    return "agency_host";
   }
 
   return null;
@@ -164,14 +212,15 @@ async function resolveAgencyBadgeRole(
  * profile API.
  *
  * We preserve the existing profile role for ordinary users
- * and only override it when the actual agency relationship
- * proves the user is an owner or manager.
+ * and override it when the actual agency relationship
+ * proves the user is an owner, manager, or host.
  */
 async function resolveProfileRole(
   userId: UserId,
   profileRole: string,
 ): Promise<string> {
-  const agencyRole = await resolveAgencyBadgeRole(userId);
+  const agencyRole =
+    await resolveAgencyBadgeRole(userId);
 
   if (agencyRole === "agency_owner") {
     return "agency_owner";
@@ -179,6 +228,10 @@ async function resolveProfileRole(
 
   if (agencyRole === "agency_agent") {
     return "agency_agent";
+  }
+
+  if (agencyRole === "agency_host") {
+    return "agency_host";
   }
 
   return profileRole;
@@ -214,12 +267,14 @@ export async function getCurrentUser(
 
   const profile = data as any;
 
-  const resolvedRole = await resolveProfileRole(
-    userId,
-    profile.role,
-  );
+  const resolvedRole =
+    await resolveProfileRole(
+      userId,
+      profile.role,
+    );
 
-  const visitorCount = await getVisitorCount(userId);
+  const visitorCount =
+    await getVisitorCount(userId);
 
   return {
     ...profile,
@@ -258,10 +313,11 @@ export async function getUserById(
 
   const profile = data as any;
 
-  const resolvedRole = await resolveProfileRole(
-    userId,
-    profile.role,
-  );
+  const resolvedRole =
+    await resolveProfileRole(
+      userId,
+      profile.role,
+    );
 
   return {
     ...profile,
@@ -311,12 +367,14 @@ export async function updateCurrentUser(
 
   const profile = data as any;
 
-  const resolvedRole = await resolveProfileRole(
-    userId,
-    profile.role,
-  );
+  const resolvedRole =
+    await resolveProfileRole(
+      userId,
+      profile.role,
+    );
 
-  const visitorCount = await getVisitorCount(userId);
+  const visitorCount =
+    await getVisitorCount(userId);
 
   return {
     ...profile,
@@ -366,7 +424,10 @@ export async function recordProfileVisit(
   visitorId: string | undefined,
   profileId: UserId,
 ): Promise<void> {
-  if (!visitorId || visitorId === profileId) {
+  if (
+    !visitorId ||
+    visitorId === profileId
+  ) {
     return;
   }
 
@@ -398,11 +459,17 @@ export async function recordProfileVisit(
 
 export interface FollowListEntry {
   id: string;
+
   public_id: string;
+
   name: string | null;
+
   handle: string | null;
+
   avatar: string | null;
+
   is_verified: boolean;
+
   level: number;
 }
 
@@ -443,7 +510,9 @@ export async function getFollowers(
   }
 
   return (data ?? [])
-    .map((row: any) => row.profiles)
+    .map(
+      (row: any) => row.profiles,
+    )
     .filter(Boolean) as FollowListEntry[];
 }
 
@@ -474,6 +543,8 @@ export async function getFollowing(
   }
 
   return (data ?? [])
-    .map((row: any) => row.profiles)
+    .map(
+      (row: any) => row.profiles,
+    )
     .filter(Boolean) as FollowListEntry[];
 }
