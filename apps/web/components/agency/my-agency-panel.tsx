@@ -35,9 +35,9 @@ import { StatTile } from "./stat-tile";
 
 import { AgentsPanel } from "./agents-panel";
 
-import { HostsPanel } from "./hosts-panel"; // <-- NEW
+import { HostsPanel } from "./hosts-panel";
 
-import { AgentDashboardPanel } from "./agent-dashboard-panel"; // <-- NEW
+import { AgentDashboardPanel } from "./agent-dashboard-panel";
 
 import { InvitationsPanel } from "./invitations-panel";
 
@@ -118,11 +118,34 @@ export function MyAgencyPanel({
     setAppBusy,
   ] = useState<string | null>(null);
 
-  const [isAgent, setIsAgent] = useState(false);
+  const [
+    isAgent,
+    setIsAgent,
+  ] = useState(false);
 
+  /*
+   * Agency owner information.
+   *
+   * The owner is resolved from:
+   *
+   * agency.ownerId -> profiles
+   *
+   * This is display-only.
+   * It does not change RBAC.
+   */
   const [
     ownerName,
     setOwnerName,
+  ] = useState<string | null>(null);
+
+  const [
+    ownerHandle,
+    setOwnerHandle,
+  ] = useState<string | null>(null);
+
+  const [
+    ownerAvatar,
+    setOwnerAvatar,
   ] = useState<string | null>(null);
 
   /* ------------------------------------------------------------------------ */
@@ -137,38 +160,60 @@ export function MyAgencyPanel({
         const profile =
           await usersApi.me();
 
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         setCurrentUserId(
           profile.id,
         );
 
-        // Load the agency owner name.
-        // This is based on agency.ownerId, so every
-        // RBAC role sees the same agency owner.
+        /*
+         * Get the actual agency owner.
+         *
+         * This uses agency.ownerId, not the currently
+         * logged-in user's role.
+         *
+         * Therefore every user looking at this agency
+         * sees the same owner.
+         */
         const owner =
           await usersApi.getById(
             agency.ownerId,
           );
 
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         setOwnerName(
           owner.name,
         );
 
-        // Check if current user is an agent
+        setOwnerHandle(
+          owner.handle,
+        );
+
+        setOwnerAvatar(
+          owner.avatar,
+        );
+
+        /*
+         * Check if current user is an agent.
+         */
         const agents =
           await agencyApi.agents(
             agency.id,
           );
 
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         const userIsAgent =
           agents.some(
-            (a) =>
-              a.userId ===
+            (agent) =>
+              agent.userId ===
               profile.id,
           );
 
@@ -176,16 +221,25 @@ export function MyAgencyPanel({
           userIsAgent,
         );
 
+        /*
+         * Existing dashboard request.
+         *
+         * No RBAC behavior is changed here.
+         */
         const dash =
           await agencyApi.dashboard(
             agency.id,
           );
 
         if (!cancelled) {
-          setDashboard(dash);
+          setDashboard(
+            dash,
+          );
         }
       } catch {
-        // ignore
+        /*
+         * Preserve existing behavior.
+         */
       }
     }
 
@@ -194,7 +248,10 @@ export function MyAgencyPanel({
     return () => {
       cancelled = true;
     };
-  }, [agency.id, agency.ownerId]);
+  }, [
+    agency.id,
+    agency.ownerId,
+  ]);
 
   /* ------------------------------------------------------------------------ */
   /* OWNER                                                                    */
@@ -223,7 +280,9 @@ export function MyAgencyPanel({
     setAppLoading(true);
 
     agencyApi
-      .applications(agency.id)
+      .applications(
+        agency.id,
+      )
       .then((results) => {
         if (cancelled) {
           return;
@@ -271,12 +330,16 @@ export function MyAgencyPanel({
       })
       .catch(() => {
         if (!cancelled) {
-          setApplications([]);
+          setApplications(
+            [],
+          );
         }
       })
       .finally(() => {
         if (!cancelled) {
-          setAppLoading(false);
+          setAppLoading(
+            false,
+          );
         }
       });
 
@@ -300,7 +363,9 @@ export function MyAgencyPanel({
       | "reject",
   ) {
     try {
-      setAppBusy(userId);
+      setAppBusy(
+        userId,
+      );
 
       if (
         action ===
@@ -326,12 +391,14 @@ export function MyAgencyPanel({
           ),
       );
     } finally {
-      setAppBusy(null);
+      setAppBusy(
+        null,
+      );
     }
   }
 
   /* ------------------------------------------------------------------------ */
-  /* TABS – RBAC                                                              */
+  /* TABS – RBAC                                                             */
   /* ------------------------------------------------------------------------ */
 
   const tabs = [
@@ -438,13 +505,16 @@ export function MyAgencyPanel({
 
       <div className="relative border-b border-white/[0.06] bg-[radial-gradient(circle_at_80%_20%,rgba(139,92,246,0.10),transparent_40%),#110e16] p-6 sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-300/15 bg-amber-400/10 text-amber-200 shadow-[0_0_40px_rgba(245,158,11,0.10)]">
+          <div className="flex items-start gap-4">
+            {/* Agency icon */}
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-amber-300/15 bg-amber-400/10 text-amber-200 shadow-[0_0_40px_rgba(245,158,11,0.10)]">
               <BriefcaseBusiness className="h-6 w-6" />
             </div>
 
-            <div>
-              <div className="flex items-center gap-3">
+            <div className="min-w-0">
+              {/* Workspace / RBAC badges */}
+
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/25">
                   Agency Workspace
                 </span>
@@ -456,6 +526,7 @@ export function MyAgencyPanel({
                 {isOwner && (
                   <span className="flex items-center gap-1.5 rounded-full border border-violet-300/15 bg-violet-400/10 px-2.5 py-1 text-[8px] font-black uppercase text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.15)]">
                     <Settings2 className="h-3 w-3" />
+
                     Owner
                   </span>
                 )}
@@ -464,38 +535,104 @@ export function MyAgencyPanel({
                   !isOwner && (
                     <span className="flex items-center gap-1.5 rounded-full border border-violet-300/15 bg-violet-400/10 px-2.5 py-1 text-[8px] font-black uppercase text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.15)]">
                       <UserCog className="h-3 w-3" />
+
                       Agent
                     </span>
                   )}
               </div>
 
+              {/* Agency name */}
+
               <h2 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">
                 {agency.name}
               </h2>
 
-              <p className="mt-1 text-xs text-white/40">
-                Owner:{" "}
-                <span className="font-semibold text-white/70">
-                  {ownerName ??
-                    "Unknown"}
-                </span>
-              </p>
+              {/* ---------------------------------------------------------------- */}
+              {/* AGENCY OWNER PROFILE                                            */}
+              {/* ---------------------------------------------------------------- */}
 
-              <p className="text-xs text-white/30">
+              {ownerName && (
+                <div className="mt-3 flex items-center gap-2.5">
+                  {/* Owner avatar */}
+
+                  {ownerAvatar ? (
+                    <img
+                      src={
+                        ownerAvatar
+                      }
+                      alt={
+                        ownerName
+                      }
+                      className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-white/10"
+                    />
+                  ) : (
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-400/10 text-xs font-black text-violet-200 ring-1 ring-white/10">
+                      {ownerName
+                        .trim()
+                        .charAt(
+                          0,
+                        )
+                        .toUpperCase() ||
+                        "A"}
+                    </div>
+                  )}
+
+                  {/* Owner identity */}
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-sm font-bold text-[#F3ECE0]">
+                        {
+                          ownerName
+                        }
+                      </span>
+
+                      {/* Agency owner verification badge */}
+
+                      <span
+                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#CBA35C]"
+                        title="Agency Owner"
+                      >
+                        <Check className="h-2.5 w-2.5 text-[#17131F]" />
+                      </span>
+                    </div>
+
+                    {ownerHandle && (
+                      <p className="truncate text-xs text-[#9088A0]">
+                        @
+                        {
+                          ownerHandle
+                        }
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Agency code */}
+
+              <p className="mt-2 text-xs text-white/30">
                 Code:{" "}
                 <span className="font-mono font-bold text-white/50">
-                  {agency.code}
+                  {
+                    agency.code
+                  }
                 </span>
               </p>
             </div>
           </div>
 
+          {/* Leave button */}
+
           <button
             type="button"
-            onClick={onLeave}
+            onClick={
+              onLeave
+            }
             className="flex items-center gap-2 rounded-xl border border-red-400/10 bg-red-400/[0.05] px-4 py-2.5 text-xs font-bold text-red-300/60 transition hover:bg-red-400/[0.10] hover:text-red-300"
           >
             <LogOut className="h-4 w-4" />
+
             Leave
           </button>
         </div>
@@ -508,7 +645,9 @@ export function MyAgencyPanel({
           {tabs.map(
             (tab) => (
               <TabButton
-                key={tab.id}
+                key={
+                  tab.id
+                }
                 active={
                   subTab ===
                   tab.id
@@ -525,7 +664,9 @@ export function MyAgencyPanel({
                   tab.badge
                 }
               >
-                {tab.label}
+                {
+                  tab.label
+                }
               </TabButton>
             ),
           )}
@@ -540,7 +681,9 @@ export function MyAgencyPanel({
         {subTab ===
           "overview" && (
           <Overview
-            agency={agency}
+            agency={
+              agency
+            }
             dashboard={
               dashboard
             }
@@ -580,7 +723,9 @@ export function MyAgencyPanel({
               loading={
                 appLoading
               }
-              busy={appBusy}
+              busy={
+                appBusy
+              }
               onReview={
                 review
               }
@@ -803,16 +948,19 @@ function Overview({
               <>
                 <p className="flex gap-2">
                   <Clock3 className="h-4 w-4 shrink-0 text-amber-200/60" />
+
                   Review pending applications to onboard new hosts.
                 </p>
 
                 <p className="flex gap-2">
                   <UserCog className="h-4 w-4 shrink-0 text-violet-200/60" />
+
                   Assign agents to manage host operations.
                 </p>
 
                 <p className="flex gap-2">
                   <DollarSign className="h-4 w-4 shrink-0 text-sky-200/60" />
+
                   Process payouts and keep finances in check.
                 </p>
               </>
@@ -820,16 +968,19 @@ function Overview({
               <>
                 <p className="flex gap-2">
                   <ListChecks className="h-4 w-4 shrink-0 text-emerald-200/60" />
+
                   Complete your assigned tasks to earn rewards.
                 </p>
 
                 <p className="flex gap-2">
                   <Users className="h-4 w-4 shrink-0 text-violet-200/60" />
+
                   Collaborate with your agent and fellow hosts.
                 </p>
 
                 <p className="flex gap-2">
                   <Activity className="h-4 w-4 shrink-0 text-blue-200/60" />
+
                   Track your performance and agency growth.
                 </p>
               </>
