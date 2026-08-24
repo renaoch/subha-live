@@ -1,8 +1,9 @@
-export type Provider = "google" | "facebook" | null;
+export type Provider =
+  | "google"
+  | "facebook"
+  | null;
 
 // ─── Public Profile ──────────────────────────────────────────────
-
-// Information that can safely be exposed on another user's profile.
 
 export interface PublicProfile {
   id: string;
@@ -40,8 +41,17 @@ export interface PublicProfile {
   following: number;
 
   /**
-   * "user" | "agency_agent" | "agency_admin" | "agency_owner" | "admin" | "super_admin"
-   * Drives the Agency Owner / Host Manager / Engineer profile badges.
+   * Resolved profile role.
+   *
+   * Normal:
+   *   user
+   *
+   * Agency:
+   *   agency_owner
+   *   agency_agent
+   *
+   * The API resolves agency roles from the actual
+   * agencies / agency_agents / agency_hosts relationships.
    */
   role: string;
 
@@ -50,17 +60,22 @@ export interface PublicProfile {
 
 // ─── Private Profile ────────────────────────────────────────────
 
-// The authenticated user's own profile.
-
 export interface PrivateProfile extends PublicProfile {
   coins: number;
 
   diamonds: number;
 
-  /** True only for platform admins (site owner / engineers). */
+  /**
+   * True only for platform admins / engineers.
+   *
+   * This is completely separate from agency ownership.
+   */
   is_admin: boolean;
 
-  /** Total number of times other users have visited this profile. */
+  /**
+   * Total number of times other users have visited
+   * this profile.
+   */
   visitor_count: number;
 }
 
@@ -68,21 +83,24 @@ export interface PrivateProfile extends PublicProfile {
 
 export interface PrivateProfileResponse {
   status: "ok";
-
   user: PrivateProfile;
 }
 
 export interface PublicProfileResponse {
   status: "ok";
-
   user: PublicProfile;
 }
 
 // ─── Live Rooms ─────────────────────────────────────────────────
 
-export type RoomMediaType = "video" | "audio";
+export type RoomMediaType =
+  | "video"
+  | "audio";
 
-export type RoomStatus = "scheduled" | "live" | "ended";
+export type RoomStatus =
+  | "scheduled"
+  | "live"
+  | "ended";
 
 export interface LiveRoom {
   id: string;
@@ -127,7 +145,9 @@ export interface ChatMessage {
 
   chatId: string;
 
-  senderId: "me" | "them";
+  senderId:
+    | "me"
+    | "them";
 
   text: string;
 

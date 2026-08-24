@@ -12,6 +12,25 @@ type ProfileUpdate =
 type UserId =
   Database["public"]["Tables"]["profiles"]["Row"]["id"];
 
+/**
+ * Badge role is derived from the actual agency relationships.
+ *
+ * Priority:
+ *
+ * agency owner
+ *   ↓
+ * host manager
+ *   ↓
+ * normal profile role
+ *
+ * Engineer is NOT handled here.
+ * Engineer is controlled exclusively by profiles.is_admin.
+ */
+type AgencyBadgeRole =
+  | "agency_owner"
+  | "agency_agent"
+  | null;
+
 // Private profile fields
 // Returned only for the authenticated user's own profile.
 const PRIVATE_PROFILE_FIELDS = `
@@ -59,6 +78,112 @@ const PUBLIC_PROFILE_FIELDS = `
   role
 `;
 
+/**
+ * Resolve the user's agency position from the actual database
+ * relationships instead of trusting profiles.role.
+ *
+ * Agency Owner:
+ *   agencies.owner_id = profiles.id
+ *
+ * Host Manager:
+ *   agency_agents.user_id = profiles.id
+ *   OR
+ *   agency_hosts.agent_id = profiles.id
+ *
+ * This function does not modify the database.
+ */
+async function resolveAgencyBadgeRole(
+  userId: UserId,
+): Promise<AgencyBadgeRole> {
+  const [
+    { data: ownedAgencies, error: ownerError },
+    { data: agentRows, error: agentError },
+    { data: managedHosts, error: hostManagerError },
+  ] = await Promise.all([
+    supabase
+      .from("agencies")
+      .select("id")
+      .eq("owner_id", userId)
+      .limit(1),
+
+    supabase
+      .from("agency_agents")
+      .select("id")
+      .eq("user_id", userId)
+      .limit(1),
+
+    supabase
+      .from("agency_hosts")
+      .select("agency_id")
+      .eq("agent_id", userId)
+      .limit(1),
+  ]);
+
+  if (ownerError) {
+    throw ownerError;
+  }
+
+  if (agentError) {
+    throw agentError;
+  }
+
+  if (hostManagerError) {
+    throw hostManagerError;
+  }
+
+  /*
+   * Owner takes priority.
+   *
+   * This means if somebody somehow exists in both
+   * agencies.owner_id and agency_agents, they are still
+   * displayed as Agency Owner.
+   */
+  if ((ownedAgencies ?? []).length > 0) {
+    return "agency_owner";
+  }
+
+  /*
+   * A user is a Host Manager if:
+   *
+   * 1. They are registered in agency_agents
+   * OR
+   * 2. They are assigned as agent_id on agency_hosts.
+   */
+  if (
+    (agentRows ?? []).length > 0 ||
+    (managedHosts ?? []).length > 0
+  ) {
+    return "agency_agent";
+  }
+
+  return null;
+}
+
+/**
+ * Convert the database role into the role exposed by the
+ * profile API.
+ *
+ * We preserve the existing profile role for ordinary users
+ * and only override it when the actual agency relationship
+ * proves the user is an owner or manager.
+ */
+async function resolveProfileRole(
+  userId: UserId,
+  profileRole: string,
+): Promise<string> {
+  const agencyRole = await resolveAgencyBadgeRole(userId);
+
+  if (agencyRole === "agency_owner") {
+    return "agency_owner";
+  }
+
+  if (agencyRole === "agency_agent") {
+    return "agency_agent";
+  }
+
+  return profileRole;
+}
+
 // -----------------------------------------------------------------------------
 // Get current authenticated user's private profile
 // GET /api/v1/users/me
@@ -67,17 +192,11 @@ const PUBLIC_PROFILE_FIELDS = `
 export async function getCurrentUser(
   userId: UserId,
 ): Promise<PrivateProfile> {
-  const profileStart = performance.now();
-
   const { data, error } = await supabase
     .from("profiles")
     .select(PRIVATE_PROFILE_FIELDS)
     .eq("id", userId)
     .single();
-
-  console.log(
-    `profiles private query: ${(performance.now() - profileStart).toFixed(2)}ms`,
-  );
 
   if (error) {
     if (error.code === "PGRST116") {
@@ -93,10 +212,18 @@ export async function getCurrentUser(
     throw error;
   }
 
+  const profile = data as any;
+
+  const resolvedRole = await resolveProfileRole(
+    userId,
+    profile.role,
+  );
+
   const visitorCount = await getVisitorCount(userId);
 
   return {
-    ...(data as any),
+    ...profile,
+    role: resolvedRole,
     visitor_count: visitorCount,
   } as PrivateProfile;
 }
@@ -109,17 +236,11 @@ export async function getCurrentUser(
 export async function getUserById(
   userId: UserId,
 ): Promise<PublicProfile> {
-  const profileStart = performance.now();
-
   const { data, error } = await supabase
     .from("profiles")
     .select(PUBLIC_PROFILE_FIELDS)
     .eq("id", userId)
     .single();
-
-  console.log(
-    `profiles public query: ${(performance.now() - profileStart).toFixed(2)}ms`,
-  );
 
   if (error) {
     if (error.code === "PGRST116") {
@@ -135,7 +256,17 @@ export async function getUserById(
     throw error;
   }
 
-  return data as PublicProfile;
+  const profile = data as any;
+
+  const resolvedRole = await resolveProfileRole(
+    userId,
+    profile.role,
+  );
+
+  return {
+    ...profile,
+    role: resolvedRole,
+  } as PublicProfile;
 }
 
 // -----------------------------------------------------------------------------
@@ -178,10 +309,18 @@ export async function updateCurrentUser(
     throw error;
   }
 
+  const profile = data as any;
+
+  const resolvedRole = await resolveProfileRole(
+    userId,
+    profile.role,
+  );
+
   const visitorCount = await getVisitorCount(userId);
 
   return {
-    ...(data as any),
+    ...profile,
+    role: resolvedRole,
     visitor_count: visitorCount,
   } as PrivateProfile;
 }
@@ -192,18 +331,16 @@ export async function updateCurrentUser(
 
 /**
  * Total number of times other users have visited this profile.
- * Used to populate PrivateProfile.visitor_count.
- *
- * Always resolves to a number (0 when there are no visits, or if the
- * count query fails) — never null/undefined — so the frontend never has
- * to guard against a missing visitor count.
  */
 async function getVisitorCount(
   profileId: UserId,
 ): Promise<number> {
   const { count, error } = await supabase
     .from("profile_visits")
-    .select("id", { count: "exact", head: true })
+    .select("id", {
+      count: "exact",
+      head: true,
+    })
     .eq("profile_id", profileId);
 
   if (error) {
@@ -211,6 +348,7 @@ async function getVisitorCount(
       "Failed to count profile visits:",
       error,
     );
+
     return 0;
   }
 
@@ -220,11 +358,9 @@ async function getVisitorCount(
 /**
  * Records that `visitorId` viewed `profileId`'s public profile.
  *
- * - Never records a self-visit.
- * - Never records an anonymous (unauthenticated) visit, since
- *   profile_visits.visitor_id has no value to store in that case.
- * - Never throws — this is called fire-and-forget from the controller
- *   and must not affect the response to the caller.
+ * Never records:
+ * - self visits
+ * - anonymous visits
  */
 export async function recordProfileVisit(
   visitorId: string | undefined,
@@ -281,8 +417,7 @@ const FOLLOW_ENTRY_FIELDS = `
 `;
 
 /**
- * Users who follow `userId` (i.e. rows in `follows` where
- * following_id = userId), newest first.
+ * Users who follow `userId`.
  */
 export async function getFollowers(
   userId: UserId,
@@ -299,7 +434,9 @@ export async function getFollowers(
       `,
     )
     .eq("following_id", userId)
-    .order("created_at", { ascending: false });
+    .order("created_at", {
+      ascending: false,
+    });
 
   if (error) {
     throw error;
@@ -311,8 +448,7 @@ export async function getFollowers(
 }
 
 /**
- * Users that `userId` follows (i.e. rows in `follows` where
- * follower_id = userId), newest first.
+ * Users that `userId` follows.
  */
 export async function getFollowing(
   userId: UserId,
@@ -329,7 +465,9 @@ export async function getFollowing(
       `,
     )
     .eq("follower_id", userId)
-    .order("created_at", { ascending: false });
+    .order("created_at", {
+      ascending: false,
+    });
 
   if (error) {
     throw error;

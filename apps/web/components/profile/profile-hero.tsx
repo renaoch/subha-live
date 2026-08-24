@@ -48,19 +48,6 @@ function tierForLevel(level: number) {
   return TIER_PALETTE[index];
 }
 
-/*
- * Role -> profile badge.
- *
- * profiles.role drives two of the three badges:
- *   - "agency_owner"                   -> Agency Owner
- *   - "agency_admin" / "agency_agent"  -> Host Manager
- *
- * The "Engineer" badge is intentionally NOT driven by role (agency_admin's
- * role literally contains the word "admin" and could be confused for a
- * platform admin). It is driven exclusively by profiles.is_admin, a
- * separate DB column that is only ever true for the site owner/engineers.
- * See badgeForAdmin() below.
- */
 type RoleBadge = {
   label: string;
   Icon: typeof Crown;
@@ -68,16 +55,11 @@ type RoleBadge = {
   accent: string;
 } | null;
 
-function badgeForRole(role: string | null | undefined): RoleBadge {
-  console.log("[BADGE DEBUG] badgeForRole received:", {
-    role,
-    type: typeof role,
-  });
-
+function badgeForRole(
+  role: string | null | undefined,
+): RoleBadge {
   switch (role) {
     case "agency_owner":
-      console.log("[BADGE DEBUG] Agency Owner badge matched");
-
       return {
         label: "Agency Owner",
         Icon: Crown,
@@ -87,8 +69,6 @@ function badgeForRole(role: string | null | undefined): RoleBadge {
 
     case "agency_admin":
     case "agency_agent":
-      console.log("[BADGE DEBUG] Host Manager badge matched");
-
       return {
         label: "Host Manager",
         Icon: UsersRound,
@@ -97,98 +77,52 @@ function badgeForRole(role: string | null | undefined): RoleBadge {
       };
 
     default:
-      console.log("[BADGE DEBUG] No role badge matched");
-
       return null;
   }
 }
 
-/*
- * Engineer badge — gated ONLY by profiles.is_admin.
- * This flag is set on exactly one account (the platform owner/engineer),
- * so this badge never shows on anyone else's profile, regardless of
- * their `role` value.
- */
-function badgeForAdmin(isAdmin: boolean): RoleBadge {
-  console.log("[BADGE DEBUG] badgeForAdmin received:", {
-    isAdmin,
-    type: typeof isAdmin,
-    isTrue: isAdmin === true,
-    isFalse: isAdmin === false,
-  });
-
+function badgeForAdmin(
+  isAdmin: boolean,
+): RoleBadge {
   if (!isAdmin) {
-    console.log(
-      "[BADGE DEBUG] isAdmin is falsy, returning null",
-    );
-
     return null;
   }
 
-  const badge = {
+  return {
     label: "Engineer",
     Icon: Wrench,
     primary: "#A86CFF",
     accent: "#DCC2FF",
   };
-
-  console.log("[BADGE DEBUG] Engineer badge CREATED:", badge);
-
-  return badge;
 }
 
-export function ProfileHero({ profile }: ProfileHeroProps) {
-  console.log("[BADGE DEBUG] =============================");
-  console.log("[BADGE DEBUG] ProfileHero rendered");
-  console.log("[BADGE DEBUG] Full profile:", profile);
-  console.log(
-    "[BADGE DEBUG] profile.is_admin:",
-    profile.is_admin,
-  );
-  console.log(
-    "[BADGE DEBUG] profile.is_admin type:",
-    typeof profile.is_admin,
-  );
-  console.log(
-    "[BADGE DEBUG] profile.role:",
-    profile.role,
-  );
-  console.log("[BADGE DEBUG] =============================");
-
+export function ProfileHero({
+  profile,
+}: ProfileHeroProps) {
   const theme = tierForLevel(profile.level);
 
   const roleBadge = badgeForRole(profile.role);
 
-  const engineerBadge = badgeForAdmin(profile.is_admin);
-
-  console.log("[BADGE DEBUG] roleBadge:", roleBadge);
-
-  console.log(
-    "[BADGE DEBUG] engineerBadge:",
-    engineerBadge,
-  );
-
-  console.log(
-    "[BADGE DEBUG] WILL RENDER ENGINEER:",
-    Boolean(engineerBadge),
+  const engineerBadge = badgeForAdmin(
+    profile.is_admin,
   );
 
   /*
-   * public_id is now the canonical profile User ID
-   * stored in public.profiles.public_id.
-   *
-   * Do NOT generate it from profile.id anymore.
+   * public_id is the canonical public User ID.
    */
   const userId = profile.public_id;
 
   const [copied, setCopied] = useState(false);
 
   const copyTimeoutRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
+    useRef<ReturnType<typeof setTimeout> | null>(
+      null,
+    );
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(userId);
+
       setCopied(true);
 
       if (copyTimeoutRef.current) {
@@ -199,7 +133,8 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
         setCopied(false);
       }, 2000);
     } catch {
-      const input = document.createElement("input");
+      const input =
+        document.createElement("input");
 
       input.value = userId;
 
@@ -265,7 +200,10 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
             {profile.country_flag && (
               <span
                 className="text-xl leading-none"
-                title={profile.country || undefined}
+                title={
+                  profile.country ||
+                  undefined
+                }
               >
                 {profile.country_flag}
               </span>
@@ -316,7 +254,9 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
             >
               <Sparkles
                 className="h-3 w-3"
-                style={{ color: theme.primary }}
+                style={{
+                  color: theme.primary,
+                }}
               />
 
               Lv.{profile.level}
@@ -325,74 +265,53 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
             <span className="inline-flex items-center gap-1 rounded-full bg-[#2A2238] px-2.5 py-1 text-xs font-semibold tabular-nums text-[#9088A0]">
               <Gem className="h-3 w-3 text-[#7FD8E8]" />
 
-              {numberFormat.format(profile.diamonds)}
+              {numberFormat.format(
+                profile.diamonds,
+              )}
             </span>
-
-        {(() => {
-          console.log("[BADGE DEBUG] JSX engineerBadge:", engineerBadge);
-
-          return null;
-        })()}
-
-        {engineerBadge && (
-          <>
-            {(() => {
-              console.log(
-                "[BADGE DEBUG] ENGINEER JSX IS RENDERING:",
-                engineerBadge.label,
-              );
-
-              return null;
-            })()}
-
-            <span>
-              ...
-            </span>
-          </>
-        )}
 
             {engineerBadge && (
-              <>
-                {console.log(
-                  "[BADGE DEBUG] ENGINEER JSX IS RENDERING:",
-                  engineerBadge.label,
-                )}
-
-                <span
-                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
-                  style={{
-                    color: engineerBadge.accent,
-                    borderColor: `${engineerBadge.primary}55`,
-                    background: `linear-gradient(135deg, ${engineerBadge.primary}30, ${engineerBadge.primary}0C)`,
-                  }}
-                >
-                  <engineerBadge.Icon
-                    className="h-3 w-3"
-                    style={{ color: engineerBadge.primary }}
-                  />
-
-                  {engineerBadge.label}
-                </span>
-              </>
-            )}
-
-            {!engineerBadge && roleBadge && (
               <span
                 className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
                 style={{
-                  color: roleBadge.accent,
-                  borderColor: `${roleBadge.primary}55`,
-                  background: `linear-gradient(135deg, ${roleBadge.primary}30, ${roleBadge.primary}0C)`,
+                  color: engineerBadge.accent,
+                  borderColor: `${engineerBadge.primary}55`,
+                  background: `linear-gradient(135deg, ${engineerBadge.primary}30, ${engineerBadge.primary}0C)`,
                 }}
               >
-                <roleBadge.Icon
+                <engineerBadge.Icon
                   className="h-3 w-3"
-                  style={{ color: roleBadge.primary }}
+                  style={{
+                    color:
+                      engineerBadge.primary,
+                  }}
                 />
 
-                {roleBadge.label}
+                {engineerBadge.label}
               </span>
             )}
+
+            {!engineerBadge &&
+              roleBadge && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black"
+                  style={{
+                    color: roleBadge.accent,
+                    borderColor: `${roleBadge.primary}55`,
+                    background: `linear-gradient(135deg, ${roleBadge.primary}30, ${roleBadge.primary}0C)`,
+                  }}
+                >
+                  <roleBadge.Icon
+                    className="h-3 w-3"
+                    style={{
+                      color:
+                        roleBadge.primary,
+                    }}
+                  />
+
+                  {roleBadge.label}
+                </span>
+              )}
           </div>
         </div>
       </div>
@@ -401,7 +320,9 @@ export function ProfileHero({ profile }: ProfileHeroProps) {
         following={profile.following}
         followers={profile.followers}
         level={profile.level}
-        visitorCount={profile.visitor_count}
+        visitorCount={
+          profile.visitor_count
+        }
       />
     </section>
   );
@@ -468,14 +389,21 @@ function AvatarWithHalo({
   level,
   theme,
 }: AvatarWithHaloProps) {
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] =
+    useState(false);
 
-  const isMax = level >= MAX_LEVEL;
+  const isMax =
+    level >= MAX_LEVEL;
 
-  const showImage = Boolean(src?.trim()) && !failed;
+  const showImage =
+    Boolean(src?.trim()) &&
+    !failed;
 
   const initial =
-    name.trim().charAt(0).toUpperCase() || "?";
+    name
+      .trim()
+      .charAt(0)
+      .toUpperCase() || "?";
 
   return (
     <div
@@ -487,7 +415,9 @@ function AvatarWithHalo({
     >
       <div
         className={`absolute inset-0 rounded-full ${
-          isMax ? "ph-max-ring" : "ph-glow"
+          isMax
+            ? "ph-max-ring"
+            : "ph-glow"
         } p-[2px]`}
         style={
           isMax
@@ -537,7 +467,10 @@ interface StatsRowProps {
   following: number;
   followers: number;
   level: number;
-  visitorCount: number | null | undefined;
+  visitorCount:
+    | number
+    | null
+    | undefined;
 }
 
 function StatsRow({
@@ -567,9 +500,6 @@ function StatsRow({
       href: "/level",
     },
     {
-      // visitorCount defaults to 0 when there are no visitors yet, or if
-      // the backend hasn't populated it for some reason — it should never
-      // render as blank/undefined/NaN.
       label: "Visitors",
       value: visitorCount ?? 0,
     },
@@ -582,7 +512,8 @@ function StatsRow({
           <div
             className={cn(
               "flex flex-1 flex-col items-center justify-center gap-1",
-              index !== stats.length - 1 &&
+              index !==
+                stats.length - 1 &&
                 "border-r border-[#2A2238]",
               stat.href &&
                 "cursor-pointer transition-colors active:opacity-70",
@@ -612,7 +543,10 @@ function StatsRow({
         }
 
         return (
-          <div key={stat.label} className="flex flex-1">
+          <div
+            key={stat.label}
+            className="flex flex-1"
+          >
             {content}
           </div>
         );
