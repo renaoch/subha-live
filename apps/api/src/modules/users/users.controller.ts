@@ -4,6 +4,7 @@ import {
   getCurrentUser,
   getUserById,
   updateCurrentUser,
+  recordProfileVisit,
 } from "./users.service";
 
 import {
@@ -69,6 +70,10 @@ export async function getPublicProfile(
     }
 
     const user = await getUserById(id);
+
+    // Fire-and-forget: log that req.user (if authenticated) viewed this
+    // profile. Never blocks or fails the response.
+    void recordProfileVisit(req.user?.id, id);
 
     const response: PublicProfileResponse = {
       status: "ok",

@@ -1266,6 +1266,96 @@ async function assertAdmin(
 }
 
 /* ========================================================================== */
+/* ROLE TAG SYNC (drives the "Host Manager" profile badge)                   */
+/* ========================================================================== */
+
+/**
+ * Promotes a user's profiles.role to "agency_agent" so the "Host Manager"
+ * badge shows on their profile. Never downgrades an owner/admin/super_admin.
+ */
+async function grantAgentRoleTag(
+  userId: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to read profile role:", error);
+    return;
+  }
+
+  const protectedRoles = [
+    "agency_owner",
+    "admin",
+    "super_admin",
+  ];
+
+  if (data && protectedRoles.includes(data.role as string)) {
+    return;
+  }
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ role: "agency_agent" as any })
+    .eq("id", userId);
+
+  if (updateError) {
+    console.error("Failed to grant agent role tag:", updateError);
+  }
+}
+
+/**
+ * Reverts a user's profiles.role back to "user" once they are no longer
+ * an active agent anywhere. Only touches accounts currently tagged as
+ * "agency_agent" so owners/admins are never affected.
+ */
+async function revokeAgentRoleTagIfInactive(
+  userId: string,
+): Promise<void> {
+  const { count, error: countError } = await supabase
+    .from("agency_agents")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "active");
+
+  if (countError) {
+    console.error("Failed to check active agent status:", countError);
+    return;
+  }
+
+  if ((count ?? 0) > 0) {
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to read profile role:", error);
+    return;
+  }
+
+  if (!data || data.role !== "agency_agent") {
+    return;
+  }
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ role: "user" as any })
+    .eq("id", userId);
+
+  if (updateError) {
+    console.error("Failed to revoke agent role tag:", updateError);
+  }
+}
+
+/* ========================================================================== */
 /* HOST COUNT                                                                 */
 /* ========================================================================== */
 
@@ -1532,6 +1622,8 @@ export async function addAgent(
       commissionRate,
     },
   });
+
+  await grantAgentRoleTag(userId);
 }
 
 export async function removeAgent(
@@ -1543,6 +1635,18 @@ export async function removeAgent(
     ownerId,
     agencyId,
   );
+
+  const {
+    data: agentRow,
+  } = await (
+    supabase.from(
+      "agency_agents" as any,
+    ) as any
+  )
+    .select("user_id")
+    .eq("id", agentId)
+    .eq("agency_id", agencyId)
+    .maybeSingle();
 
   const {
     error,
@@ -1568,6 +1672,10 @@ export async function removeAgent(
     entityType: "agency_agents",
     entityId: agentId,
   });
+
+  if (agentRow?.user_id) {
+    await revokeAgentRoleTagIfInactive(agentRow.user_id);
+  }
 }
 
 export async function suspendAgent(
@@ -1579,6 +1687,18 @@ export async function suspendAgent(
     ownerId,
     agencyId,
   );
+
+  const {
+    data: agentRow,
+  } = await (
+    supabase.from(
+      "agency_agents" as any,
+    ) as any
+  )
+    .select("user_id")
+    .eq("id", agentId)
+    .eq("agency_id", agencyId)
+    .maybeSingle();
 
   const {
     error,
@@ -1604,6 +1724,10 @@ export async function suspendAgent(
     entityType: "agency_agents",
     entityId: agentId,
   });
+
+  if (agentRow?.user_id) {
+    await revokeAgentRoleTagIfInactive(agentRow.user_id);
+  }
 }
 
 /* ========================================================================== */

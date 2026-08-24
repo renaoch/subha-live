@@ -41,3 +41,15 @@ export const createBdApplicationSchema = z
 
 export type CreateBdApplicationInput =
   z.infer<typeof createBdApplicationSchema>;
+
+/* ========================================================================== */
+/* ADMIN                                                                      */
+/* ========================================================================== */
+
+export const bdApplicationIdParamsSchema = z.object({
+  id: z.string().uuid("Invalid application ID"),
+});
+
+export type BdApplicationIdParamsInput = z.infer<
+  typeof bdApplicationIdParamsSchema
+>;
