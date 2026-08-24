@@ -15,6 +15,7 @@
     import agencyRoutes from "./modules/agency/agency.routes";
     import walletRoutes from "./modules/wallet/wallet.routes";
     import offlineRechargeRoutes from "./modules/offline-recharge/offline-recharge.routes";
+    import mediaTestRoutes from "./modules/media/media-test.routes";
 import charismaRoutes from "./modules/charisma/charisma.routes";
     import { errorMiddleware } from "./middleware/error.middleware";
 
@@ -56,6 +57,10 @@ import charismaRoutes from "./modules/charisma/charisma.routes";
     app.use("/api/v1/offline-recharge", offlineRechargeRoutes);
     app.use("/api/v1/wallet", walletRoutes);
     app.use("/api/v1/charisma", charismaRoutes);
+    app.use(
+  "/api/v1/media/test",
+  mediaTestRoutes,
+);
     app.use(errorMiddleware);
 
     export { app };
