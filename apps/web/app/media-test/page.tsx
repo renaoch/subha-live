@@ -26,20 +26,15 @@ interface CreateSessionResponse {
 
   data: {
     sessionId: string;
-
     roomId: string;
-
     userId: string;
-
     role: string;
-
     generation: number;
 
     status: string;
 
     sessionDescription?: {
       type: "offer" | "answer";
-
       sdp: string;
     };
   };
@@ -61,6 +56,8 @@ interface PublishTracksResponse {
       direction:
         | "publish"
         | "subscribe";
+
+      mid?: string;
     }>;
 
     requiresRenegotiation: boolean;
@@ -73,6 +70,8 @@ interface MediaTrackInput {
   kind: "audio" | "video";
 
   direction: "publish";
+
+  mid: string;
 }
 
 export default function MediaTestPage() {
@@ -231,41 +230,43 @@ export default function MediaTestPage() {
        * ----------------------------------------------------------
        * 3. Add actual MediaStream tracks
        * ----------------------------------------------------------
+       *
+       * IMPORTANT:
+       *
+       * We deliberately use addTransceiver()
+       * instead of addTrack().
+       *
+       * This gives us the RTCRtpTransceiver,
+       * whose .mid is required by Cloudflare.
        */
+
+      const transceivers: Array<{
+        transceiver: RTCRtpTransceiver;
+        track: MediaStreamTrack;
+      }> = [];
 
       for (
         const track of
         stream.getTracks()
       ) {
-        peer.addTrack(
+        const transceiver =
+          peer.addTransceiver(
+            track,
+            {
+              direction:
+                "sendonly",
+            },
+          );
+
+        transceivers.push({
+          transceiver,
           track,
-          stream,
-        );
+        });
       }
 
       /*
        * ----------------------------------------------------------
-       * 4. Build track descriptors from actual stream
-       * ----------------------------------------------------------
-       */
-
-      const tracks =
-        buildPublishTracks(stream);
-
-      if (tracks.length === 0) {
-        throw new Error(
-          "No audio or video tracks were captured.",
-        );
-      }
-
-      console.log(
-        "[media-test] Tracks:",
-        tracks,
-      );
-
-      /*
-       * ----------------------------------------------------------
-       * 5. Create SDP offer
+       * 4. Create SDP offer
        * ----------------------------------------------------------
        */
 
@@ -282,9 +283,6 @@ export default function MediaTestPage() {
 
       /*
        * Wait until ICE gathering completes.
-       *
-       * This gives us a complete SDP containing
-       * the gathered ICE candidates.
        */
 
       await waitForIceGatheringComplete(
@@ -312,10 +310,53 @@ export default function MediaTestPage() {
 
       /*
        * ----------------------------------------------------------
-       * 6. Create Cloudflare session
+       * 5. Build track descriptors AFTER SDP creation
        * ----------------------------------------------------------
        *
-       * Session creation receives the browser SDP.
+       * The browser assigns transceiver.mid
+       * during SDP creation.
+       *
+       * Therefore this MUST happen after
+       * createOffer() + setLocalDescription().
+       */
+
+      const tracks =
+        buildPublishTracks(
+          transceivers,
+        );
+
+      if (tracks.length === 0) {
+        throw new Error(
+          "No audio or video tracks were captured.",
+        );
+      }
+
+      console.log(
+        "[media-test] Tracks:",
+        tracks,
+      );
+
+      /*
+       * Safety check.
+       *
+       * Every Cloudflare track must have
+       * a corresponding SDP MID.
+       */
+
+      for (
+        const track of tracks
+      ) {
+        if (!track.mid) {
+          throw new Error(
+            `Missing MID for ${track.trackName}`,
+          );
+        }
+      }
+
+      /*
+       * ----------------------------------------------------------
+       * 6. Create Cloudflare session
+       * ----------------------------------------------------------
        */
 
       setStatus(
@@ -329,6 +370,11 @@ export default function MediaTestPage() {
             roomId:
               "phase1-browser-test",
 
+            /*
+             * IMPORTANT:
+             *
+             * Do not trim or modify SDP.
+             */
             offerSdp:
               localDescription.sdp,
           },
@@ -354,7 +400,7 @@ export default function MediaTestPage() {
 
       /*
        * ----------------------------------------------------------
-       * 7. Publish actual captured tracks
+       * 7. Publish tracks
        * ----------------------------------------------------------
        */
 
@@ -369,6 +415,11 @@ export default function MediaTestPage() {
             sessionId:
               newSessionId,
 
+            /*
+             * IMPORTANT:
+             *
+             * Send the exact browser SDP.
+             */
             offerSdp:
               localDescription.sdp,
 
@@ -809,42 +860,73 @@ export default function MediaTestPage() {
 }
 
 /**
- * Build provider-agnostic track descriptors
- * from the actual browser MediaStream.
+ * Build Cloudflare-compatible track descriptors
+ * from the actual RTCRtpTransceivers.
  *
- * No hard-coded audio/video track names.
+ * The transceiver MID comes from the browser's
+ * generated SDP.
  */
 function buildPublishTracks(
-  stream: MediaStream,
+  transceivers: Array<{
+    transceiver: RTCRtpTransceiver;
+    track: MediaStreamTrack;
+  }>,
 ): MediaTrackInput[] {
-  return stream
-    .getTracks()
+  return transceivers
     .map(
-      (track): MediaTrackInput => ({
-        trackName:
-          createTrackName(
-            track,
-          ),
+      ({
+        transceiver,
+        track,
+      }): MediaTrackInput | null => {
+        const mid =
+          transceiver.mid;
 
-        kind:
+        if (!mid) {
+          console.error(
+            "[media-test] Transceiver has no MID:",
+            {
+              trackId:
+                track.id,
+
+              kind:
+                track.kind,
+            },
+          );
+
+          return null;
+        }
+
+        const kind =
           track.kind ===
           "video"
             ? "video"
-            : "audio",
+            : "audio";
 
-        direction:
-          "publish",
-      }),
+        return {
+          trackName:
+            createTrackName(
+              track,
+            ),
+
+          kind,
+
+          direction:
+            "publish",
+
+          mid,
+        };
+      },
+    )
+    .filter(
+      (
+        track,
+      ): track is MediaTrackInput =>
+        track !== null,
     );
 }
 
 /**
- * Create a stable track name for the
- * current browser track.
- *
- * The provider receives the name, while
- * the actual MediaStreamTrack remains the
- * source of truth on the browser.
+ * Create a stable track name.
  */
 function createTrackName(
   track: MediaStreamTrack,
