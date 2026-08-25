@@ -2053,14 +2053,18 @@ if (result.offerSdp) {
         <button
           type="button"
           onClick={() => setSpeakerPanelOpen(true)}
-          className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-bold text-white shadow-2xl shadow-black/40 backdrop-blur-2xl transition hover:scale-[1.03] hover:bg-black/45"
-          aria-label="Open audio stage"
+          className="absolute right-4 top-1/2 z-20 flex h-16 w-16 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-2xl transition hover:scale-105 hover:bg-black/50 active:scale-95"
+          aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} seats occupied`}
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.09]">
-            <Headphones className="h-4 w-4" />
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.12]">
+            <Headphones className="h-5 w-5" strokeWidth={2} />
           </span>
-          <span>Audio stage</span>
-          <span className="rounded-full bg-white/10 px-2 py-1 text-[10px]">{occupiedSeats}/{seatCount}</span>
+
+          {occupiedSeats > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full border border-white/20 bg-white px-1.5 text-[10px] font-extrabold text-black shadow-lg">
+              {occupiedSeats}
+            </span>
+          )}
         </button>
 
         {speakerPanelOpen && (
