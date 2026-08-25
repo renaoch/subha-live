@@ -25,9 +25,9 @@ export const mediaConfig = {
   },
 
   retry: {
-    maxAttempts: 5,
+    maxAttempts: 2,
     baseDelayMs: 500,
-    maxDelayMs: 8_000,
+    maxDelayMs: 4_000,
   },
 
   idempotency: {
