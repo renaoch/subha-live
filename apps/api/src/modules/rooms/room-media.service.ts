@@ -177,14 +177,14 @@ export const roomMediaService = {
     let session: MediaSession | null = null;
 
     try {
-      const sessionResult =
-        await provider.createSession({
-          roomId,
-          userId,
-          role: "host",
-          generation,
-        });
-
+const sessionResult =
+  await provider.createSession({
+    roomId,
+    userId,
+    role: "host",
+    generation,
+    offerSdp,
+  });
       session =
         sessionResult.session;
 
