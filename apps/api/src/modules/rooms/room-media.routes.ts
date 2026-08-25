@@ -4,6 +4,7 @@ import {
   getMediaState,
   publishHost,
   publishGuest,
+  subscribeHostToGuests,
   unpublishGuest,
   createViewerSession,
   completeRenegotiation,
@@ -16,6 +17,7 @@ const router = Router();
 router.get("/:id/media", authMiddleware, getMediaState);
 router.post("/:id/media/host/publish", authMiddleware, publishHost);
 router.post("/:id/media/guest/publish", authMiddleware, publishGuest);
+router.post("/:id/media/host/subscribe", authMiddleware, subscribeHostToGuests);
 router.delete("/:id/media/guest", authMiddleware, unpublishGuest);
 router.post("/:id/media/viewer/session", authMiddleware, createViewerSession);
 router.post("/:id/media/viewer/renegotiate", authMiddleware, completeRenegotiation);

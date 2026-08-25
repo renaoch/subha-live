@@ -288,6 +288,84 @@ const connectedSession: MediaSession = {
 }
   },
 
+  async subscribeHostToGuests(
+    roomId: string,
+    userId: string,
+    offerSdp: string,
+    answerSdp?: string,
+  ) {
+    const room = await getRoom(roomId);
+
+    if (room.host_id !== userId) {
+      throw new AppError(403, "Only the room host can subscribe to guests", {
+        code: "ROOM_HOST_REQUIRED",
+      });
+    }
+
+    if (!answerSdp && !stringValue(offerSdp)) {
+      throw new AppError(400, "offerSdp or answerSdp is required", {
+        code: "MEDIA_SDP_REQUIRED",
+      });
+    }
+
+    const state = await mediaService.getRoomState(roomId);
+    if (!state.host || state.host.userId !== userId || state.host.status !== "connected") {
+      throw new AppError(409, "Host media is not connected", {
+        code: "MEDIA_HOST_NOT_CONNECTED",
+      });
+    }
+
+    const tracks: RemoteMediaTrack[] = Object.values(state.speakers).map((speaker) => ({
+      sessionId: speaker.sessionId,
+      trackName: speaker.audioTrackName,
+    }));
+
+    if (tracks.length === 0) {
+      throw new AppError(409, "No guest audio is active", {
+        code: "NO_GUEST_AUDIO",
+      });
+    }
+
+    const provider = await mediaService.getProvider();
+
+    if (answerSdp) {
+      await provider.renegotiate({
+        sessionId: state.host.sessionId,
+        answerSdp,
+      });
+
+      return {
+        session: {
+          sessionId: state.host.sessionId,
+          generation: state.host.generation,
+          status: state.host.status,
+        },
+        answerSdp: undefined,
+        offerSdp: undefined,
+        tracks: [],
+        requiresRenegotiation: false,
+      };
+    }
+
+    const negotiation = await provider.subscribeTracks({
+      sessionId: state.host.sessionId,
+      offerSdp,
+      tracks,
+    });
+
+    return {
+      session: {
+        sessionId: state.host.sessionId,
+        generation: state.host.generation,
+        status: state.host.status,
+      },
+      answerSdp: negotiation.answerSdp,
+      offerSdp: negotiation.offerSdp,
+      tracks: negotiation.tracks,
+      requiresRenegotiation: negotiation.requiresRenegotiation,
+    };
+  },
+
   async publishGuest(
     roomId: string,
     userId: string,

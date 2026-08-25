@@ -44,6 +44,32 @@ export async function publishHost(
   }
 }
 
+
+export async function subscribeHostToGuests(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.user) throw new AppError(401, "Authentication required", {
+      code: "AUTHENTICATION_REQUIRED",
+    });
+
+    const offerSdp = typeof req.body?.offerSdp === "string" ? req.body.offerSdp : "";
+    const answerSdp = typeof req.body?.answerSdp === "string" ? req.body.answerSdp : undefined;
+    const result = await roomMediaService.subscribeHostToGuests(
+      req.params.id,
+      req.user.id,
+      offerSdp,
+      answerSdp,
+    );
+
+    res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function publishGuest(
   req: Request<{ id: string }>,
   res: Response,

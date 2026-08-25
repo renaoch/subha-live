@@ -195,7 +195,7 @@ export const roomRequestService = {
 
     const { data, error } = await supabase
       .from("room_join_requests")
-      .select("*")
+      .select("*, user:profiles!user_id(id, name, handle, avatar, public_id)")
       .eq("room_id", roomId)
       .eq("status", "pending")
       .order("created_at", { ascending: true });

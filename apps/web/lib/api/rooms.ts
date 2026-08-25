@@ -97,6 +97,24 @@ export interface MediaPublishResult {
   requiresRenegotiation: boolean;
 }
 
+export interface SpeakerRequest {
+  id: string;
+  room_id: string;
+  user_id: string;
+  requested_by: string | null;
+  type: "audio" | "video";
+  status: "pending" | "accepted" | "rejected" | "cancelled";
+  created_at: string;
+  responded_at: string | null;
+  user?: {
+    id: string;
+    name: string;
+    handle: string;
+    avatar: string | null;
+    public_id: string | null;
+  } | null;
+}
+
 export interface MediaViewerResult {
   session: {
     sessionId: string;
@@ -199,6 +217,62 @@ export const roomsApi = {
     );
   },
 
+  publishGuest(
+    id: string,
+    input: {
+      offerSdp: string;
+      tracks: MediaTrackInput[];
+    },
+  ) {
+    return apiFetch<RoomEnvelope<MediaPublishResult>>(
+      `/api/v1/rooms/${id}/media/guest/publish`,
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    ).then((r) => r.data);
+  },
+
+  unpublishGuest(id: string) {
+    return apiFetch<RoomEnvelope<null>>(
+      `/api/v1/rooms/${id}/media/guest`,
+      { method: "DELETE" },
+    );
+  },
+
+  subscribeHostToGuests(
+    id: string,
+    input: { offerSdp?: string; answerSdp?: string },
+  ) {
+    return apiFetch<RoomEnvelope<MediaViewerResult>>(
+      `/api/v1/rooms/${id}/media/host/subscribe`,
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    ).then((r) => r.data);
+  },
+
+  listSpeakerRequests(id: string) {
+    return apiFetch<RoomEnvelope<SpeakerRequest[]>>(
+      `/api/v1/rooms/${id}/speaker-requests`,
+    ).then((r) => r.data);
+  },
+
+  approveSpeakerRequest(id: string, requestId: string) {
+    return apiFetch<RoomEnvelope<SpeakerRequest>>(
+      `/api/v1/rooms/${id}/speaker-requests/${requestId}/approve`,
+      { method: "POST" },
+    ).then((r) => r.data);
+  },
+
+  rejectSpeakerRequest(id: string, requestId: string) {
+    return apiFetch<RoomEnvelope<SpeakerRequest>>(
+      `/api/v1/rooms/${id}/speaker-requests/${requestId}/reject`,
+      { method: "POST" },
+    ).then((r) => r.data);
+  },
+
   completeRenegotiation(
     id: string,
     answerSdp: string,
@@ -232,12 +306,13 @@ export const roomsApi = {
   },
 
   requestAudio(id: string) {
-    return apiFetch<RoomEnvelope<unknown>>(
+    return apiFetch<RoomEnvelope<SpeakerRequest>>(
       `/api/v1/rooms/${id}/audio-request`,
       {
         method: "POST",
+        body: JSON.stringify({ type: "audio" }),
       },
-    );
+    ).then((r) => r.data);
   },
 
   cancelAudioRequest(id: string) {

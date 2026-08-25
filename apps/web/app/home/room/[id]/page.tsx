@@ -4,17 +4,21 @@ import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Check,
-  Copy,
+  BellRing,
+  ChevronLeft,
+  ChevronRight,
+  Headphones,
   Loader2,
   Mic,
   MicOff,
+  PhoneOff,
   Play,
   Radio,
+  ShieldCheck,
+  UserRound,
   Users,
   Video,
   VideoOff,
-  X,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import {
@@ -22,6 +26,7 @@ import {
   type MediaTrackInput,
   type RoomMediaState,
   type RoomRecord,
+  type SpeakerRequest,
 } from "@/lib/api/rooms";
 import { createClient } from "@/lib/supabase/client";
 
@@ -326,10 +331,25 @@ export default function RoomStagePage({
   const [micEnabled, setMicEnabled] =
     useState(true);
 
-  const [copied, setCopied] =
+  const [mediaError, setMediaError] =
+    useState("");
+
+  const [mediaState, setMediaState] =
+    useState<RoomMediaState | null>(null);
+
+  const [speakerPanelOpen, setSpeakerPanelOpen] =
+    useState(true);
+
+  const [speakerRequests, setSpeakerRequests] =
+    useState<SpeakerRequest[]>([]);
+
+  const [requestPending, setRequestPending] =
     useState(false);
 
-  const [mediaError, setMediaError] =
+  const [speakerPublishing, setSpeakerPublishing] =
+    useState(false);
+
+  const [speakerMediaError, setSpeakerMediaError] =
     useState("");
 
   const localVideoRef =
@@ -361,6 +381,18 @@ export default function RoomStagePage({
       sessionId: string;
       generation: number;
     } | null>(null);
+
+  const guestPeerRef =
+    useRef<RTCPeerConnection | null>(null);
+
+  const guestStreamRef =
+    useRef<MediaStream | null>(null);
+
+  const viewerSpeakerIdsRef =
+    useRef<Set<string>>(new Set());
+
+  const hostSpeakerIdsRef =
+    useRef<Set<string>>(new Set());
 
   const isHost = Boolean(
     room &&
@@ -399,11 +431,223 @@ export default function RoomStagePage({
     viewerPeerRef.current = null;
     viewerSessionRef.current = null;
     remoteStreamRef.current = null;
+    viewerSpeakerIdsRef.current.clear();
 
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject =
         null;
     }
+  }
+
+  function closeGuestPeer() {
+    guestPeerRef.current?.close();
+    guestPeerRef.current = null;
+    guestStreamRef.current?.getTracks().forEach((track) => track.stop());
+    guestStreamRef.current = null;
+    setSpeakerPublishing(false);
+  }
+
+  function closeHostSubscriptions() {
+    hostSpeakerIdsRef.current.clear();
+  }
+
+  async function publishGuestAudio() {
+    if (!room || isHost || speakerPublishing) return;
+
+    setSpeakerMediaError("");
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+
+    guestStreamRef.current = stream;
+
+    const peer = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+      bundlePolicy: "max-bundle",
+    });
+
+    guestPeerRef.current = peer;
+
+    const track = stream.getAudioTracks()[0];
+    if (!track) throw new Error("Microphone track was not created.");
+
+    const transceiver = peer.addTransceiver(track, { direction: "sendonly" });
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    await waitForIceGatheringComplete(peer);
+
+    const firstDescription = peer.localDescription;
+    if (!firstDescription?.sdp) throw new Error("Microphone SDP offer was not created.");
+
+    const tracks = createPublishTracks([{
+      transceiver,
+      track,
+      trackName: createTrackName("audio", userId ?? "speaker"),
+    }]);
+
+    const initial = await roomsApi.publishGuest(room.id, {
+      offerSdp: firstDescription.sdp,
+      tracks,
+    });
+
+    if (!initial.answerSdp) throw new Error("Guest media session did not return an SDP answer.");
+    await peer.setRemoteDescription({ type: "answer", sdp: initial.answerSdp });
+    await waitForPeerConnectionConnected(peer, 20000, 400);
+
+    const renegotiationOffer = await peer.createOffer();
+    await peer.setLocalDescription(renegotiationOffer);
+    await waitForIceGatheringComplete(peer);
+
+    const renegotiationDescription = peer.localDescription;
+    if (!renegotiationDescription?.sdp) throw new Error("Guest audio negotiation offer was not created.");
+
+    const result = await roomsApi.publishGuest(room.id, {
+      offerSdp: renegotiationDescription.sdp,
+      tracks,
+    });
+
+    if (!result.answerSdp) throw new Error("Guest audio negotiation failed.");
+    await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
+
+    const speakerSession = result.session;
+    peer.onconnectionstatechange = () => {
+      if (peer.connectionState === "failed" || peer.connectionState === "closed") {
+        setSpeakerPublishing(false);
+      }
+    };
+
+    setSpeakerPublishing(true);
+
+    return speakerSession;
+  }
+
+async function syncHostGuestAudio(state: RoomMediaState) {
+  const currentRoom = room;
+
+  if (
+    !currentRoom ||
+    !isHost ||
+    !hostPeerRef.current ||
+    !hostMediaReady
+  ) {
+    return;
+  }
+
+    const speakerIds = Object.keys(state.speakers).filter(
+      (speakerId) => !hostSpeakerIdsRef.current.has(speakerId),
+    );
+
+    if (speakerIds.length === 0) return;
+
+    const peer = hostPeerRef.current;
+    for (const speakerId of speakerIds) {
+      peer.addTransceiver("audio", { direction: "recvonly" });
+      hostSpeakerIdsRef.current.add(speakerId);
+    }
+
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    await waitForIceGatheringComplete(peer);
+
+    const localDescription = peer.localDescription;
+    if (!localDescription?.sdp) throw new Error("Host guest-audio SDP was not created.");
+
+    const result = await roomsApi.subscribeHostToGuests(room.id, { offerSdp: localDescription.sdp });
+
+    if (result.answerSdp) {
+      await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
+      return;
+    }
+
+    if (result.offerSdp) {
+      await peer.setRemoteDescription({ type: "offer", sdp: result.offerSdp });
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      await waitForIceGatheringComplete(peer);
+      const localAnswer = peer.localDescription;
+      if (!localAnswer?.sdp) throw new Error("Host guest-audio answer was not created.");
+      await roomsApi.subscribeHostToGuests(room.id, { answerSdp: localAnswer.sdp });
+      return;
+    }
+
+    throw new Error("Host guest-audio negotiation returned no SDP.");
+  }
+
+  async function syncViewerSpeakerAudio(state: RoomMediaState) {
+    if (isHost || !viewerPeerRef.current || !viewerSessionRef.current) return;
+
+    const newSpeakers = Object.keys(state.speakers).filter(
+      (speakerId) => !viewerSpeakerIdsRef.current.has(speakerId),
+    );
+
+    if (newSpeakers.length === 0) return;
+
+    const peer = viewerPeerRef.current;
+    for (const speakerId of newSpeakers) {
+      peer.addTransceiver("audio", { direction: "recvonly" });
+      viewerSpeakerIdsRef.current.add(speakerId);
+    }
+
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    await waitForIceGatheringComplete(peer);
+
+    const localDescription = peer.localDescription;
+    if (!localDescription?.sdp) throw new Error("Viewer speaker-audio offer was not created.");
+
+   const currentRoom = room;
+
+if (!currentRoom || isHost || !viewerPeerRef.current || !viewerSessionRef.current) {
+  return;
+}
+
+const result = await roomsApi.createViewerSession(
+  currentRoom.id,
+  localDescription.sdp,
+);
+
+if (result.answerSdp) {
+  await peer.setRemoteDescription({
+    type: "answer",
+    sdp: result.answerSdp,
+  });
+
+  return;
+}
+
+if (result.offerSdp) {
+  await peer.setRemoteDescription({
+    type: "offer",
+    sdp: result.offerSdp,
+  });
+
+  const answer = await peer.createAnswer();
+
+  await peer.setLocalDescription(answer);
+
+  await waitForIceGatheringComplete(peer);
+
+  const localAnswer = peer.localDescription;
+
+  if (!localAnswer?.sdp) {
+    throw new Error("Viewer speaker-audio answer was not created.");
+  }
+
+  await roomsApi.completeRenegotiation(
+    currentRoom.id,
+    localAnswer.sdp,
+  );
+
+  return;
+}
+
+    throw new Error("Viewer speaker-audio negotiation returned no SDP.");
   }
 
   async function ensureLocalPreview() {
@@ -765,6 +1009,8 @@ export default function RoomStagePage({
       state,
     );
 
+    viewerSpeakerIdsRef.current = new Set(Object.keys(state.speakers));
+
     /*
      * Phase 1:
      * Establish the Cloudflare session.
@@ -1111,6 +1357,87 @@ export default function RoomStagePage({
     userId,
   ]);
 
+  useEffect(() => {
+    if (!room || !isLive) return;
+
+    let active = true;
+    let mediaBusy = false;
+    let requestBusy = false;
+
+    const poll = async () => {
+      try {
+        const state = await roomsApi.getMediaState(id);
+        if (!active) return;
+        setMediaState(state);
+
+        if (!isHost && state.speakers[userId ?? ""]) {
+          setRequestPending(false);
+        }
+
+        if (isHost) {
+          if (!requestBusy) {
+            requestBusy = true;
+            try {
+              setSpeakerRequests(await roomsApi.listSpeakerRequests(id));
+            } finally {
+              requestBusy = false;
+            }
+          }
+
+          if (!mediaBusy) {
+            mediaBusy = true;
+            try {
+              await syncHostGuestAudio(state);
+            } catch (error) {
+              console.error("Host guest audio sync failed", error);
+            } finally {
+              mediaBusy = false;
+            }
+          }
+        } else {
+          if (state.speakers[userId ?? ""] && !speakerPublishing && !mediaBusy) {
+            mediaBusy = true;
+            try {
+              await publishGuestAudio();
+            } catch (error) {
+              setSpeakerMediaError(
+                error instanceof Error ? error.message : "Microphone could not be connected.",
+              );
+              closeGuestPeer();
+            } finally {
+              mediaBusy = false;
+            }
+          }
+
+          if (!mediaBusy && viewerConnected) {
+            mediaBusy = true;
+            try {
+              await syncViewerSpeakerAudio(state);
+            } catch (error) {
+              console.error("Viewer speaker sync failed", error);
+            } finally {
+              mediaBusy = false;
+            }
+          }
+        }
+      } catch {
+        // Keep the room playable during transient polling failures.
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(poll, 1800);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [id, room, isLive, isHost, userId, viewerConnected, speakerPublishing, hostMediaReady]);
+
+  useEffect(() => {
+    if (!room || isHost || room.status !== "live" || joined) return;
+    void handleJoin();
+  }, [room?.id, room?.status, isHost]);
+
   /*
    * Host camera/microphone preview.
    */
@@ -1263,6 +1590,22 @@ export default function RoomStagePage({
     viewerConnected,
   ]);
 
+  useEffect(() => {
+    if (!speakerPublishing || isHost) return;
+
+    const timer = window.setInterval(() => {
+      const session = guestPeerRef.current ? mediaState?.speakers[userId ?? ""] : null;
+      if (!session) return;
+      roomsApi.heartbeat(id, {
+        role: "speaker",
+        sessionId: session.sessionId,
+        generation: mediaState?.generation ?? 0,
+      }).catch(() => {});
+    }, 15000);
+
+    return () => window.clearInterval(timer);
+  }, [id, speakerPublishing, isHost, userId, mediaState?.generation, mediaState?.speakers]);
+
   async function handleStart() {
     if (
       !isHost ||
@@ -1391,14 +1734,47 @@ export default function RoomStagePage({
     }
   }
 
+  async function requestAudioSeat() {
+    if (!room || isHost || requestPending) return;
+    try {
+      setActionLoading(true);
+      await roomsApi.requestAudio(room.id);
+      setRequestPending(true);
+      toast.success("Audio seat requested");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn’t request an audio seat");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function approveRequest(requestId: string) {
+    try {
+      await roomsApi.approveSpeakerRequest(id, requestId);
+      setSpeakerRequests((current) => current.filter((request) => request.id !== requestId));
+      toast.success("Viewer is joining the audio room");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn’t approve the request");
+    }
+  }
+
+  async function rejectRequest(requestId: string) {
+    try {
+      await roomsApi.rejectSpeakerRequest(id, requestId);
+      setSpeakerRequests((current) => current.filter((request) => request.id !== requestId));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn’t reject the request");
+    }
+  }
+
   async function handleLeave() {
     try {
-      if (
-        viewerSessionRef.current
-      ) {
-        await roomsApi
-          .leaveViewer(id)
-          .catch(() => {});
+      if (viewerSessionRef.current) {
+        await roomsApi.leaveViewer(id).catch(() => {});
+      }
+
+      if (speakerPublishing) {
+        await roomsApi.unpublishGuest(id).catch(() => {});
       }
 
       if (joined) {
@@ -1418,7 +1794,9 @@ export default function RoomStagePage({
       }
     } finally {
       closeViewerPeer();
+      closeGuestPeer();
       closeHostPeer();
+      closeHostSubscriptions();
       stopLocalMedia();
 
       setHostPublishing(
@@ -1490,32 +1868,12 @@ export default function RoomStagePage({
     }
   }
 
-  async function copyRoomLink() {
-    try {
-      await navigator.clipboard.writeText(
-        window.location.href,
-      );
-
-      setCopied(true);
-
-      window.setTimeout(
-        () =>
-          setCopied(
-            false,
-          ),
-        1600,
-      );
-    } catch {
-      toast.error(
-        "Couldn't copy the room link",
-      );
-    }
-  }
-
   useEffect(() => {
     return () => {
       closeViewerPeer();
+      closeGuestPeer();
       closeHostPeer();
+      closeHostSubscriptions();
       stopLocalMedia();
     };
   }, []);
@@ -1559,367 +1917,252 @@ export default function RoomStagePage({
     room.status ===
     "created";
 
-  const mediaReady = isHost
-    ? hostMediaReady
-    : viewerConnected;
+  const activeSpeakers = mediaState ? Object.values(mediaState.speakers) : [];
+  const seatCount = Math.min(room.max_guest_slots || 3, 3);
+  const occupiedSeats = Math.min(activeSpeakers.length, seatCount);
 
   return (
-    <main className="relative min-h-dvh overflow-hidden bg-black text-white">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.25),transparent_40%),radial-gradient(circle_at_bottom_left,rgba(236,72,153,0.18),transparent_40%)]" />
+    <main className="relative min-h-dvh overflow-hidden bg-[#06060a] text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(139,92,246,0.22),transparent_30%),radial-gradient(circle_at_88%_22%,rgba(236,72,153,0.16),transparent_28%)]" />
 
-      <div className="relative mx-auto flex min-h-dvh w-full max-w-[680px] flex-col">
-        <header className="flex items-center justify-between px-4 pb-3 pt-4">
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-[1180px] flex-col px-2 sm:px-3">
+        <header className="flex items-center justify-between px-2 pb-3 pt-4 sm:px-3">
           <div className="flex min-w-0 items-center gap-3">
             <Avatar
               name={hostName}
-              src={
-                room.host?.avatar ??
-                undefined
-              }
+              src={room.host?.avatar ?? undefined}
               size="sm"
               online={isLive}
               className="ring-1 ring-white/20"
             />
-
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold">
-                {room.title}
-              </p>
-
-              <p className="truncate text-[11px] text-white/55">
-                {hostName} ·{" "}
-                {isLive
-                  ? "Live now"
-                  : "Waiting to start"}
+              <p className="truncate text-sm font-bold sm:text-base">{room.title}</p>
+              <p className="truncate text-[11px] text-white/50 sm:text-xs">
+                {hostName} · {isLive ? "Live now" : isWaiting ? "Waiting to start" : "Ended"}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="hidden rounded-full bg-white/8 px-3 py-1.5 text-[10px] font-semibold text-white/60 sm:block">
-              {room.viewerCount ??
-                0}{" "}
-              watching
-            </span>
-
+            <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-[11px] font-semibold text-white/65 sm:flex">
+              <Users className="h-3.5 w-3.5" />
+              {room.viewerCount ?? mediaState?.viewerCount ?? 0} watching
+            </div>
             <button
-              onClick={
-                copyRoomLink
-              }
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10"
-              aria-label="Copy room link"
+              onClick={() => setSpeakerPanelOpen((value) => !value)}
+              className="flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.08] px-3 text-xs font-bold text-white/80 backdrop-blur-xl"
+              aria-label="Toggle audio seats"
             >
-              {copied ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
+              <Headphones className="h-4 w-4" />
+              <span className="hidden sm:inline">Seats</span>
+              <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{occupiedSeats}/{seatCount}</span>
             </button>
-
             <button
-              onClick={
-                handleLeave
-              }
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10"
-              aria-label="Close room"
+              onClick={handleLeave}
+              className="flex h-10 items-center gap-2 rounded-full bg-red-500 px-4 text-xs font-bold text-white shadow-lg shadow-red-500/20 transition hover:bg-red-400"
             >
-              <X className="h-5 w-5" />
+              <PhoneOff className="h-4 w-4" />
+              Leave room
             </button>
           </div>
         </header>
 
-        <section className="flex flex-1 flex-col px-3 pb-4 sm:px-4">
-          <div className="relative min-h-[72dvh] flex-1 overflow-hidden rounded-[30px] border border-white/10 bg-[#0b0610] shadow-2xl">
-            {isHost &&
-            isWaiting ? (
+        <div className="flex min-h-0 flex-1 gap-3 pb-4 sm:gap-4">
+          <section className="relative min-h-[78dvh] flex-1 overflow-hidden rounded-[30px] border border-white/10 bg-[#0b0b10] shadow-[0_25px_80px_rgba(0,0,0,0.45)]">
+            {isHost && isWaiting ? (
               <>
-                <video
-                  ref={
-                    localVideoRef
-                  }
-                  autoPlay
-                  muted
-                  playsInline
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
-
+                <video ref={localVideoRef} autoPlay muted playsInline className="absolute inset-0 h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/20" />
                 {mediaError && (
-                  <div className="absolute left-3 right-3 top-3 rounded-2xl border border-red-300/20 bg-red-950/70 p-3 text-xs text-red-100 backdrop-blur-xl">
-                    {mediaError}
-                  </div>
+                  <div className="absolute left-3 right-3 top-3 rounded-2xl border border-red-300/20 bg-red-950/70 p-3 text-xs text-red-100 backdrop-blur-xl">{mediaError}</div>
                 )}
-
                 <div className="absolute left-3 top-3 flex gap-2">
-                  <button
-                    onClick={() =>
-                      setCameraEnabled(
-                        (value) =>
-                          !value,
-                      )
-                    }
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 backdrop-blur-xl"
-                    aria-label="Toggle camera"
-                  >
-                    {cameraEnabled ? (
-                      <Video className="h-4 w-4" />
-                    ) : (
-                      <VideoOff className="h-4 w-4 text-red-300" />
-                    )}
+                  <button onClick={() => setCameraEnabled((value) => !value)} className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 backdrop-blur-xl">
+                    {cameraEnabled ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4 text-red-300" />}
                   </button>
-
-                  <button
-                    onClick={() =>
-                      setMicEnabled(
-                        (value) =>
-                          !value,
-                      )
-                    }
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 backdrop-blur-xl"
-                    aria-label="Toggle microphone"
-                  >
-                    {micEnabled ? (
-                      <Mic className="h-4 w-4" />
-                    ) : (
-                      <MicOff className="h-4 w-4 text-red-300" />
-                    )}
+                  <button onClick={() => setMicEnabled((value) => !value)} className="flex h-10 w-10 items-center justify-center rounded-full bg-black/45 backdrop-blur-xl">
+                    {micEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4 text-red-300" />}
                   </button>
                 </div>
-
-                <div className="absolute inset-x-0 bottom-0 p-4">
-                  <div className="rounded-[24px] border border-white/10 bg-black/35 p-4 backdrop-blur-xl">
+                <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
+                  <div className="rounded-[26px] border border-white/10 bg-black/40 p-4 backdrop-blur-xl sm:p-5">
                     <div className="flex items-end justify-between gap-4">
                       <div>
-                        <div className="mb-1 flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full bg-amber-300" />
-
-                          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">
-                            Private preview
-                          </span>
-                        </div>
-
-                        <h2 className="text-xl font-bold tracking-tight">
-                          Check your camera and mic
-                        </h2>
-
-                        <p className="mt-1 text-xs text-white/55">
-                          Your live starts when you press the button.
-                        </p>
+                        <div className="mb-1.5 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-300" /><span className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/55">Private preview</span></div>
+                        <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Check your camera and mic</h2>
+                        <p className="mt-1 text-xs text-white/50">Your room becomes live when you press Start Live.</p>
                       </div>
-
-                      <button
-                        onClick={
-                          handleStart
-                        }
-                        disabled={
-                          actionLoading ||
-                          !localStreamRef.current
-                        }
-                        className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-hot px-5 text-sm font-bold shadow-lg disabled:opacity-50"
-                      >
-                        {actionLoading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Play className="h-4 w-4 fill-current" />
-                        )}
-
-                        Start Live
+                      <button onClick={handleStart} disabled={actionLoading || !localStreamRef.current} className="flex h-12 shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-hot px-5 text-sm font-bold shadow-xl disabled:opacity-50">
+                        {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />} Start Live
                       </button>
                     </div>
                   </div>
                 </div>
               </>
-            ) : isHost &&
-              isLive ? (
+            ) : isHost && isLive ? (
               <>
-                <video
-                  ref={
-                    localVideoRef
-                  }
-                  autoPlay
-                  muted
-                  playsInline
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/10" />
-
+                <video ref={localVideoRef} autoPlay muted playsInline className="absolute inset-0 h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/10" />
                 <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-[10px] font-bold backdrop-blur-xl">
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      hostMediaReady
-                        ? "animate-pulse bg-red-400"
-                        : "animate-pulse bg-amber-300"
-                    }`}
-                  />
-
-                  {hostMediaReady
-                    ? "LIVE"
-                    : "CONNECTING"}
+                  <span className={`h-2 w-2 rounded-full ${hostMediaReady ? "animate-pulse bg-red-400" : "animate-pulse bg-amber-300"}`} />
+                  {hostMediaReady ? "LIVE" : "CONNECTING"}
                 </div>
-
-                {!hostMediaReady && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 px-8 text-center backdrop-blur-[1px]">
-                    <div>
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                      </div>
-
-                      <h2 className="mt-4 text-lg font-bold">
-                        Connecting your live
-                      </h2>
-
-                      <p className="mt-1 text-xs leading-5 text-white/55">
-                        Your camera and microphone are connecting to the room.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between rounded-2xl border border-white/10 bg-black/35 p-3 backdrop-blur-xl">
                   <div className="flex items-center gap-2">
-                    <Avatar
-                      name={
-                        hostName
-                      }
-                      src={
-                        room.host
-                          ?.avatar ??
-                        undefined
-                      }
-                      size="sm"
-                    />
-
-                    <div>
-                      <p className="text-sm font-bold">
-                        {hostName}
-                      </p>
-
-                      <p className="text-[10px] text-white/55">
-                        {hostMediaReady
-                          ? "Streaming to the room"
-                          : "Connecting…"}
-                      </p>
-                    </div>
+                    <Avatar name={hostName} src={room.host?.avatar ?? undefined} size="sm" />
+                    <div><p className="text-sm font-bold">{hostName}</p><p className="text-[10px] text-white/55">{occupiedSeats > 0 ? `${occupiedSeats} guest${occupiedSeats === 1 ? "" : "s"} on stage` : "You are live"}</p></div>
                   </div>
-
-                  <button
-                    onClick={
-                      handleEnd
-                    }
-                    disabled={
-                      actionLoading
-                    }
-                    className="rounded-full bg-white/10 px-4 py-2 text-xs font-bold hover:bg-white/15 disabled:opacity-50"
-                  >
-                    End live
-                  </button>
+                  <button onClick={handleEnd} disabled={actionLoading} className="rounded-full bg-white/10 px-4 py-2 text-xs font-bold hover:bg-white/15 disabled:opacity-50">End live</button>
                 </div>
               </>
             ) : isLive ? (
               <>
-                <video
-                  ref={
-                    remoteVideoRef
-                  }
-                  autoPlay
-                  playsInline
-                  controls={false}
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-
-                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/10" />
-
+                <video ref={remoteVideoRef} autoPlay playsInline controls={false} className="absolute inset-0 h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/5" />
                 {!viewerConnected && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 px-8 text-center backdrop-blur-sm">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/25 px-8 text-center backdrop-blur-[2px]">
                     <div>
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
-                        {joined ? (
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                        ) : (
-                          <Radio className="h-6 w-6" />
-                        )}
-                      </div>
-
-                      <h2 className="mt-4 text-lg font-bold">
-                        {joined
-                          ? "Connecting to the live…"
-                          : "Live now"}
-                      </h2>
-
-                      <p className="mt-1 text-xs leading-5 text-white/55">
-                        {joined
-                          ? "Waiting for the host media connection."
-                          : "Join to watch the host live."}
-                      </p>
-
-                      {!joined && (
-                        <button
-                          onClick={
-                            handleJoin
-                          }
-                          disabled={
-                            actionLoading
-                          }
-                          className="mt-5 rounded-full bg-gradient-to-r from-accent to-accent-hot px-6 py-3 text-sm font-bold"
-                        >
-                          {actionLoading
-                            ? "Connecting…"
-                            : "Join live"}
-                        </button>
-                      )}
+                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/[0.08]"><Loader2 className="h-6 w-6 animate-spin" /></div>
+                      <h2 className="mt-5 text-xl font-bold">Joining the live…</h2>
+                      <p className="mt-1 max-w-xs text-xs leading-5 text-white/50">Connecting your room viewer. No extra join button, because apparently we can spare humans one click.</p>
                     </div>
                   </div>
                 )}
-
                 {viewerConnected && (
                   <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-[10px] font-bold backdrop-blur-xl">
-                    <span className="h-2 w-2 rounded-full bg-red-400" />
-                    LIVE ·{" "}
-                    {hostName}
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-red-400" /> LIVE · {hostName}
                   </div>
+                )}
+                {speakerPublishing && (
+                  <div className="absolute bottom-3 left-3 rounded-full border border-white/10 bg-black/45 px-3 py-2 text-[10px] font-bold backdrop-blur-xl">
+                    <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" /> You are speaking
+                  </div>
+                )}
+                {speakerMediaError && (
+                  <div className="absolute bottom-3 left-3 right-3 rounded-2xl border border-red-300/20 bg-red-950/70 p-3 text-xs text-red-100 backdrop-blur-xl">{speakerMediaError}</div>
                 )}
               </>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center px-8 text-center">
-                <div>
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white/10">
-                    <Radio className="h-7 w-7 text-white/70" />
-                  </div>
-
-                  <h2 className="mt-5 text-xl font-bold">
-                    {isWaiting
-                      ? "Waiting for the host"
-                      : "This live has ended"}
-                  </h2>
-
-                  <p className="mt-2 max-w-xs text-sm leading-6 text-white/45">
-                    {isWaiting
-                      ? "The host is getting their camera and microphone ready."
-                      : "The room is no longer live."}
-                  </p>
-                </div>
+                <div><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-white/10"><Radio className="h-7 w-7 text-white/70" /></div><h2 className="mt-5 text-xl font-bold">{isWaiting ? "Waiting for the host" : "This live has ended"}</h2><p className="mt-2 max-w-xs text-sm leading-6 text-white/45">{isWaiting ? "The host is getting their camera and microphone ready." : "The room is no longer live."}</p></div>
               </div>
             )}
+          </section>
+
+          {speakerPanelOpen && (
+            <aside className="hidden w-[300px] shrink-0 flex-col overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.045] shadow-2xl backdrop-blur-2xl lg:flex">
+              <AudioSeatPanel
+                isHost={isHost}
+                requests={speakerRequests}
+                speakers={activeSpeakers}
+                seatCount={seatCount}
+                pending={requestPending}
+                requestLoading={actionLoading}
+                onRequest={requestAudioSeat}
+                onApprove={approveRequest}
+                onReject={rejectRequest}
+                hostName={hostName}
+              />
+            </aside>
+          )}
+        </div>
+
+        <div className="pb-4 lg:hidden">
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-1 backdrop-blur-2xl">
+            <button onClick={() => setSpeakerPanelOpen((value) => !value)} className="flex w-full items-center justify-between rounded-[20px] px-4 py-3 text-left">
+              <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20"><Headphones className="h-4 w-4" /></div><div><p className="text-sm font-bold">Audio seats</p><p className="text-[11px] text-white/45">{occupiedSeats}/{seatCount} occupied</p></div></div>
+              {speakerPanelOpen ? <ChevronLeft className="h-4 w-4 rotate-[-90deg] text-white/45" /> : <ChevronRight className="h-4 w-4 text-white/45" />}
+            </button>
+            {speakerPanelOpen && <div className="border-t border-white/10 pt-1"><AudioSeatPanel isHost={isHost} requests={speakerRequests} speakers={activeSpeakers} seatCount={seatCount} pending={requestPending} requestLoading={actionLoading} onRequest={requestAudioSeat} onApprove={approveRequest} onReject={rejectRequest} hostName={hostName} /></div>}
           </div>
-
-          <div className="mt-3 flex items-center justify-between px-1 text-[10px] text-white/40">
-            <span className="flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-
-              {room.viewerCount ??
-                0}{" "}
-              watching
-            </span>
-
-            <span>
-              {room.max_guest_slots}{" "}
-              guest slots
-            </span>
-          </div>
-        </section>
+        </div>
       </div>
     </main>
+  );
+}
+
+function AudioSeatPanel({
+  isHost,
+  requests,
+  speakers,
+  seatCount,
+  pending,
+  requestLoading,
+  onRequest,
+  onApprove,
+  onReject,
+}: {
+  isHost: boolean;
+  requests: SpeakerRequest[];
+  speakers: Array<{ userId: string; sessionId: string; audioTrackName: string; videoTrackName?: string; hasVideo?: boolean }>;
+  seatCount: number;
+  pending: boolean;
+  requestLoading: boolean;
+  onRequest: () => void;
+  onApprove: (requestId: string) => void;
+  onReject: (requestId: string) => void;
+  hostName: string;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-b border-white/10 px-5 py-5">
+        <div className="flex items-start justify-between gap-3">
+          <div><div className="flex items-center gap-2"><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/25 to-fuchsia-500/20"><Headphones className="h-4 w-4" /></div><div><p className="text-sm font-bold">Audio stage</p><p className="text-[11px] text-white/40">Three live seats beside the host</p></div></div></div>
+          <div className="rounded-full bg-white/[0.07] px-2.5 py-1 text-[10px] font-bold text-white/65">{speakers.length}/{seatCount}</div>
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-2 overflow-auto p-3">
+        {Array.from({ length: seatCount }).map((_, index) => {
+          const speaker = speakers[index];
+          return (
+            <div key={speaker?.userId ?? `empty-${index}`} className="group rounded-[22px] border border-white/10 bg-black/20 p-3">
+              {speaker ? (
+                <div className="flex items-center gap-3">
+                  <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-500/25 to-fuchsia-500/20 ring-1 ring-white/10">
+                    <UserRound className="h-5 w-5 text-white/50" />
+                  </div>
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">Guest {index + 1}</p><p className="mt-0.5 truncate text-[10px] text-white/40">{speaker.userId}</p></div>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-300"><Mic className="h-3.5 w-3.5" /></span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.025]"><Headphones className="h-5 w-5 text-white/20" /></div><div><p className="text-sm font-semibold text-white/55">Open audio seat</p><p className="text-[10px] text-white/30">Waiting for someone to join</p></div></div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {isHost ? (
+        <div className="border-t border-white/10 p-3">
+          <div className="mb-2 flex items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/35"><BellRing className="h-3.5 w-3.5" /> Join requests {requests.length > 0 ? `· ${requests.length}` : ""}</div>
+          {requests.length === 0 ? (
+            <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-4 text-center text-xs text-white/35">No one is waiting for a seat.</div>
+          ) : (
+            <div className="space-y-2">
+              {requests.map((request) => (
+                <div key={request.id} className="rounded-[20px] border border-white/10 bg-black/25 p-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar name={request.user?.name || "Viewer"} src={request.user?.avatar ?? undefined} size="sm" />
+                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{request.user?.name || "Viewer"}</p><p className="truncate text-[10px] text-white/40">ID · {request.user?.public_id || request.user_id}</p></div>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-4 text-white/50">Requested an audio seat. Accepting opens two-way voice with you and the room.</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => onReject(request.id)} className="rounded-xl bg-white/[0.06] py-2.5 text-xs font-bold text-white/65">Decline</button><button onClick={() => onApprove(request.id)} disabled={speakers.length >= seatCount} className="rounded-xl bg-emerald-500 py-2.5 text-xs font-bold text-white disabled:opacity-40">Accept</button></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="border-t border-white/10 p-3">
+          {pending ? (
+            <div className="rounded-[20px] border border-amber-300/10 bg-amber-300/[0.06] p-4"><div className="flex items-center gap-2 text-sm font-bold"><BellRing className="h-4 w-4 text-amber-300" /> Waiting for the host</div><p className="mt-1 text-[11px] leading-5 text-white/45">Your request is on the host’s stage queue. Stay in the room and you’ll connect automatically after approval.</p></div>
+          ) : (
+            <button onClick={onRequest} disabled={requestLoading || speakers.length >= seatCount} className="flex w-full items-center justify-between rounded-[20px] bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-4 text-left shadow-xl shadow-violet-950/20 disabled:opacity-45"><div><p className="text-sm font-bold">Request an audio seat</p><p className="mt-0.5 text-[11px] text-white/65">Ask to speak live with {seatCount - speakers.length} seat{seatCount - speakers.length === 1 ? "" : "s"} open</p></div><ChevronRight className="h-4 w-4" /></button>
+          )}
+          <div className="mt-2 flex items-center gap-2 px-1 text-[10px] text-white/30"><ShieldCheck className="h-3 w-3" /> Host approval is required before your mic turns on.</div>
+        </div>
+      )}
+    </div>
   );
 }
