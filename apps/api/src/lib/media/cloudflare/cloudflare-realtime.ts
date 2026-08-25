@@ -162,113 +162,90 @@ export class CloudflareRealtimeProvider
    * SESSION
    * ======================================================================== */
 
-  async createSession(
-    input: CreateMediaSessionInput,
-  ): Promise<CreateMediaSessionResult> {
-    const body: Record<
-      string,
-      unknown
-    > = {};
+async createSession(
+  input: CreateMediaSessionInput,
+): Promise<CreateMediaSessionResult> {
+  /*
+   * Cloudflare Realtime creates the WebRTC session first.
+   *
+   * IMPORTANT:
+   *
+   * The browser SDP offer does NOT belong in
+   * POST /sessions/new.
+   *
+   * Cloudflare's documented negotiation flow is:
+   *
+   *   1. POST /sessions/new
+   *   2. POST /sessions/:sessionId/tracks/new
+   *      with the browser SDP offer
+   *   3. Cloudflare returns the SDP answer
+   *   4. Browser applies that answer with
+   *      setRemoteDescription()
+   *
+   * Previously we sent input.offerSdp to /sessions/new
+   * and then sent the same offer again to /tracks/new.
+   *
+   * That put the Cloudflare session into the wrong
+   * negotiation state and produced:
+   *
+   *   HTTP 425
+   *   session_error
+   *   Session is not ready yet
+   */
+  const response =
+    await this.getHttp().request<CloudflareSessionResponse>(
+      "/sessions/new",
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
 
-    /*
-     * Cloudflare requires a valid browser-generated
-     * SDP offer when creating the session.
-     */
-    if (input.offerSdp) {
-      /*
-       * IMPORTANT:
-       *
-       * Only use .trim() to check for
-       * emptiness. Do NOT send the trimmed
-       * value to Cloudflare. trim() strips
-       * the trailing \r\n that terminates
-       * the last SDP line, and Cloudflare's SDP
-       * parser requires that terminator.
-       */
-      if (!input.offerSdp.trim()) {
-        throw new MediaProviderError(
-          "offerSdp is required. Generate it from a browser RTCPeerConnection before creating the Cloudflare media session.",
-          {
-            code:
-              "MEDIA_SDP_OFFER_REQUIRED",
-          },
-        );
-      }
-
-      body.sessionDescription = {
-        type: "offer",
-        sdp: input.offerSdp,
-      };
-    } else {
-      throw new MediaProviderError(
-        "offerSdp is required. Generate it from a browser RTCPeerConnection before creating the Cloudflare media session.",
-        {
-          code:
-            "MEDIA_SDP_OFFER_REQUIRED",
-        },
-      );
-    }
-
-    const response =
-      await this.getHttp().request<CloudflareSessionResponse>(
-        "/sessions/new",
-        {
-          method: "POST",
-
-          body: JSON.stringify(
-            body,
-          ),
-        },
-      );
-
-    if (
-      !response?.sessionId
-    ) {
-      throw new MediaProviderError(
-        "Cloudflare did not return a session ID",
-        {
-          response,
-        },
-      );
-    }
-
-    const timestamp =
-      Date.now();
-
-    const session: MediaSession = {
-      sessionId:
-        response.sessionId,
-
-      roomId:
-        input.roomId,
-
-      userId:
-        input.userId,
-
-      role:
-        input.role,
-
-      generation:
-        input.generation,
-
-      status:
-        "connecting",
-
-      createdAt:
-        timestamp,
-
-      lastHeartbeatAt:
-        timestamp,
-    };
-
-    return {
-      session,
-
-      sessionDescription:
-        response.sessionDescription,
-    };
+  if (!response?.sessionId) {
+    throw new MediaProviderError(
+      "Cloudflare did not return a session ID",
+      {
+        response,
+      },
+    );
   }
 
+  const timestamp =
+    Date.now();
+
+  const session: MediaSession = {
+    sessionId:
+      response.sessionId,
+
+    roomId:
+      input.roomId,
+
+    userId:
+      input.userId,
+
+    role:
+      input.role,
+
+    generation:
+      input.generation,
+
+    status:
+      "connecting",
+
+    createdAt:
+      timestamp,
+
+    lastHeartbeatAt:
+      timestamp,
+  };
+
+  return {
+    session,
+
+    sessionDescription:
+      response.sessionDescription,
+  };
+}
   /* ==========================================================================
    * PUBLISH TRACKS
    * ======================================================================== */
