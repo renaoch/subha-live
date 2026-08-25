@@ -647,26 +647,71 @@ const connectedSession: MediaSession = {
     let session: MediaSession | null = null;
 
     try {
-const sessionResult =
-  await provider.createSession({
-    roomId,
-    userId,
-    role: "viewer",
-    generation,
-    offerSdp,
-  });
+      const existingViewer =
+        state.viewers?.[userId];
 
-      session =
-        sessionResult.session;
+      const hasConnectingSession =
+        existingViewer &&
+        existingViewer.status === "connecting" &&
+        existingViewer.sessionId;
 
-      await mediaService.saveViewerSession(
-        session,
-      );
+      if (!hasConnectingSession) {
+        /*
+         * FIRST call: create the Cloudflare session only,
+         * exactly like the host flow. Do NOT subscribe to
+         * remote tracks yet — the browser must apply this
+         * answer and reach PeerConnection "connected" before
+         * Cloudflare will accept /tracks/new for this session.
+         */
+        const sessionResult =
+          await provider.createSession({
+            roomId,
+            userId,
+            role: "viewer",
+            generation,
+            offerSdp,
+          });
+
+        session = sessionResult.session;
+
+        await mediaService.saveViewerSession(
+          session,
+        );
+
+        return {
+          session,
+          answerSdp:
+            sessionResult.sessionDescription?.sdp,
+          offerSdp: undefined,
+          tracks: [],
+          requiresRenegotiation: false,
+        };
+      }
+
+      /*
+       * SECOND call: the PeerConnection is already connected.
+       * Reuse the existing Cloudflare session instead of
+       * creating a brand new one — the browser's
+       * RTCPeerConnection is already bound to the first
+       * session's ICE/DTLS state, so issuing a second
+       * /sessions/new here would negotiate against a session
+       * the browser never applied.
+       */
+      session = {
+        sessionId: existingViewer.sessionId,
+        roomId,
+        userId: existingViewer.userId,
+        role: "viewer",
+        generation: existingViewer.generation,
+        status: existingViewer.status,
+        createdAt: existingViewer.joinedAt,
+        lastHeartbeatAt: existingViewer.lastHeartbeatAt,
+      };
 
       const negotiation =
         await provider.subscribeTracks({
           sessionId:
-            session.sessionId,
+            existingViewer.sessionId,
           offerSdp,
           tracks,
         });
