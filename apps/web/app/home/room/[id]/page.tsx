@@ -16,6 +16,7 @@ import {
   Menu,
   Mic,
   MicOff,
+  PhoneOff,
   Play,
   Radio,
   Share2,
@@ -25,6 +26,7 @@ import {
   ThumbsUp,
   Trophy,
   UserRound,
+  Users,
   Video,
   VideoOff,
   X,
@@ -1915,7 +1917,7 @@ if (result.offerSdp) {
   if (loading) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-black text-white">
-        <Loader2 className="h-5 w-5 animate-spin" />
+        <Loader2 className="h-3 w-3 animate-spin" />
       </main>
     );
   }
@@ -1934,7 +1936,7 @@ if (result.offerSdp) {
                 "/home",
               )
             }
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-black"
+            className="mt-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-black"
           >
             Back home
           </button>
@@ -1945,7 +1947,7 @@ if (result.offerSdp) {
 
   const hostName =
     room.host?.name ||
-    "Subha";
+    "Host";
 
   const isWaiting =
     room.status ===
@@ -1954,12 +1956,11 @@ if (result.offerSdp) {
   const activeSpeakers = mediaState ? Object.values(mediaState.speakers) : [];
   const seatCount = Math.min(room.max_guest_slots || 3, 3);
   const occupiedSeats = Math.min(activeSpeakers.length, seatCount);
-  const viewerCount = room.viewerCount ?? mediaState?.viewerCount ?? 0;
 
   return (
-    <main className="relative min-h-dvh w-full overflow-hidden bg-black text-white">
-      {/* Full-screen room media. The old centered card layout was fighting the reference design. */}
-      <div className="absolute inset-0">
+    <main className="min-h-[100svh] w-full overflow-hidden bg-black text-white">
+      <section className="relative mx-auto h-[100svh] w-full max-w-[430px] overflow-hidden bg-black">
+        {/* Full-screen room media */}
         {isHost && isWaiting ? (
           <video
             ref={localVideoRef}
@@ -1985,411 +1986,311 @@ if (result.offerSdp) {
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
-          <div className="absolute inset-0 bg-[#090909]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(120,70,40,0.45),transparent_34%),radial-gradient(circle_at_25%_55%,rgba(60,40,25,0.42),transparent_45%),#111]" />
         )}
 
-        <div className="absolute inset-0 bg-black/35" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-black/10 to-black/80" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,transparent_0%,rgba(0,0,0,0.12)_45%,rgba(0,0,0,0.52)_100%)]" />
-      </div>
+        {/* Cinematic darkening exactly for the UI treatment */}
+        <div className="pointer-events-none absolute inset-0 bg-black/35" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[34%] bg-gradient-to-b from-black/80 via-black/35 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%] bg-gradient-to-t from-black/95 via-black/50 to-transparent" />
 
-      {/* Waiting / connection states remain functional, but visually stay inside the reference composition. */}
-      {isHost && isWaiting && mediaError && (
-        <div className="absolute left-5 right-5 top-28 z-40 rounded-2xl border border-red-300/20 bg-black/70 p-3 text-xs text-red-100 backdrop-blur-2xl">
-          {mediaError}
-        </div>
-      )}
-
-      {!isHost && isLive && !viewerConnected && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/25 px-8 text-center backdrop-blur-[1px]">
-          <div className="rounded-[28px] border border-white/10 bg-black/35 px-7 py-6 backdrop-blur-2xl">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/[0.07]">
-              <Loader2 className="h-5 w-5 animate-spin text-white/75" />
-            </div>
-            <p className="mt-4 text-sm font-semibold">Joining the live</p>
-            <p className="mt-1 text-[11px] text-white/45">
-              Connecting to {hostName}
-            </p>
+        {mediaError && isHost && isWaiting && (
+          <div className="absolute left-5 right-5 top-5 z-50 rounded-2xl border border-red-300/20 bg-black/70 px-4 py-3 text-xs text-red-100 backdrop-blur-xl">
+            {mediaError}
           </div>
-        </div>
-      )}
+        )}
 
-      {!isLive && !isWaiting && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center px-8 text-center">
-          <div>
-            <Radio className="mx-auto h-7 w-7 text-white/60" />
-            <p className="mt-4 text-lg font-semibold">This live has ended</p>
-            <p className="mt-1 text-xs text-white/40">
-              The room is no longer live.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Top profile row */}
-      <header className="absolute inset-x-0 top-0 z-40 px-5 pt-[max(18px,env(safe-area-inset-top))]">
-        <div className="flex items-center gap-3">
-          <Avatar
-            name={hostName}
-            src={room.host?.avatar ?? undefined}
-            size="sm"
-            online={isLive}
-            className="h-12 w-12 shrink-0 border border-white/15 bg-black/35 ring-1 ring-black/30"
-          />
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <p className="truncate text-[17px] font-semibold leading-none">
-                {hostName}
-              </p>
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white text-black">
-                <span className="text-[9px] font-black">✓</span>
-              </span>
-            </div>
-            <p className="mt-1 text-[13px] text-white/55">12.4K followers</p>
-          </div>
-
-          <button
-            type="button"
-            className="h-12 shrink-0 rounded-full border border-white/20 bg-black/25 px-5 text-[14px] font-medium backdrop-blur-xl transition active:scale-95"
-          >
-            Follow
-          </button>
-
-          <button
-            type="button"
-            className="flex h-12 shrink-0 items-center gap-2 rounded-full border border-white/20 bg-black/25 px-4 text-[13px] font-medium backdrop-blur-xl transition active:scale-95"
-          >
-            <Smartphone className="h-4 w-4" strokeWidth={1.6} />
-            2 devices
-          </button>
-
-          <button
-            type="button"
-            className="flex h-12 shrink-0 items-center gap-2 rounded-full border border-white/20 bg-black/25 px-4 text-[13px] font-medium backdrop-blur-xl transition active:scale-95"
-          >
-            <UserRound className="h-4 w-4" strokeWidth={1.5} />
-            {viewerCount >= 1000
-              ? `${(viewerCount / 1000).toFixed(1)}K`
-              : viewerCount || "1.2K"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleLeave}
-            className="ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white/90 transition hover:bg-white/10 active:scale-90"
-            aria-label="Close room"
-          >
-            <X className="h-7 w-7" strokeWidth={1.5} />
-          </button>
-        </div>
-
-        {/* Secondary navigation pills */}
-        <div className="mt-7 flex items-center gap-3">
-          <button
-            type="button"
-            className="flex h-12 items-center gap-3 rounded-full border border-white/15 bg-black/25 px-5 text-[13px] font-medium backdrop-blur-xl"
-          >
-            <Trophy className="h-[18px] w-[18px]" strokeWidth={1.5} />
-            Top Ranking
-            <ChevronRight className="ml-1 h-4 w-4 text-white/65" />
-          </button>
-
-          <button
-            type="button"
-            className="flex h-12 items-center gap-3 rounded-full border border-white/15 bg-black/25 px-5 text-[13px] font-medium backdrop-blur-xl"
-          >
-            <BarChart3 className="h-[18px] w-[18px]" strokeWidth={1.5} />
-            Daily No. 6
-            <ChevronRight className="ml-1 h-4 w-4 text-white/65" />
-          </button>
-
-          <button
-            type="button"
-            className="ml-auto flex h-12 items-center gap-3 rounded-full border border-white/15 bg-black/25 px-5 text-[13px] font-medium backdrop-blur-xl"
-          >
-            <Compass className="h-[18px] w-[18px]" strokeWidth={1.5} />
-            Explore
-            <ChevronRight className="ml-1 h-4 w-4 text-white/65" />
-          </button>
-        </div>
-      </header>
-
-      {/* Top-right event / reward card */}
-      <section className="absolute right-5 top-[178px] z-30 w-[56%] max-w-[470px] rounded-[27px] border border-white/20 bg-black/45 p-5 backdrop-blur-2xl">
-        <div className="flex gap-4">
-          <div className="h-[84px] w-[84px] shrink-0 overflow-hidden rounded-[18px] border border-white/10 bg-white/10">
-            <div className="h-full w-full bg-[radial-gradient(circle_at_55%_35%,rgba(255,255,255,0.65),transparent_15%),radial-gradient(circle_at_30%_70%,rgba(255,255,255,0.3),transparent_35%),linear-gradient(145deg,#292929,#777,#111)]" />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[15px] font-medium leading-5">Space</p>
-                <p className="text-[15px] font-medium leading-5">Journey</p>
-                <p className="mt-2 text-[25px] font-light leading-none">0 / 3</p>
-              </div>
-
-              <div className="h-[78px] w-px bg-white/20" />
-
-              <div className="min-w-[130px] flex-1">
-                <div className="flex items-center justify-between text-[14px]">
-                  <span className="text-white/90">Total Income</span>
-                  <span>45%</span>
-                </div>
-                <div className="mt-4 h-2 rounded-full bg-white/15">
-                  <div className="h-full w-[72%] rounded-full bg-white" />
-                </div>
-                <div className="mt-5 flex items-center justify-between text-[13px]">
-                  <span>Lucky Stars</span>
-                  <span className="flex items-center gap-1.5">
-                    160
-                    <Star className="h-4 w-4" />
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Live chat / comments */}
-      <section className="absolute bottom-[300px] left-5 z-30 w-[48%] max-w-[390px] space-y-1.5">
-        {[
-          ["Riya", "This stream is awesome!"],
-          ["Aman", "Keep going bro!"],
-          ["Neha", "Hello from Nepal!"],
-        ].map(([name, message], index) => (
-          <div
-            key={`${name}-${index}`}
-            className="flex items-center gap-3 rounded-full border border-white/[0.07] bg-black/30 px-3 py-2.5 backdrop-blur-xl"
-          >
+        {/* Top profile row */}
+        <div className="absolute inset-x-0 top-0 z-30 px-[13px] pt-[53px] sm:pt-[53px]">
+          <div className="flex items-center gap-[5px]">
             <Avatar
-              name={name}
-              size="sm"
-              className="h-11 w-11 shrink-0 border border-white/10"
+              name={hostName}
+              src={room.host?.avatar ?? undefined}
+              size="md"
+              online={isLive}
+              className="h-[38px] w-[38px] shrink-0 border border-white/10"
             />
-            <div className="min-w-0">
-              <p className="text-[14px] font-semibold leading-5">{name}</p>
-              <p className="truncate text-[13px] text-white/85">{message}</p>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <p className="truncate text-[17px] font-semibold leading-none">{hostName}</p>
+                <span className="flex h-[12px] w-[12px] items-center justify-center rounded-full bg-white text-black">
+                  <span className="text-[8px] font-black leading-none">✓</span>
+                </span>
+              </div>
+              <p className="mt-1 text-[13px] leading-none text-white/55">12.4K followers</p>
             </div>
-          </div>
-        ))}
-      </section>
 
-      {/* Policy card */}
-      <section className="absolute bottom-[170px] left-5 z-30 w-[48%] max-w-[390px] rounded-[24px] border border-white/15 bg-black/50 p-5 backdrop-blur-2xl">
-        <div className="flex gap-3">
-          <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0" strokeWidth={1.5} />
-          <div>
-            <p className="text-[15px] font-semibold">Community Guidelines</p>
-            <p className="mt-3 text-[12px] leading-[1.45] text-white/80">
-              Please do not livestream any vulgar, pornographic (including
-              child pornography), child sexual abuse and sexual exploitation,
-              content that violates laws and habits, infringing or illegal
-              content, otherwise your account will be banned by the app.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Room boost */}
-      <button
-        type="button"
-        className="absolute bottom-[82px] left-5 z-30 w-[48%] max-w-[390px] rounded-[22px] border border-white/15 bg-black/50 p-4 text-left backdrop-blur-2xl transition active:scale-[0.99]"
-      >
-        <div className="flex items-start gap-3">
-          <Bell className="mt-0.5 h-6 w-6 shrink-0" strokeWidth={1.5} />
-          <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-semibold">Room Boost</p>
-            <p className="mt-1 text-[12px] leading-5 text-white/70">
-              Notify friends to start livestreaming, increasing room Hot Boost.
-            </p>
-          </div>
-          <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-white/70" />
-        </div>
-      </button>
-
-      {/* Right-side actions */}
-      <div className="absolute bottom-[145px] right-5 z-30 flex flex-col gap-3">
-        <button
-          type="button"
-          className="flex h-14 items-center gap-3 rounded-full border border-white/15 bg-black/45 px-5 backdrop-blur-2xl"
-        >
-          <BarChart3 className="h-5 w-5" strokeWidth={1.5} />
-          <span className="text-[14px]">Game Ranking</span>
-          <ChevronRight className="h-4 w-4 text-white/70" />
-        </button>
-
-        <button
-          type="button"
-          className="flex h-14 items-center gap-3 rounded-full border border-white/15 bg-black/45 px-5 backdrop-blur-2xl"
-        >
-          <Share2 className="h-5 w-5" strokeWidth={1.5} />
-          <span className="text-[14px]">Share</span>
-        </button>
-      </div>
-
-      {/* Bottom interaction dock */}
-      <div className="absolute inset-x-5 bottom-[22px] z-40 flex items-center gap-3 pb-[env(safe-area-inset-bottom)]">
-        <div className="flex h-[58px] min-w-0 flex-1 items-center rounded-full border border-white/15 bg-black/45 px-5 backdrop-blur-2xl">
-          <input
-            type="text"
-            placeholder="Say something..."
-            className="w-full bg-transparent text-[14px] text-white outline-none placeholder:text-white/45"
-          />
-        </div>
-
-        {[
-          { icon: Link2, label: "Link" },
-          { icon: Mail, label: "Messages" },
-          { icon: Menu, label: "More" },
-          { icon: Gift, label: "Gift" },
-        ].map(({ icon: Icon, label }) => (
-          <button
-            key={label}
-            type="button"
-            aria-label={label}
-            className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/45 backdrop-blur-2xl transition active:scale-90"
-          >
-            <Icon className="h-[22px] w-[22px]" strokeWidth={1.45} />
-          </button>
-        ))}
-
-        <button
-          type="button"
-          aria-label="Like"
-          className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_10px_35px_rgba(255,255,255,0.12)] transition active:scale-90"
-        >
-          <ThumbsUp className="h-[23px] w-[23px]" fill="currentColor" strokeWidth={1.4} />
-        </button>
-      </div>
-
-      {/* Host controls are still available without breaking the reference composition. */}
-      {isHost && isWaiting && (
-        <div className="absolute bottom-[92px] left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/55 p-1.5 backdrop-blur-2xl">
-          <button
-            type="button"
-            onClick={() => setCameraEnabled((value) => !value)}
-            className="flex h-10 w-10 items-center justify-center rounded-full"
-            aria-label={cameraEnabled ? "Turn camera off" : "Turn camera on"}
-          >
-            {cameraEnabled ? (
-              <Video className="h-4 w-4" />
-            ) : (
-              <VideoOff className="h-4 w-4 text-red-300" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setMicEnabled((value) => !value)}
-            className="flex h-10 w-10 items-center justify-center rounded-full"
-            aria-label={micEnabled ? "Mute microphone" : "Unmute microphone"}
-          >
-            {micEnabled ? (
-              <Mic className="h-4 w-4" />
-            ) : (
-              <MicOff className="h-4 w-4 text-red-300" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={handleStart}
-            disabled={actionLoading || !localStreamRef.current}
-            className="flex h-10 items-center gap-2 rounded-full bg-white px-4 text-xs font-semibold text-black disabled:opacity-50"
-          >
-            {actionLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4 fill-current" />
-            )}
-            Start Live
-          </button>
-        </div>
-      )}
-
-      {isHost && isLive && (
-        <div className="absolute left-5 top-[145px] z-40 flex items-center gap-2 rounded-full border border-white/10 bg-black/45 px-3 py-2 text-[10px] font-bold backdrop-blur-2xl">
-          <span
-            className={`h-2 w-2 rounded-full ${
-              hostMediaReady
-                ? "animate-pulse bg-red-400"
-                : "animate-pulse bg-amber-300"
-            }`}
-          />
-          {hostMediaReady ? "LIVE" : "CONNECTING"}
-          <button
-            type="button"
-            onClick={handleEnd}
-            disabled={actionLoading}
-            className="ml-2 border-l border-white/15 pl-2 text-white/70 disabled:opacity-40"
-          >
-            End
-          </button>
-        </div>
-      )}
-
-      {/* Audio stage trigger, matching the small circular side control in the reference. */}
-      <button
-        type="button"
-        onClick={() => setSpeakerPanelOpen(true)}
-        className="absolute right-5 top-1/2 z-40 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white/80 backdrop-blur-2xl transition hover:bg-black/60 hover:text-white active:scale-95"
-        aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} occupied`}
-      >
-        <Headphones className="h-5 w-5" strokeWidth={1.6} />
-        {occupiedSeats > 0 && (
-          <span className="absolute -bottom-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[9px] font-bold text-black">
-            {occupiedSeats}
-          </span>
-        )}
-      </button>
-
-      {speakerPublishing && (
-        <div className="absolute right-5 top-[52%] z-40 rounded-full border border-white/10 bg-black/50 px-3 py-2 text-[10px] font-semibold backdrop-blur-2xl">
-          <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-          Speaking
-        </div>
-      )}
-
-      {speakerMediaError && (
-        <div className="absolute bottom-[92px] left-5 right-5 z-50 rounded-2xl border border-red-300/20 bg-red-950/75 p-3 text-xs text-red-100 backdrop-blur-2xl">
-          {speakerMediaError}
-        </div>
-      )}
-
-      {speakerPanelOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
-          onClick={() => setSpeakerPanelOpen(false)}
-        >
-          <div
-            className="relative w-full max-w-sm rounded-[26px] border border-white/[0.08] bg-[#0c0c0f] shadow-2xl animate-in fade-in zoom-in-95 duration-150"
-            onClick={(event) => event.stopPropagation()}
-          >
             <button
               type="button"
-              onClick={() => setSpeakerPanelOpen(false)}
-              className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white/35 transition hover:bg-white/[0.06] hover:text-white"
-              aria-label="Close audio stage"
+              className="flex h-[30px] shrink-0 items-center rounded-full border border-white/20 bg-black/25 px-[14px] text-[15px] font-medium backdrop-blur-xl"
             >
-              <X className="h-4 w-4" />
+              Follow
             </button>
 
-            <AudioSeatPanel
-              isHost={isHost}
-              requests={speakerRequests}
-              speakers={activeSpeakers}
-              seatCount={seatCount}
-              pending={requestPending}
-              requestLoading={actionLoading}
-              onRequest={requestAudioSeat}
-              onApprove={approveRequest}
-              onReject={rejectRequest}
-              hostName={hostName}
-            />
+            <button
+              type="button"
+              className="flex h-[30px] shrink-0 items-center gap-2 rounded-full border border-white/20 bg-black/25 px-[13px] text-[15px] font-medium backdrop-blur-xl"
+            >
+              <Smartphone className="h-[12px] w-[12px]" strokeWidth={1.7} />
+              2 devices
+            </button>
+
+            <button
+              type="button"
+              className="flex h-[30px] shrink-0 items-center gap-2 rounded-full border border-white/20 bg-black/25 px-[13px] text-[15px] font-medium backdrop-blur-xl"
+            >
+              <UserRound className="h-[13px] w-[13px]" strokeWidth={1.7} />
+              {room.viewerCount ?? mediaState?.viewerCount ?? 1200}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLeave}
+              aria-label="Close room"
+              className="ml-1 flex h-[30px] w-[22px] shrink-0 items-center justify-end"
+            >
+              <X className="h-[19px] w-[19px]" strokeWidth={1.5} />
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Top navigation pills */}
+        <div className="absolute inset-x-0 top-[102px] z-30 flex items-center justify-between px-[13px]">
+          <button type="button" className="flex h-[28px] w-[94px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
+            <Trophy className="h-[13px] w-[13px]" strokeWidth={1.7} />
+            <span className="text-center text-[14px] leading-[1.15] font-medium">Top Ranking</span>
+            <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
+          </button>
+
+          <button type="button" className="flex h-[28px] w-[88px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
+            <BarChart3 className="h-[13px] w-[13px]" strokeWidth={1.7} />
+            <span className="text-center text-[14px] leading-[1.15] font-medium">Daily No. 6</span>
+            <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
+          </button>
+
+          <button type="button" className="flex h-[28px] w-[75px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
+            <Compass className="h-[13px] w-[13px]" strokeWidth={1.7} />
+            <span className="text-[14px] font-medium">Explore</span>
+            <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
+          </button>
+        </div>
+
+        {/* Reward card */}
+        <div className="absolute right-[12px] top-[148px] z-30 w-[214px] max-w-[calc(100%-48px)] rounded-[14px] border border-white/20 bg-[#0c0b0d]/85 p-[10px] backdrop-blur-2xl">
+          <div className="flex items-center gap-1.5">
+            <div className="h-[44px] w-[44px] shrink-0 overflow-hidden rounded-[10px] bg-gradient-to-br from-white/40 via-white/10 to-black/60 ring-1 ring-white/10">
+              <div className="h-full w-full bg-[radial-gradient(circle_at_58%_40%,rgba(255,255,255,0.75),transparent_14%),radial-gradient(circle_at_35%_65%,rgba(255,255,255,0.35),transparent_20%),linear-gradient(135deg,#5c5c5c,#111)]" />
+            </div>
+            <div className="min-w-[58px]">
+              <p className="text-[15px] leading-tight">Space</p>
+              <p className="text-[15px] leading-tight">Journey</p>
+              <p className="mt-2 text-[25px] font-medium leading-none">0 / 3</p>
+            </div>
+            <div className="h-[42px] w-px bg-white/20" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1.5 text-[13px]">
+                <span>Total Income</span>
+                <span>45%</span>
+              </div>
+              <div className="mt-2.5 h-[9px] rounded-full bg-white/15">
+                <div className="h-full w-[56%] rounded-full bg-white" />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-1.5 text-[12px]">
+                <span>Lucky Stars</span>
+                <span className="flex items-center gap-1">160 <Star className="h-3 w-3" strokeWidth={1.6} /></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Live comments */}
+        <div className="absolute left-[15px] bottom-[194px] z-30 w-[142px] space-y-2">
+          {[
+            { name: "Riya", text: "This stream is awesome!" },
+            { name: "Aman", text: "Keep going bro!" },
+            { name: "Neha", text: "Hello from Nepal!" },
+          ].map((comment, index) => (
+            <div key={comment.name} className="flex items-center gap-1.5 rounded-[15px] border border-white/10 bg-black/35 px-1.5 py-1 backdrop-blur-xl">
+              <div className="h-[21px] w-[21px] shrink-0 overflow-hidden rounded-full bg-white/15 ring-1 ring-white/10">
+                <div className="h-full w-full bg-gradient-to-br from-white/50 to-white/5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold leading-none">{comment.name}</p>
+                <p className="mt-1 text-[11px] leading-none text-white/85">{comment.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Community guidelines */}
+        <div className="absolute left-[15px] bottom-[153px] z-30 w-[181px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[10px] backdrop-blur-2xl">
+          <div className="flex items-start gap-1">
+            <ShieldCheck className="mt-1 h-[13px] w-[13px] shrink-0" strokeWidth={1.6} />
+            <div>
+              <p className="text-[13px] font-semibold leading-tight">Community Guidelines</p>
+              <p className="mt-3 text-[11px] leading-[1.45] text-white/80">
+                Please do not livestream any vulgar, pornographic (including child pornography), child sexual abuse and sexual exploitation, content that violates laws and habits, infringing or illegal content, otherwise your account will be banned by the app.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Room boost */}
+        <div className="absolute left-[15px] bottom-[95px] z-30 w-[181px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[9px] backdrop-blur-2xl">
+          <div className="flex items-start gap-1">
+            <Bell className="mt-1 h-[13px] w-[13px] shrink-0" strokeWidth={1.6} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-[13px] font-semibold">Room Boost</p>
+                <ChevronRight className="h-3 w-3" strokeWidth={1.6} />
+              </div>
+              <p className="mt-2 text-[11px] leading-[1.45] text-white/75">Notify friends to start livestreaming, increasing room Hot Boost.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right-side utility buttons */}
+        <div className="absolute right-[15px] bottom-[153px] z-30 flex w-[111px] flex-col gap-1.5">
+          <button type="button" className="flex h-[28px] items-center justify-between rounded-full border border-white/15 bg-black/45 px-3.5 backdrop-blur-xl">
+            <span className="flex items-center gap-2 text-[11px]"><BarChart3 className="h-[13px] w-[13px]" strokeWidth={1.7} />Game Ranking</span>
+            <ChevronRight className="h-3 w-3" strokeWidth={1.7} />
+          </button>
+          <button type="button" className="flex h-[28px] items-center gap-1 rounded-full border border-white/15 bg-black/45 px-3.5 backdrop-blur-xl text-[11px]">
+            <Share2 className="h-[14px] w-[14px]" strokeWidth={1.7} />
+            Share
+          </button>
+        </div>
+
+        {/* Vertical audio-stage button */}
+        <button
+          type="button"
+          onClick={() => setSpeakerPanelOpen(true)}
+          aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} occupied`}
+          className="absolute right-[13px] top-1/2 z-40 flex h-[29px] w-[29px] -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/45 backdrop-blur-xl"
+        >
+          <Headphones className="h-[13px] w-[13px]" strokeWidth={1.6} />
+          {occupiedSeats > 0 && (
+            <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[9px] font-bold text-black">{occupiedSeats}</span>
+          )}
+        </button>
+
+        {/* Bottom interaction bar */}
+        <div className="absolute inset-x-0 bottom-[10px] z-40 flex items-center gap-[5px] px-[14px]">
+          <div className="flex h-[29px] min-w-0 flex-1 items-center rounded-full border border-white/10 bg-black/45 px-[10px] text-[13px] text-white/45 backdrop-blur-xl">
+            Say something...
+          </div>
+
+          {[
+            { label: "Share link", icon: <Link2 className="h-[13px] w-[13px]" strokeWidth={1.7} /> },
+            { label: "Messages", icon: <Mail className="h-[13px] w-[13px]" strokeWidth={1.7} /> },
+            { label: "Menu", icon: <Menu className="h-[14px] w-[14px]" strokeWidth={1.7} /> },
+            { label: "Gift", icon: <Gift className="h-[13px] w-[13px]" strokeWidth={1.7} /> },
+          ].map((item) => (
+            <button key={item.label} type="button" aria-label={item.label} className="flex h-[29px] w-[29px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/45 backdrop-blur-xl">
+              {item.icon}
+            </button>
+          ))}
+
+          <button type="button" aria-label="Like" className="flex h-[29px] w-[29px] shrink-0 items-center justify-center rounded-full bg-white text-black">
+            <ThumbsUp className="h-[12px] w-[12px]" strokeWidth={1.6} />
+          </button>
+        </div>
+
+        {/* Host preview/live controls stay functional, but are visually integrated into the bottom UI */}
+        {isHost && isWaiting && (
+          <div className="absolute left-1/2 bottom-[43px] z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/10 bg-black/55 p-1 backdrop-blur-2xl">
+            <button
+              type="button"
+              onClick={() => setCameraEnabled((value) => !value)}
+              className="flex h-[24px] w-[24px] items-center justify-center rounded-full"
+              aria-label="Toggle camera"
+            >
+              {cameraEnabled ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3 text-red-300" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMicEnabled((value) => !value)}
+              className="flex h-[24px] w-[24px] items-center justify-center rounded-full"
+              aria-label="Toggle microphone"
+            >
+              {micEnabled ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3 text-red-300" />}
+            </button>
+            <button
+              type="button"
+              onClick={handleStart}
+              disabled={actionLoading || !localStreamRef.current}
+              className="flex h-[28px] items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-black disabled:opacity-50"
+            >
+              {actionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
+              <span>Start Live</span>
+            </button>
+          </div>
+        )}
+
+        {isHost && isLive && (
+          <div className="absolute left-1/2 top-[46px] z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/40 px-2 py-1 text-[8px] font-semibold backdrop-blur-xl">
+            <span className={`mr-2 inline-block h-2 w-2 rounded-full ${hostMediaReady ? "animate-pulse bg-red-400" : "animate-pulse bg-amber-300"}`} />
+            {hostMediaReady ? "LIVE" : "CONNECTING"}
+          </div>
+        )}
+
+        {isLive && !viewerConnected && !isHost && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/15 backdrop-blur-[1px]">
+            <div className="rounded-3xl border border-white/10 bg-black/45 px-6 py-5 text-center backdrop-blur-xl">
+              <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+              <p className="mt-3 text-sm font-semibold">Joining the live...</p>
+            </div>
+          </div>
+        )}
+
+        {speakerPublishing && !isHost && (
+          <div className="absolute left-[15px] bottom-[154px] z-40 rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[8px] font-semibold backdrop-blur-xl">
+            <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+            You are speaking
+          </div>
+        )}
+
+        {speakerMediaError && !isHost && (
+          <div className="absolute left-[15px] right-[30px] bottom-[150px] z-50 rounded-2xl border border-red-300/20 bg-red-950/70 p-3 text-xs text-red-100 backdrop-blur-xl">
+            {speakerMediaError}
+          </div>
+        )}
+
+        {/* Audio stage modal */}
+        {speakerPanelOpen && (
+          <div
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 px-4 pb-5"
+            onClick={() => setSpeakerPanelOpen(false)}
+          >
+            <div
+              className="relative w-full max-w-[390px] overflow-hidden rounded-[26px] border border-white/10 bg-[#0c0c0f] shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setSpeakerPanelOpen(false)}
+                className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-white/40 hover:bg-white/5 hover:text-white"
+                aria-label="Close audio stage"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <AudioSeatPanel
+                isHost={isHost}
+                requests={speakerRequests}
+                speakers={activeSpeakers}
+                seatCount={seatCount}
+                pending={requestPending}
+                requestLoading={actionLoading}
+                onRequest={requestAudioSeat}
+                onApprove={approveRequest}
+                onReject={rejectRequest}
+                hostName={hostName}
+              />
+            </div>
+          </div>
+        )}
+      </section>
     </main>
   );
 }
@@ -2426,14 +2327,14 @@ function AudioSeatPanel({
     <div className="flex max-h-[75dvh] flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pb-3 pt-5">
-        <p className="text-[13px] font-semibold text-white">Audio stage</p>
-        <p className="text-[11px] text-white/35">
+        <p className="text-[8px] font-semibold text-white">Audio stage</p>
+        <p className="text-[8px] text-white/35">
           {speakers.length}/{seatCount}
         </p>
       </div>
 
       {/* Seats — flat row, no glow rings, minimal state changes */}
-      <div className="flex items-center gap-3 px-5 pb-5">
+      <div className="flex items-center gap-1.5 px-5 pb-5">
         {Array.from({ length: seatCount }).map((_, index) => {
           const speaker = speakers[index];
 
@@ -2470,13 +2371,13 @@ function AudioSeatPanel({
       {isHost ? (
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {requests.length === 0 ? (
-            <p className="py-6 text-center text-[11px] text-white/25">No pending requests</p>
+            <p className="py-6 text-center text-[8px] text-white/25">No pending requests</p>
           ) : (
             <div className="space-y-1">
               {requests.map((request) => (
                 <div
                   key={request.id}
-                  className="flex items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-white/[0.03]"
+                  className="flex items-center gap-1.5 rounded-xl px-2 py-2 transition hover:bg-white/[0.03]"
                 >
                   <Avatar
                     name={request.user?.name || "Viewer"}
@@ -2514,7 +2415,7 @@ function AudioSeatPanel({
       ) : (
         <div className="px-5 py-4">
           {pending ? (
-            <div className="flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] text-white/45">
+            <div className="flex items-center justify-center gap-1 rounded-xl py-3 text-[12px] text-white/45">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Waiting for the host
             </div>
@@ -2525,7 +2426,7 @@ function AudioSeatPanel({
               type="button"
               onClick={onRequest}
               disabled={requestLoading}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-white py-3 text-[12px] font-semibold text-black transition hover:bg-white/90 disabled:opacity-40"
+              className="flex w-full items-center justify-center gap-1 rounded-full bg-white py-3 text-[12px] font-semibold text-black transition hover:bg-white/90 disabled:opacity-40"
             >
               <Mic className="h-3.5 w-3.5" />
               Request to speak
