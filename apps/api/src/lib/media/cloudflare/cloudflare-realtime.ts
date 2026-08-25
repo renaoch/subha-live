@@ -165,59 +165,35 @@ export class CloudflareRealtimeProvider
   async createSession(
     input: CreateMediaSessionInput,
   ): Promise<CreateMediaSessionResult> {
-    const body: Record<
-      string,
-      unknown
-    > = {};
-
     /*
-     * Cloudflare requires a valid browser-generated
-     * SDP offer when creating the session.
+     * Cloudflare Realtime's current SFU Connection API separates
+     * session creation from media-track negotiation.
+     *
+     * POST /sessions/new creates the Cloudflare WebRTC session.
+     * It does NOT accept the browser SDP offer.
+     *
+     * The browser SDP offer is sent to:
+     *
+     *   POST /sessions/:sessionId/tracks/new
+     *
+     * together with the tracks to publish/subscribe.
+     *
+     * Cloudflare then returns the SDP answer for that
+     * PeerConnection.
+     *
+     * Do not put sessionDescription in /sessions/new.
+     * Cloudflare currently rejects that payload with:
+     *
+     *   400 decoding_error
+     *   Body JSON validation error: sessionDescription
      */
-    if (input.offerSdp) {
-      /*
-       * IMPORTANT:
-       *
-       * Only use .trim() to check for
-       * emptiness. Do NOT send the trimmed
-       * value to Cloudflare. trim() strips
-       * the trailing \r\n that terminates
-       * the last SDP line, and Cloudflare's SDP
-       * parser requires that terminator.
-       */
-      if (!input.offerSdp.trim()) {
-        throw new MediaProviderError(
-          "offerSdp is required. Generate it from a browser RTCPeerConnection before creating the Cloudflare media session.",
-          {
-            code:
-              "MEDIA_SDP_OFFER_REQUIRED",
-          },
-        );
-      }
-
-      body.sessionDescription = {
-        type: "offer",
-        sdp: input.offerSdp,
-      };
-    } else {
-      throw new MediaProviderError(
-        "offerSdp is required. Generate it from a browser RTCPeerConnection before creating the Cloudflare media session.",
-        {
-          code:
-            "MEDIA_SDP_OFFER_REQUIRED",
-        },
-      );
-    }
+    void input;
 
     const response =
       await this.getHttp().request<CloudflareSessionResponse>(
         "/sessions/new",
         {
           method: "POST",
-
-          body: JSON.stringify(
-            body,
-          ),
         },
       );
 
@@ -264,6 +240,10 @@ export class CloudflareRealtimeProvider
     return {
       session,
 
+      /*
+       * /sessions/new does not negotiate the browser SDP.
+       * The actual SDP answer comes from /tracks/new.
+       */
       sessionDescription:
         response.sessionDescription,
     };
