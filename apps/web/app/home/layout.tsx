@@ -15,7 +15,7 @@ export default function HomeLayout({
   const router = useRouter();
   const [ready, setReady] = useState(false);
 const pathname = usePathname();
-const isFullScreenRoute = pathname?.startsWith("/room/");
+const isFullScreenRoute = pathname?.includes("/room/");
   useEffect(() => {
     const supabase = createClient();
     let active = true;
