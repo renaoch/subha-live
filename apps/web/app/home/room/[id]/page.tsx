@@ -58,6 +58,84 @@ function waitForIceGatheringComplete(
   });
 }
 
+async function waitForPeerConnectionConnected(
+  peer: RTCPeerConnection,
+  timeoutMs = 10000,
+): Promise<void> {
+  if (peer.connectionState === "connected") {
+    return;
+  }
+
+  if (
+    peer.connectionState === "failed" ||
+    peer.connectionState === "closed"
+  ) {
+    throw new Error(
+      `WebRTC connection failed before media negotiation (${peer.connectionState}).`,
+    );
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let timeout: number | undefined;
+
+    const cleanup = () => {
+      peer.removeEventListener(
+        "connectionstatechange",
+        onConnectionStateChange,
+      );
+      if (timeout !== undefined) {
+        window.clearTimeout(timeout);
+      }
+    };
+
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    };
+
+    const onConnectionStateChange = () => {
+      if (peer.connectionState === "connected") {
+        finish();
+        return;
+      }
+
+      if (
+        peer.connectionState === "failed" ||
+        peer.connectionState === "closed"
+      ) {
+        finish(
+          new Error(
+            `WebRTC connection failed (${peer.connectionState}).`,
+          ),
+        );
+      }
+    };
+
+    timeout = window.setTimeout(() => {
+      finish(
+        new Error(
+          "Timed out waiting for the Cloudflare WebRTC connection.",
+        ),
+      );
+    }, timeoutMs);
+
+    peer.addEventListener(
+      "connectionstatechange",
+      onConnectionStateChange,
+    );
+
+    onConnectionStateChange();
+  });
+}
+
 /**
  * The room can become "live" before the host's media session
  * has finished being registered in the backend/Redis state.
@@ -76,7 +154,10 @@ async function waitForHostMediaState(
   while (Date.now() - startedAt < timeoutMs) {
     lastState = await roomsApi.getMediaState(roomId);
 
-    if (lastState.host) {
+    if (
+      lastState.host &&
+      lastState.host.status === "connected"
+    ) {
       return lastState;
     }
 
@@ -349,7 +430,14 @@ export default function RoomStagePage({
       await ensureLocalPreview();
 
     const peer =
-      new RTCPeerConnection();
+      new RTCPeerConnection({
+        iceServers: [
+          {
+            urls: "stun:stun.cloudflare.com:3478",
+          },
+        ],
+        bundlePolicy: "max-bundle",
+      });
 
     hostPeerRef.current =
       peer;
@@ -414,7 +502,15 @@ export default function RoomStagePage({
         transceivers,
       );
 
-    const result =
+    /*
+     * Cloudflare sessions map directly to the browser
+     * RTCPeerConnection. The first /sessions/new call
+     * establishes the PeerConnection and returns its SDP
+     * answer. We must apply that answer and wait for the
+     * connection to become connected before asking Cloudflare
+     * to add the local media tracks.
+     */
+    const initialResult =
       await roomsApi.publishHost(
         currentRoom.id,
         {
@@ -424,18 +520,63 @@ export default function RoomStagePage({
         },
       );
 
-    if (!result.answerSdp) {
+    if (!initialResult.answerSdp) {
       throw new Error(
-        "Cloudflare did not return an SDP answer.",
+        "Cloudflare did not return the initial host SDP answer.",
       );
     }
 
-    await peer.setRemoteDescription(
-      {
-        type: "answer",
-        sdp: result.answerSdp,
-      },
+    await peer.setRemoteDescription({
+      type: "answer",
+      sdp: initialResult.answerSdp,
+    });
+
+    await waitForPeerConnectionConnected(
+      peer,
     );
+
+    const renegotiationOffer =
+      await peer.createOffer();
+
+    await peer.setLocalDescription(
+      renegotiationOffer,
+    );
+
+    await waitForIceGatheringComplete(
+      peer,
+    );
+
+    const renegotiationDescription =
+      peer.localDescription;
+
+    if (
+      !renegotiationDescription?.sdp
+    ) {
+      throw new Error(
+        "Browser did not generate a valid host track negotiation offer.",
+      );
+    }
+
+    const result =
+      await roomsApi.publishHost(
+        currentRoom.id,
+        {
+          offerSdp:
+            renegotiationDescription.sdp,
+          tracks,
+        },
+      );
+
+    if (!result.answerSdp) {
+      throw new Error(
+        "Cloudflare did not return the host track negotiation answer.",
+      );
+    }
+
+    await peer.setRemoteDescription({
+      type: "answer",
+      sdp: result.answerSdp,
+    });
 
     hostSessionRef.current = {
       sessionId:
@@ -508,7 +649,14 @@ export default function RoomStagePage({
     }
 
     const peer =
-      new RTCPeerConnection();
+      new RTCPeerConnection({
+        iceServers: [
+          {
+            urls: "stun:stun.cloudflare.com:3478",
+          },
+        ],
+        bundlePolicy: "max-bundle",
+      });
 
     viewerPeerRef.current =
       peer;
@@ -582,24 +730,95 @@ export default function RoomStagePage({
       );
     }
 
-    const result =
+    const initialResult =
       await roomsApi.createViewerSession(
         currentRoom.id,
         localDescription.sdp,
       );
 
-    if (!result.answerSdp) {
+    if (!initialResult.answerSdp) {
       throw new Error(
-        "Cloudflare did not return a viewer SDP answer.",
+        "Cloudflare did not return the initial viewer SDP answer.",
       );
     }
 
-    await peer.setRemoteDescription(
-      {
+    await peer.setRemoteDescription({
+      type: "answer",
+      sdp: initialResult.answerSdp,
+    });
+
+    await waitForPeerConnectionConnected(
+      peer,
+    );
+
+    const renegotiationOffer =
+      await peer.createOffer();
+
+    await peer.setLocalDescription(
+      renegotiationOffer,
+    );
+
+    await waitForIceGatheringComplete(
+      peer,
+    );
+
+    const renegotiationDescription =
+      peer.localDescription;
+
+    if (
+      !renegotiationDescription?.sdp
+    ) {
+      throw new Error(
+        "Browser did not generate a valid viewer track negotiation offer.",
+      );
+    }
+
+    const result =
+      await roomsApi.createViewerSession(
+        currentRoom.id,
+        renegotiationDescription.sdp,
+      );
+
+    if (result.answerSdp) {
+      await peer.setRemoteDescription({
         type: "answer",
         sdp: result.answerSdp,
-      },
-    );
+      });
+    } else if (result.offerSdp) {
+      await peer.setRemoteDescription({
+        type: "offer",
+        sdp: result.offerSdp,
+      });
+
+      const answer =
+        await peer.createAnswer();
+
+      await peer.setLocalDescription(
+        answer,
+      );
+
+      await waitForIceGatheringComplete(
+        peer,
+      );
+
+      const localAnswer =
+        peer.localDescription;
+
+      if (!localAnswer?.sdp) {
+        throw new Error(
+          "Browser did not generate a valid viewer renegotiation answer.",
+        );
+      }
+
+      await roomsApi.completeRenegotiation(
+        currentRoom.id,
+        localAnswer.sdp,
+      );
+    } else {
+      throw new Error(
+        "Cloudflare did not return a viewer track negotiation SDP.",
+      );
+    }
 
     viewerSessionRef.current = {
       sessionId:
@@ -607,6 +826,12 @@ export default function RoomStagePage({
       generation:
         result.session.generation,
     };
+
+    await waitForPeerConnectionConnected(
+      peer,
+    );
+
+    setViewerConnected(true);
 
     peer.onconnectionstatechange =
       () => {

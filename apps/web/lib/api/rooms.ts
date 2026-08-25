@@ -46,12 +46,19 @@ export interface RoomMediaState {
   status: string;
   generation: number;
   sequence: number;
-  host: {
-    userId: string;
-    sessionId: string;
-    videoTrackName: string;
-    audioTrackName: string;
-  } | null;
+host: {
+  userId: string;
+  sessionId: string;
+  status:
+    | "connecting"
+    | "connected"
+    | "reconnecting"
+    | "closing"
+    | "closed"
+    | "failed";
+  videoTrackName: string;
+  audioTrackName: string;
+} | null;
   speakers: Record<
     string,
     {
@@ -188,6 +195,21 @@ export const roomsApi = {
       `/api/v1/rooms/${id}/media/viewer`,
       {
         method: "DELETE",
+      },
+    );
+  },
+
+  completeRenegotiation(
+    id: string,
+    answerSdp: string,
+  ) {
+    return apiFetch<RoomEnvelope<null>>(
+      `/api/v1/rooms/${id}/media/viewer/renegotiate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          answerSdp,
+        }),
       },
     );
   },
