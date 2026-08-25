@@ -83,7 +83,7 @@ export class CloudflareRealtimeProvider
             this.appSecret,
 
           timeoutMs:
-            60_000,
+            12_000,
 
           maxAttempts:
             mediaConfig.retry
