@@ -3,6 +3,7 @@ import { gradientFor } from "@/lib/mock-data";
 
 interface AvatarProps {
   name: string;
+  src?: string;
   size?: "sm" | "md" | "lg";
   online?: boolean;
   className?: string;
@@ -14,7 +15,13 @@ const SIZES = {
   lg: "h-20 w-20 text-xl",
 };
 
-export function Avatar({ name, size = "md", online, className }: AvatarProps) {
+export function Avatar({
+  name,
+  src,
+  size = "md",
+  online,
+  className,
+}: AvatarProps) {
   const initials = name
     .split(" ")
     .map((p) => p[0])
@@ -26,12 +33,21 @@ export function Avatar({ name, size = "md", online, className }: AvatarProps) {
     <div className={cn("relative shrink-0", className)}>
       <div
         className={cn(
-          "flex items-center justify-center rounded-full bg-gradient-to-br font-semibold text-white",
+          "flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-br font-semibold text-white",
           SIZES[size],
-          gradientFor(name),
+          !src && gradientFor(name),
         )}
       >
-        {initials}
+        {src ? (
+          <img
+            src={src}
+            alt={name}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          initials
+        )}
       </div>
 
       {online && (
