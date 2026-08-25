@@ -61,7 +61,8 @@ const isFullScreenRoute = pathname?.startsWith("/room/");
   }
 
   return (
-    <div className="min-h-dvh bg-surface pb-24">
+    <div className={isFullScreenRoute ? "min-h-dvh bg-surface" : "min-h-dvh bg-surface pb-24"}>
+  
          {children}
     {!isFullScreenRoute && <BottomNav />}
     </div>
