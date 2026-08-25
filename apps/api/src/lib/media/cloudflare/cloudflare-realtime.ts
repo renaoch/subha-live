@@ -180,11 +180,10 @@ export class CloudflareRealtimeProvider
        *
        * Only use .trim() to check for
        * emptiness. Do NOT send the trimmed
-       * value to Cloudflare — trim() strips
-       * the trailing \r\n that terminates the
-       * last SDP line, and Cloudflare's SDP
-       * parser requires that terminator. Send
-       * the original, untouched SDP string.
+       * value to Cloudflare. trim() strips
+       * the trailing \r\n that terminates
+       * the last SDP line, and Cloudflare's SDP
+       * parser requires that terminator.
        */
       if (!input.offerSdp.trim()) {
         throw new MediaProviderError(
@@ -352,23 +351,44 @@ export class CloudflareRealtimeProvider
         }),
       ),
     );
-const requestBody = {
-  sessionDescription: {
-    sdp: input.offerSdp,
-    type: "offer",
-  },
-  tracks,
-};
 
-console.log(
-  "[cloudflare-realtime] TRACKS/NEW REQUEST",
-  {
-    sessionId: input.sessionId,
-    sdpLength: input.offerSdp.length,
-    tracks,
-    bodyLength: JSON.stringify(requestBody).length,
-  },
-);
+    /*
+     * Keep the exact request body in one object.
+     *
+     * This lets us log exactly what is being
+     * sent to Cloudflare and guarantees the
+     * logged payload is the same payload used
+     * by the HTTP request.
+     */
+    const requestBody = {
+      sessionDescription: {
+        sdp:
+          input.offerSdp,
+
+        type: "offer",
+      },
+
+      tracks,
+    };
+
+    console.log(
+      "[cloudflare-realtime] TRACKS/NEW REQUEST",
+      {
+        sessionId:
+          input.sessionId,
+
+        sdpLength:
+          input.offerSdp.length,
+
+        tracks,
+
+        bodyLength:
+          JSON.stringify(
+            requestBody,
+          ).length,
+      },
+    );
+
     const response =
       await this.getHttp().request<CloudflareTracksResponse>(
         `/sessions/${encodeURIComponent(
@@ -377,16 +397,9 @@ console.log(
         {
           method: "POST",
 
-          body: JSON.stringify({
-            sessionDescription: {
-              sdp:
-                input.offerSdp,
-
-              type: "offer",
-            },
-
-            tracks,
-          }),
+          body: JSON.stringify(
+            requestBody,
+          ),
         },
       );
 
