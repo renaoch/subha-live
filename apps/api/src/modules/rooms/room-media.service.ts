@@ -158,94 +158,39 @@ export const roomMediaService = {
       await mediaService.getProvider();
 
     /*
-     * Cloudflare Realtime uses one WebRTC PeerConnection
-     * per session. The first request to this endpoint creates
-     * that session and returns Cloudflare's SDP answer to the
-     * browser. The browser applies that answer, waits until
-     * the PeerConnection is connected, creates a second SDP
-     * offer, and calls this endpoint again.
+     * Cloudflare's current Connection API uses two API calls
+     * for a normal media negotiation:
      *
-     * On that second request we reuse the pending host session
-     * instead of creating another Cloudflare session.
+     *   1. POST /sessions/new
+     *      Creates the Cloudflare session. No SDP is sent here.
+     *
+     *   2. POST /sessions/:sessionId/tracks/new
+     *      Sends the browser-generated SDP offer and the local
+     *      tracks. Cloudflare returns the SDP answer.
+     *
+     * The browser then applies that answer to the same
+     * RTCPeerConnection and completes ICE/DTLS.
+     *
+     * Do NOT send sessionDescription to /sessions/new.
+     * Cloudflare rejects that request with HTTP 400.
      */
     let session: MediaSession | null = null;
-    const pendingHost =
-      state.host &&
-      state.host.userId === userId &&
-      state.host.generation === generation &&
-      state.host.status === "connecting"
-        ? state.host
-        : null;
 
-    if (pendingHost) {
-      session = {
-        sessionId:
-          pendingHost.sessionId,
-        roomId,
-        userId,
-        role: "host",
-        generation,
-        status: "connecting",
-        createdAt:
-          pendingHost.connectedAt,
-        lastHeartbeatAt:
-          pendingHost.lastHeartbeatAt,
-      };
-    } else if (state.host?.sessionId) {
-      /*
-       * A completed or stale host session must not be reused.
-       */
-      await provider
-        .closeSession(
-          state.host.sessionId,
-        )
-        .catch(() => {});
-
-      await mediaService
-        .removeHostSession(
-          roomId,
-        )
-        .catch(() => {});
-    }
-
-    if (!session) {
+    try {
       const sessionResult =
         await provider.createSession({
           roomId,
           userId,
           role: "host",
           generation,
-          offerSdp,
         });
 
       session =
         sessionResult.session;
 
-      if (
-        !sessionResult.sessionDescription ||
-        sessionResult.sessionDescription.type !==
-          "answer"
-      ) {
-        await provider
-          .closeSession(
-            session.sessionId,
-          )
-          .catch(() => {});
-
-        throw new AppError(
-          502,
-          "Cloudflare did not return the initial host SDP answer",
-          {
-            code:
-              "MEDIA_INITIAL_SDP_ANSWER_MISSING",
-          },
-        );
-      }
-
       /*
-       * Store the session as connecting, not connected.
-       * Viewers are explicitly prevented from subscribing
-       * until the host completes the second negotiation.
+       * Keep the host in connecting state until the track
+       * negotiation has returned successfully.
        */
       await mediaService.saveHostSession(
         session,
@@ -253,19 +198,6 @@ export const roomMediaService = {
         audioTrack.trackName,
       );
 
-      return {
-        session,
-        answerSdp:
-          sessionResult.sessionDescription.sdp,
-        offerSdp:
-          undefined,
-        tracks: [],
-        requiresRenegotiation:
-          false,
-      };
-    }
-
-    try {
       const negotiation =
         await provider.publishTracks({
           sessionId:
@@ -277,7 +209,9 @@ export const roomMediaService = {
           ],
         });
 
-      if (!negotiation.answerSdp) {
+      if (
+        !negotiation.answerSdp
+      ) {
         throw new AppError(
           502,
           "Cloudflare did not return the host track negotiation answer",
@@ -319,17 +253,24 @@ export const roomMediaService = {
           negotiation.requiresRenegotiation,
       };
     } catch (error) {
-      await provider
-        .closeSession(
-          session.sessionId,
-        )
-        .catch(() => {});
+      /*
+       * If the session was created, close it and clear the
+       * connecting host state. This prevents a failed Cloudflare
+       * session from being reused on the next Start Live attempt.
+       */
+      if (session) {
+        await provider
+          .closeSession(
+            session.sessionId,
+          )
+          .catch(() => {});
 
-      await mediaService
-        .removeHostSession(
-          roomId,
-        )
-        .catch(() => {});
+        await mediaService
+          .removeHostSession(
+            roomId,
+          )
+          .catch(() => {});
+      }
 
       throw error;
     }
@@ -532,14 +473,8 @@ export const roomMediaService = {
     offerSdp: string,
   ) {
     /*
-     * IMPORTANT:
-     *
-     * Fetch the room status immediately before
-     * creating the Cloudflare viewer session.
-     *
-     * If the host ended the room while this viewer
-     * was loading, this prevents a new viewer session
-     * from being created after the live is already over.
+     * Fetch the room status immediately before creating the
+     * Cloudflare viewer session.
      */
     const room =
       await getRoom(roomId);
@@ -576,11 +511,8 @@ export const roomMediaService = {
       );
 
     /*
-     * The room can theoretically end between
-     * getRoom() above and this state read.
-     *
-     * Re-check the durable room status so we never
-     * create a viewer session for an ended room.
+     * Re-check the durable room status so we never create
+     * a viewer session for an ended room.
      */
     const {
       data: latestRoom,
@@ -637,31 +569,23 @@ export const roomMediaService = {
     /*
      * Subscribe to the host's video and audio.
      */
-    const tracks: RemoteMediaTrack[] =
-      [
-        {
-          sessionId:
-            state.host
-              .sessionId,
-          trackName:
-            state.host
-              .videoTrackName,
-        },
-        {
-          sessionId:
-            state.host
-              .sessionId,
-          trackName:
-            state.host
-              .audioTrackName,
-        },
-      ];
+    const tracks: RemoteMediaTrack[] = [
+      {
+        sessionId:
+          state.host.sessionId,
+        trackName:
+          state.host.videoTrackName,
+      },
+      {
+        sessionId:
+          state.host.sessionId,
+        trackName:
+          state.host.audioTrackName,
+      },
+    ];
 
     /*
-     * Add every active speaker's audio.
-     *
-     * If a speaker has video enabled, also subscribe
-     * to that speaker's video.
+     * Add every active speaker's audio and optional video.
      */
     for (
       const speaker of Object.values(
@@ -693,97 +617,39 @@ export const roomMediaService = {
     const provider =
       await mediaService.getProvider();
 
-    const pendingViewer =
-      state.viewers?.[userId];
+    /*
+     * Cloudflare's current Connection API uses:
+     *
+     *   POST /sessions/new
+     *       -> create the session only
+     *
+     *   POST /sessions/:sessionId/tracks/new
+     *       -> send the browser SDP offer and the remote tracks
+     *
+     * For a viewer, tracks/new may return either:
+     *
+     *   - an SDP answer, completing negotiation immediately, or
+     *   - an SDP offer, which must be answered through
+     *     PUT /sessions/:sessionId/renegotiate.
+     */
+    let session: MediaSession | null = null;
 
-    let session: MediaSession | null =
-      pendingViewer &&
-      pendingViewer.generation === generation &&
-      pendingViewer.status === "connecting"
-        ? {
-            sessionId:
-              pendingViewer.sessionId,
-            roomId,
-            userId,
-            role: "viewer",
-            generation,
-            status: "connecting",
-            createdAt:
-              pendingViewer.joinedAt,
-            lastHeartbeatAt:
-              pendingViewer.lastHeartbeatAt,
-          }
-        : null;
-
-    if (
-      !session &&
-      pendingViewer?.sessionId
-    ) {
-      await provider
-        .closeSession(
-          pendingViewer.sessionId,
-        )
-        .catch(() => {});
-
-      await mediaService
-        .removeViewerSession(
-          roomId,
-          userId,
-        )
-        .catch(() => {});
-    }
-
-    if (!session) {
+    try {
       const sessionResult =
         await provider.createSession({
           roomId,
           userId,
           role: "viewer",
           generation,
-          offerSdp,
         });
 
       session =
         sessionResult.session;
 
-      if (
-        !sessionResult.sessionDescription ||
-        sessionResult.sessionDescription.type !==
-          "answer"
-      ) {
-        await provider
-          .closeSession(
-            session.sessionId,
-          )
-          .catch(() => {});
-
-        throw new AppError(
-          502,
-          "Cloudflare did not return the initial viewer SDP answer",
-          {
-            code:
-              "MEDIA_INITIAL_SDP_ANSWER_MISSING",
-          },
-        );
-      }
-
       await mediaService.saveViewerSession(
         session,
       );
 
-      return {
-        session,
-        answerSdp:
-          sessionResult.sessionDescription.sdp,
-        offerSdp:
-          undefined,
-        tracks: [],
-        requiresRenegotiation:
-          false,
-      };
-    }
-
-    try {
       const negotiation =
         await provider.subscribeTracks({
           sessionId:
@@ -792,16 +658,6 @@ export const roomMediaService = {
           tracks,
         });
 
-      /*
-       * Pulling remote tracks can return either:
-       *
-       *   1. an SDP answer, which completes the negotiation, or
-       *   2. an SDP offer requiring the browser to create an
-       *      answer and call /renegotiate.
-       *
-       * Cloudflare commonly returns the second form when remote
-       * tracks are added to an already-connected session.
-       */
       if (
         !negotiation.answerSdp &&
         !negotiation.offerSdp
@@ -817,9 +673,9 @@ export const roomMediaService = {
       }
 
       /*
-       * Do one final durable status check before keeping the
-       * viewer session alive. The viewer may still be in the
-       * connecting state when Cloudflare returned an offer.
+       * Verify the room is still live after the Cloudflare
+       * negotiation. If the room ended during negotiation,
+       * don't leave the viewer session behind.
        */
       const {
         data: finalRoom,
@@ -859,7 +715,9 @@ export const roomMediaService = {
         );
       }
 
-      if (negotiation.answerSdp) {
+      if (
+        negotiation.answerSdp
+      ) {
         const connectedSession: MediaSession = {
           ...session,
           status: "connected",
@@ -885,6 +743,11 @@ export const roomMediaService = {
         };
       }
 
+      /*
+       * Cloudflare returned an offer. The browser must apply it,
+       * create an answer, and send that answer to the existing
+       * session's /renegotiate endpoint.
+       */
       return {
         session,
         answerSdp:
@@ -897,18 +760,20 @@ export const roomMediaService = {
           true,
       };
     } catch (error) {
-      await provider
-        .closeSession(
-          session.sessionId,
-        )
-        .catch(() => {});
+      if (session) {
+        await provider
+          .closeSession(
+            session.sessionId,
+          )
+          .catch(() => {});
 
-      await mediaService
-        .removeViewerSession(
-          roomId,
-          userId,
-        )
-        .catch(() => {});
+        await mediaService
+          .removeViewerSession(
+            roomId,
+            userId,
+          )
+          .catch(() => {});
+      }
 
       throw error;
     }

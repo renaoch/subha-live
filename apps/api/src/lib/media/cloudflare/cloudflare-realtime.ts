@@ -83,7 +83,7 @@ export class CloudflareRealtimeProvider
             this.appSecret,
 
           timeoutMs:
-            12_000,
+            60_000,
 
           maxAttempts:
             mediaConfig.retry
@@ -165,37 +165,90 @@ export class CloudflareRealtimeProvider
   async createSession(
     input: CreateMediaSessionInput,
   ): Promise<CreateMediaSessionResult> {
+    if (
+      !input.offerSdp ||
+      !input.offerSdp.trim()
+    ) {
+      throw new MediaProviderError(
+        "offerSdp is required",
+        {
+          code:
+            "MEDIA_SDP_OFFER_REQUIRED",
+        },
+      );
+    }
+
     /*
-     * Cloudflare Realtime's current SFU Connection API separates
-     * session creation from media-track negotiation.
+     * Cloudflare Realtime creates the PeerConnection/session
+     * and performs the initial SDP negotiation in /sessions/new.
      *
-     * POST /sessions/new creates the Cloudflare WebRTC session.
-     * It does NOT accept the browser SDP offer.
+     * The browser's first SDP offer belongs here.
      *
-     * The browser SDP offer is sent to:
+     * After Cloudflare returns the initial SDP answer, the
+     * browser applies it and the second negotiation is performed
+     * through /sessions/:sessionId/tracks/new.
      *
-     *   POST /sessions/:sessionId/tracks/new
+     * This is the documented Cloudflare Realtime lifecycle:
      *
-     * together with the tracks to publish/subscribe.
+     *   1. POST /sessions/new with sessionDescription offer
+     *   2. receive sessionId + sessionDescription answer
+     *   3. browser setRemoteDescription(answer)
+     *   4. browser creates a fresh offer
+     *   5. POST /sessions/:sessionId/tracks/new
      *
-     * Cloudflare then returns the SDP answer for that
-     * PeerConnection.
-     *
-     * Do not put sessionDescription in /sessions/new.
-     * Cloudflare currently rejects that payload with:
-     *
-     *   400 decoding_error
-     *   Body JSON validation error: sessionDescription
+     * Do not remove sessionDescription from this request.
      */
-    void input;
+    const requestBody = {
+      sessionDescription: {
+        type: "offer" as const,
+        sdp:
+          input.offerSdp,
+      },
+    };
+
+    console.log(
+      "[cloudflare-realtime] SESSIONS/NEW REQUEST",
+      {
+        sdpLength:
+          input.offerSdp.length,
+
+        bodyLength:
+          JSON.stringify(
+            requestBody,
+          ).length,
+      },
+    );
 
     const response =
       await this.getHttp().request<CloudflareSessionResponse>(
         "/sessions/new",
         {
           method: "POST",
+
+          body: JSON.stringify(
+            requestBody,
+          ),
         },
       );
+
+    console.log(
+      "[cloudflare-realtime] SESSIONS/NEW RESPONSE",
+      {
+        sessionId:
+          response?.sessionId,
+
+        sessionDescriptionType:
+          response
+            ?.sessionDescription
+            ?.type,
+
+        sessionDescriptionSdpLength:
+          response
+            ?.sessionDescription
+            ?.sdp
+            ?.length,
+      },
+    );
 
     if (
       !response?.sessionId
@@ -240,10 +293,6 @@ export class CloudflareRealtimeProvider
     return {
       session,
 
-      /*
-       * /sessions/new does not negotiate the browser SDP.
-       * The actual SDP answer comes from /tracks/new.
-       */
       sessionDescription:
         response.sessionDescription,
     };
