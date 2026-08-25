@@ -2053,18 +2053,19 @@ if (result.offerSdp) {
         <button
           type="button"
           onClick={() => setSpeakerPanelOpen(true)}
-          className="absolute right-4 top-1/2 z-20 flex h-16 w-16 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-2xl transition hover:scale-105 hover:bg-black/50 active:scale-95"
+          className="absolute right-4 top-1/2 z-20 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white shadow-[0_8px_30px_rgba(0,0,0,0.28)] backdrop-blur-xl transition duration-200 hover:scale-105 hover:bg-black/40 active:scale-95"
           aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} seats occupied`}
         >
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.12]">
-            <Headphones className="h-5 w-5" strokeWidth={2} />
+          <Headphones className="h-5 w-5" strokeWidth={1.9} />
+          <span
+            className={`absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-black/30 px-1 text-[9px] font-bold ${
+              occupiedSeats > 0
+                ? "bg-white text-black"
+                : "bg-white/10 text-white/50 backdrop-blur-sm"
+            }`}
+          >
+            {occupiedSeats}
           </span>
-
-          {occupiedSeats > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full border border-white/20 bg-white px-1.5 text-[10px] font-extrabold text-black shadow-lg">
-              {occupiedSeats}
-            </span>
-          )}
         </button>
 
         {speakerPanelOpen && (
@@ -2118,7 +2119,13 @@ function AudioSeatPanel({
 }: {
   isHost: boolean;
   requests: SpeakerRequest[];
-  speakers: Array<{ userId: string; sessionId: string; audioTrackName: string; videoTrackName?: string; hasVideo?: boolean }>;
+  speakers: Array<{
+    userId: string;
+    sessionId: string;
+    audioTrackName: string;
+    videoTrackName?: string;
+    hasVideo?: boolean;
+  }>;
   seatCount: number;
   pending: boolean;
   requestLoading: boolean;
@@ -2128,63 +2135,162 @@ function AudioSeatPanel({
   hostName: string;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-white/10 px-5 py-5">
-        <div className="flex items-start justify-between gap-3">
-          <div><div className="flex items-center gap-2"><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/25 to-fuchsia-500/20"><Headphones className="h-4 w-4" /></div><div><p className="text-sm font-bold">Audio stage</p><p className="text-[11px] text-white/40">Three live seats beside the host</p></div></div></div>
-          <div className="rounded-full bg-white/[0.07] px-2.5 py-1 text-[10px] font-bold text-white/65">{speakers.length}/{seatCount}</div>
+    <div className="flex min-h-0 flex-1 flex-col bg-[#0b0b10]/70">
+      <div className="border-b border-white/[0.07] px-5 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15">
+              <Headphones className="h-4 w-4 text-violet-200" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold tracking-tight text-white">Audio stage</p>
+              <p className="text-[11px] text-white/35">{speakers.length} of {seatCount} seats live</p>
+            </div>
+          </div>
+
+          <div className="flex h-8 min-w-8 items-center justify-center rounded-full bg-white/[0.05] px-2 text-[10px] font-semibold text-white/45">
+            {speakers.length}/{seatCount}
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 space-y-2 overflow-auto p-3">
-        {Array.from({ length: seatCount }).map((_, index) => {
-          const speaker = speakers[index];
-          return (
-            <div key={speaker?.userId ?? `empty-${index}`} className="group rounded-[22px] border border-white/10 bg-black/20 p-3">
-              {speaker ? (
-                <div className="flex items-center gap-3">
-                  <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-500/25 to-fuchsia-500/20 ring-1 ring-white/10">
-                    <UserRound className="h-5 w-5 text-white/50" />
-                  </div>
-                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">Guest {index + 1}</p><p className="mt-0.5 truncate text-[10px] text-white/40">{speaker.userId}</p></div>
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-300"><Mic className="h-3.5 w-3.5" /></span>
+      <div className="flex-1 overflow-auto px-4 py-3">
+        <div className="space-y-2">
+          {Array.from({ length: seatCount }).map((_, index) => {
+            const speaker = speakers[index];
+
+            return (
+              <div
+                key={speaker?.userId ?? `empty-${index}`}
+                className={`group flex min-h-[68px] items-center gap-3 rounded-2xl border px-3 transition-all duration-300 ${
+                  speaker
+                    ? "border-white/[0.08] bg-white/[0.035]"
+                    : "border-white/[0.06] bg-white/[0.018]"
+                }`}
+              >
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
+                    speaker
+                      ? "bg-violet-500/15 text-violet-200 ring-1 ring-violet-300/10"
+                      : "border border-dashed border-white/[0.10] text-white/20"
+                  }`}
+                >
+                  {speaker ? <Mic className="h-4 w-4" /> : <Headphones className="h-4 w-4" />}
                 </div>
-              ) : (
-                <div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.025]"><Headphones className="h-5 w-5 text-white/20" /></div><div><p className="text-sm font-semibold text-white/55">Open audio seat</p><p className="text-[10px] text-white/30">Waiting for someone to join</p></div></div>
-              )}
-            </div>
-          );
-        })}
+
+                <div className="min-w-0 flex-1">
+                  {speaker ? (
+                    <>
+                      <p className="truncate text-[13px] font-semibold text-white/90">Guest {index + 1}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-white/30">{speaker.userId}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[13px] font-medium text-white/40">Open seat</p>
+                      <p className="mt-0.5 text-[10px] text-white/20">Available</p>
+                    </>
+                  )}
+                </div>
+
+                {speaker && (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-300">
+                    <Mic className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {isHost ? (
-        <div className="border-t border-white/10 p-3">
-          <div className="mb-2 flex items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/35"><BellRing className="h-3.5 w-3.5" /> Join requests {requests.length > 0 ? `· ${requests.length}` : ""}</div>
+        <div className="border-t border-white/[0.07] px-4 py-3">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <span className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/30">
+              <BellRing className="h-3.5 w-3.5" />
+              Requests
+            </span>
+            {requests.length > 0 && (
+              <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[9px] font-bold text-violet-200">
+                {requests.length}
+              </span>
+            )}
+          </div>
+
           {requests.length === 0 ? (
-            <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-4 text-center text-xs text-white/35">No one is waiting for a seat.</div>
+            <div className="rounded-2xl bg-white/[0.025] px-4 py-3 text-center text-[11px] text-white/25">
+              No pending requests
+            </div>
           ) : (
             <div className="space-y-2">
               {requests.map((request) => (
-                <div key={request.id} className="rounded-[20px] border border-white/10 bg-black/25 p-3">
+                <div
+                  key={request.id}
+                  className="animate-in fade-in slide-in-from-bottom-1 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-3 duration-300"
+                >
                   <div className="flex items-center gap-3">
-                    <Avatar name={request.user?.name || "Viewer"} src={request.user?.avatar ?? undefined} size="sm" />
-                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{request.user?.name || "Viewer"}</p><p className="truncate text-[10px] text-white/40">ID · {request.user?.public_id || request.user_id}</p></div>
+                    <Avatar
+                      name={request.user?.name || "Viewer"}
+                      src={request.user?.avatar ?? undefined}
+                      size="sm"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-semibold text-white/85">{request.user?.name || "Viewer"}</p>
+                      <p className="truncate text-[10px] text-white/25">ID · {request.user?.public_id || request.user_id}</p>
+                    </div>
                   </div>
-                  <p className="mt-2 text-[11px] leading-4 text-white/50">Requested an audio seat. Accepting opens two-way voice with you and the room.</p>
-                  <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={() => onReject(request.id)} className="rounded-xl bg-white/[0.06] py-2.5 text-xs font-bold text-white/65">Decline</button><button onClick={() => onApprove(request.id)} disabled={speakers.length >= seatCount} className="rounded-xl bg-emerald-500 py-2.5 text-xs font-bold text-white disabled:opacity-40">Accept</button></div>
+
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => onReject(request.id)}
+                      className="flex-1 rounded-xl bg-white/[0.05] py-2 text-[11px] font-semibold text-white/55 transition hover:bg-white/[0.08] hover:text-white/75"
+                    >
+                      Decline
+                    </button>
+                    <button
+                      onClick={() => onApprove(request.id)}
+                      disabled={speakers.length >= seatCount}
+                      className="flex-1 rounded-xl bg-violet-500/90 py-2 text-[11px] font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      Accept
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
       ) : (
-        <div className="border-t border-white/10 p-3">
+        <div className="border-t border-white/[0.07] px-4 py-3">
           {pending ? (
-            <div className="rounded-[20px] border border-amber-300/10 bg-amber-300/[0.06] p-4"><div className="flex items-center gap-2 text-sm font-bold"><BellRing className="h-4 w-4 text-amber-300" /> Waiting for the host</div><p className="mt-1 text-[11px] leading-5 text-white/45">Your request is on the host’s stage queue. Stay in the room and you’ll connect automatically after approval.</p></div>
+            <div className="animate-in fade-in rounded-2xl bg-amber-300/[0.05] px-4 py-3 duration-300">
+              <div className="flex items-center gap-2 text-[12px] font-semibold text-amber-200/80">
+                <BellRing className="h-3.5 w-3.5" />
+                Waiting for approval
+              </div>
+              <p className="mt-1 text-[10px] leading-4 text-white/30">
+                You will join automatically when the host accepts.
+              </p>
+            </div>
+          ) : speakers.length >= seatCount ? (
+            <div className="rounded-2xl bg-white/[0.025] px-4 py-3 text-center text-[11px] text-white/25">
+              All seats are currently occupied
+            </div>
           ) : (
-            <button onClick={onRequest} disabled={requestLoading || speakers.length >= seatCount} className="flex w-full items-center justify-between rounded-[20px] bg-gradient-to-r from-violet-600 to-fuchsia-600 px-4 py-4 text-left shadow-xl shadow-violet-950/20 disabled:opacity-45"><div><p className="text-sm font-bold">Request an audio seat</p><p className="mt-0.5 text-[11px] text-white/65">Ask to speak live with {seatCount - speakers.length} seat{seatCount - speakers.length === 1 ? "" : "s"} open</p></div><ChevronRight className="h-4 w-4" /></button>
+            <button
+              onClick={onRequest}
+              disabled={requestLoading}
+              className="group flex w-full items-center justify-between rounded-2xl border border-violet-400/15 bg-violet-500/[0.08] px-4 py-3.5 text-left transition-all duration-200 hover:border-violet-300/25 hover:bg-violet-500/[0.13] active:scale-[0.99] disabled:opacity-40"
+            >
+              <div>
+                <p className="text-[12px] font-semibold text-white/85">Request to speak</p>
+                <p className="mt-0.5 text-[10px] text-white/30">
+                  {seatCount - speakers.length} seat{seatCount - speakers.length === 1 ? "" : "s"} available
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-white/35 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-white/60" />
+            </button>
           )}
-          <div className="mt-2 flex items-center gap-2 px-1 text-[10px] text-white/30"><ShieldCheck className="h-3 w-3" /> Host approval is required before your mic turns on.</div>
         </div>
       )}
     </div>
