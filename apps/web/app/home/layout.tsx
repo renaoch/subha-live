@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { BottomNav } from "@/components/nav/bottom-nav";
@@ -13,7 +14,8 @@ export default function HomeLayout({
 }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
-
+const pathname = usePathname();
+const isFullScreenRoute = pathname?.startsWith("/room/");
   useEffect(() => {
     const supabase = createClient();
     let active = true;
@@ -60,8 +62,8 @@ export default function HomeLayout({
 
   return (
     <div className="min-h-dvh bg-surface pb-24">
-      {children}
-      <BottomNav />
+         {children}
+    {!isFullScreenRoute && <BottomNav />}
     </div>
   );
 }
