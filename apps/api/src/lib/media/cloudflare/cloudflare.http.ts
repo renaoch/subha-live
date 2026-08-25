@@ -13,12 +13,8 @@ interface CloudflareHttpClientConfig {
   maxDelayMs: number;
 }
 
-function sleep(
-  ms: number,
-): Promise<void> {
-  return new Promise((resolve) =>
-    setTimeout(resolve, ms),
-  );
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getRetryDelay(
@@ -26,23 +22,18 @@ function getRetryDelay(
   baseDelayMs: number,
   maxDelayMs: number,
 ): number {
-  const exponential =
-    Math.min(
-      maxDelayMs,
-      baseDelayMs *
-        2 ** (attempt - 1),
-    );
+  const exponential = Math.min(
+    maxDelayMs,
+    baseDelayMs * 2 ** (attempt - 1),
+  );
 
-  const jitter =
-    Math.floor(
-      Math.random() *
-        Math.max(
-          1,
-          Math.floor(
-            exponential * 0.25,
-          ),
-        ),
-    );
+  const jitter = Math.floor(
+    Math.random() *
+      Math.max(
+        1,
+        Math.floor(exponential * 0.25),
+      ),
+  );
 
   return exponential + jitter;
 }
@@ -60,38 +51,59 @@ export class CloudflareRealtimeHttpClient {
 
     for (
       let attempt = 1;
-      attempt <=
-      this.config.maxAttempts;
+      attempt <= this.config.maxAttempts;
       attempt++
     ) {
       try {
         return await this.execute<T>(
           path,
           init,
+          attempt,
         );
       } catch (error) {
         lastError = error;
 
         const retryable =
-          this.isRetryableError(
-            error,
-          );
+          this.isRetryableError(error);
+
+        console.error(
+          "[cloudflare-http] REQUEST ERROR",
+          {
+            path,
+            attempt,
+            maxAttempts:
+              this.config.maxAttempts,
+            retryable,
+            error:
+              error instanceof Error
+                ? error.message
+                : error,
+          },
+        );
 
         if (
           !retryable ||
-          attempt >=
-            this.config.maxAttempts
+          attempt >= this.config.maxAttempts
         ) {
           throw error;
         }
 
-        await sleep(
-          getRetryDelay(
-            attempt,
-            this.config.baseDelayMs,
-            this.config.maxDelayMs,
-          ),
+        const delay = getRetryDelay(
+          attempt,
+          this.config.baseDelayMs,
+          this.config.maxDelayMs,
         );
+
+        console.log(
+          "[cloudflare-http] RETRYING",
+          {
+            path,
+            attempt: attempt + 1,
+            delayMs: delay,
+          },
+        );
+
+        await sleep(delay);
       }
     }
 
@@ -101,16 +113,17 @@ export class CloudflareRealtimeHttpClient {
   private async execute<T>(
     path: string,
     init: RequestInit,
+    attempt: number,
   ): Promise<T> {
     const controller =
       new AbortController();
 
-    const timeout =
-      setTimeout(
-        () =>
-          controller.abort(),
-        this.config.timeoutMs,
-      );
+    const timeout = setTimeout(
+      () => {
+        controller.abort();
+      },
+      this.config.timeoutMs,
+    );
 
     try {
       const url =
@@ -130,13 +143,38 @@ export class CloudflareRealtimeHttpClient {
         `Bearer ${this.config.appSecret}`,
       );
 
-      const response =
-        await fetch(url, {
-          ...init,
-          headers,
-          signal:
-            controller.signal,
-        });
+      console.log(
+        "[cloudflare-http] REQUEST",
+        {
+          url,
+          method: init.method ?? "GET",
+          timeoutMs:
+            this.config.timeoutMs,
+          attempt,
+        },
+      );
+
+      const startedAt = Date.now();
+
+      const response = await fetch(url, {
+        ...init,
+        headers,
+        signal: controller.signal,
+      });
+
+      const elapsedMs =
+        Date.now() - startedAt;
+
+      console.log(
+        "[cloudflare-http] RESPONSE",
+        {
+          url,
+          status: response.status,
+          ok: response.ok,
+          elapsedMs,
+          attempt,
+        },
+      );
 
       const text =
         await response.text();
@@ -152,6 +190,16 @@ export class CloudflareRealtimeHttpClient {
       }
 
       if (!response.ok) {
+        console.error(
+          "[cloudflare-http] HTTP ERROR",
+          {
+            url,
+            status: response.status,
+            body,
+            attempt,
+          },
+        );
+
         throw new CloudflareRealtimeError(
           this.extractErrorMessage(
             body,
@@ -183,11 +231,19 @@ export class CloudflareRealtimeHttpClient {
       }
 
       if (
-        error instanceof
-        DOMException &&
-        error.name ===
-          "AbortError"
+        error instanceof DOMException &&
+        error.name === "AbortError"
       ) {
+        console.error(
+          "[cloudflare-http] TIMEOUT",
+          {
+            path,
+            timeoutMs:
+              this.config.timeoutMs,
+            attempt,
+          },
+        );
+
         throw new CloudflareRealtimeError(
           "Cloudflare Realtime request timed out",
           {
@@ -197,9 +253,17 @@ export class CloudflareRealtimeHttpClient {
         );
       }
 
-      if (
-        error instanceof Error
-      ) {
+      if (error instanceof Error) {
+        console.error(
+          "[cloudflare-http] NETWORK ERROR",
+          {
+            path,
+            message: error.message,
+            name: error.name,
+            attempt,
+          },
+        );
+
         throw new CloudflareRealtimeError(
           `Cloudflare Realtime network error: ${error.message}`,
           {
@@ -208,6 +272,15 @@ export class CloudflareRealtimeHttpClient {
           },
         );
       }
+
+      console.error(
+        "[cloudflare-http] UNKNOWN ERROR",
+        {
+          path,
+          error,
+          attempt,
+        },
+      );
 
       throw new CloudflareRealtimeError(
         "Unknown Cloudflare Realtime error",
