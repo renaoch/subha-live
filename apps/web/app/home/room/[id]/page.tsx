@@ -547,37 +547,52 @@ async function syncHostGuestAudio(state: RoomMediaState) {
     if (speakerIds.length === 0) return;
 
     const peer = hostPeerRef.current;
-    for (const speakerId of speakerIds) {
-      peer.addTransceiver("audio", { direction: "recvonly" });
-      hostSpeakerIdsRef.current.add(speakerId);
-    }
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    await waitForIceGatheringComplete(peer);
+    // Track which ids we attempted this round so we can roll back on
+    // failure instead of leaving them permanently marked as "handled".
+    const attemptedIds: string[] = [];
 
-    const localDescription = peer.localDescription;
-    if (!localDescription?.sdp) throw new Error("Host guest-audio SDP was not created.");
+    try {
+      for (const speakerId of speakerIds) {
+        peer.addTransceiver("audio", { direction: "recvonly" });
+        attemptedIds.push(speakerId);
+      }
 
-    const result = await roomsApi.subscribeHostToGuests(currentRoom.id, { offerSdp: localDescription.sdp });
-
-    if (result.answerSdp) {
-      await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
-      return;
-    }
-
-    if (result.offerSdp) {
-      await peer.setRemoteDescription({ type: "offer", sdp: result.offerSdp });
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
       await waitForIceGatheringComplete(peer);
-      const localAnswer = peer.localDescription;
-      if (!localAnswer?.sdp) throw new Error("Host guest-audio answer was not created.");
-      await roomsApi.subscribeHostToGuests(currentRoom.id, { answerSdp: localAnswer.sdp });
-      return;
+
+      const localDescription = peer.localDescription;
+      if (!localDescription?.sdp) throw new Error("Host guest-audio SDP was not created.");
+
+      const result = await roomsApi.subscribeHostToGuests(currentRoom.id, { offerSdp: localDescription.sdp });
+
+      if (result.answerSdp) {
+        await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
+      } else if (result.offerSdp) {
+        await peer.setRemoteDescription({ type: "offer", sdp: result.offerSdp });
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        await waitForIceGatheringComplete(peer);
+        const localAnswer = peer.localDescription;
+        if (!localAnswer?.sdp) throw new Error("Host guest-audio answer was not created.");
+        await roomsApi.subscribeHostToGuests(currentRoom.id, { answerSdp: localAnswer.sdp });
+      } else {
+        throw new Error("Host guest-audio negotiation returned no SDP.");
+      }
+
+      // Only now that negotiation fully succeeded do we mark these ids done.
+      for (const speakerId of attemptedIds) {
+        hostSpeakerIdsRef.current.add(speakerId);
+      }
+    } catch (error) {
+      // If any step fails, we roll back the attempted ids.
+      for (const speakerId of attemptedIds) {
+        hostSpeakerIdsRef.current.delete(speakerId);
+      }
+      throw error;
     }
 
-    throw new Error("Host guest-audio negotiation returned no SDP.");
   }
 
   async function syncViewerSpeakerAudio(state: RoomMediaState) {
