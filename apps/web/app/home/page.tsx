@@ -2,10 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, X } from "lucide-react";
+import {
+  ArrowRight,
+  Camera,
+  Loader2,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
 import { MOCK_ROOMS, gradientFor } from "@/lib/mock-data";
-import { mediaBadgeLabel } from "@/lib/api/rooms";
+import { mediaBadgeLabel, roomsApi } from "@/lib/api/rooms";
 import type { LiveRoom } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -17,9 +26,11 @@ const TABS: { key: LiveRoom["category"]; label: string }[] = [
 ];
 
 export default function LivePage() {
+  const router = useRouter();
   const [tab, setTab] = useState<LiveRoom["category"]>("nearby");
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const trending = useMemo(() => MOCK_ROOMS.slice(0, 6), []);
 
@@ -34,9 +45,33 @@ export default function LivePage() {
     );
   }, [tab, query]);
 
+  async function createRoom(input: {
+    title: string;
+    description: string;
+    category: string;
+  }) {
+    try {
+      const room = await roomsApi.create({
+        title: input.title,
+        description: input.description || null,
+        category: input.category,
+        livekit_room_name: `subha-${crypto.randomUUID()}`,
+        max_guest_slots: 3,
+        cover: null,
+      });
+
+      toast.success("Room created");
+      setCreateOpen(false);
+      router.push(`/home/room/${room.id}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Couldn't create room",
+      );
+    }
+  }
+
   return (
     <main className="mx-auto max-w-[560px]">
-      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-border/60 bg-surface/80 px-4 pb-3 pt-6 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <AnimatePresence mode="wait" initial={false}>
@@ -90,11 +125,18 @@ export default function LivePage() {
               >
                 <Search className="h-4.5 w-4.5" />
               </button>
+
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-hot px-4 text-sm font-semibold text-white shadow-lg"
+              >
+                <Plus className="h-4 w-4" />
+                Go Live
+              </button>
             </div>
           )}
         </div>
 
-        {/* Live-now rail — the thing that actually matters on a streaming app */}
         {!searchOpen && (
           <div className="mt-4 flex gap-4 overflow-x-auto pb-1">
             {trending.map((room) => (
@@ -122,7 +164,6 @@ export default function LivePage() {
           </div>
         )}
 
-        {/* Sliding-pill tabs */}
         <div className="relative mt-4 flex gap-1 rounded-full bg-surface-raised p-1">
           {TABS.map((t) => (
             <button
@@ -150,7 +191,6 @@ export default function LivePage() {
         </div>
       </header>
 
-      {/* Grid */}
       <div className="px-4 pb-6 pt-4">
         {rooms.length > 0 ? (
           <div className="grid grid-cols-2 gap-3">
@@ -162,7 +202,152 @@ export default function LivePage() {
           <EmptyState query={query} />
         )}
       </div>
+
+      {createOpen && (
+        <CreateRoomModal
+          onClose={() => setCreateOpen(false)}
+          onCreate={createRoom}
+        />
+      )}
     </main>
+  );
+}
+
+function CreateRoomModal({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (input: {
+    title: string;
+    description: string;
+    category: string;
+  }) => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("explore");
+  const [creating, setCreating] = useState(false);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const cleanTitle = title.trim();
+
+    if (!cleanTitle) {
+      toast.error("Give your room a title");
+      return;
+    }
+
+    try {
+      setCreating(true);
+      await onCreate({
+        title: cleanTitle,
+        description: description.trim(),
+        category,
+      });
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center">
+      <div className="w-full max-w-[520px] overflow-hidden rounded-[28px] border border-border bg-surface shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
+          <div>
+            <p className="text-lg font-bold text-ink">Create a live room</p>
+            <p className="text-xs text-ink-muted">
+              Your camera preview comes on the room screen.
+            </p>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-raised text-ink-muted"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="space-y-4 p-5">
+          <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface-raised p-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-hot text-white">
+              <Camera className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-ink">Video live</p>
+              <p className="text-xs text-ink-muted">
+                Camera and microphone are previewed before you start.
+              </p>
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold text-ink-muted">
+              Room title
+            </span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={80}
+              placeholder="What's happening?"
+              className="w-full rounded-2xl border border-border bg-surface-raised px-4 py-3 text-sm text-ink outline-none transition focus:border-accent"
+              autoFocus
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold text-ink-muted">
+              Description
+            </span>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              maxLength={240}
+              rows={3}
+              placeholder="Tell people what this live is about"
+              className="w-full resize-none rounded-2xl border border-border bg-surface-raised px-4 py-3 text-sm text-ink outline-none transition focus:border-accent"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-semibold text-ink-muted">
+              Category
+            </span>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded-2xl border border-border bg-surface-raised px-4 py-3 text-sm text-ink outline-none"
+            >
+              <option value="explore">Explore</option>
+              <option value="nearby">Nearby</option>
+              <option value="popular">Popular</option>
+              <option value="featured">Featured</option>
+            </select>
+          </label>
+
+          <button
+            type="submit"
+            disabled={creating}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-accent to-accent-hot text-sm font-bold text-white disabled:opacity-60"
+          >
+            {creating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Creating room…
+              </>
+            ) : (
+              <>
+                Create room
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -183,7 +368,6 @@ function RoomCard({ room, index }: { room: LiveRoom; index: number }) {
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/25" />
 
-      {/* Live pulse — signature element */}
       <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded-full bg-black/45 py-1 pl-1.5 pr-2 text-[10px] font-semibold text-white backdrop-blur-md">
         <span className="relative flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[hsl(350_85%_65%)] opacity-75" />
@@ -205,7 +389,6 @@ function RoomCard({ room, index }: { room: LiveRoom; index: number }) {
         {mediaBadgeLabel(room.mediaType)}
       </span>
 
-      {/* Glass info bar */}
       <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 border-t border-white/10 bg-black/30 px-2.5 py-2 backdrop-blur-md">
         <Avatar name={room.hostName} size="sm" className="ring-1 ring-white/30" />
         <div className="min-w-0">
@@ -231,7 +414,7 @@ function EmptyState({ query }: { query: string }) {
       <p className="max-w-[220px] text-xs text-ink-muted">
         {query
           ? "Try a different name or check another tab."
-          : "Check back soon, or explore another category above."}
+          : "Create a room with Go Live to test the real room flow."}
       </p>
     </div>
   );

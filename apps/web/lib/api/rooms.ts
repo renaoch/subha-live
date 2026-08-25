@@ -1,7 +1,6 @@
 import { apiFetch } from "@/lib/api/client";
 import type { RoomMediaType } from "@/lib/types";
 
-// Matches apps/api/src/modules/rooms — response envelope is { success, data }.
 interface RoomEnvelope<T> {
   success: boolean;
   data: T;
@@ -11,20 +10,23 @@ export interface RoomRecord {
   id: string;
   title: string;
   host_id: string;
-  status: "scheduled" | "live" | "ended";
+  status: "created" | "live" | "ending" | "ended";
   category: string | null;
   cover: string | null;
   description: string | null;
   livekit_room_name: string;
   max_guest_slots: number;
+  started_at?: string | null;
+  ended_at?: string | null;
+  created_at?: string;
 }
 
 export interface CreateRoomInput {
   title: string;
   livekit_room_name: string;
   category?: string;
-  cover?: string;
-  description?: string;
+  cover?: string | null;
+  description?: string | null;
   max_guest_slots?: number;
 }
 
