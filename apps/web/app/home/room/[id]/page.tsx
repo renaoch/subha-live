@@ -2053,38 +2053,33 @@ if (result.offerSdp) {
         <button
           type="button"
           onClick={() => setSpeakerPanelOpen(true)}
-          className="absolute right-4 top-1/2 z-20 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white shadow-[0_8px_30px_rgba(0,0,0,0.28)] backdrop-blur-xl transition duration-200 hover:scale-105 hover:bg-black/40 active:scale-95"
-          aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} seats occupied`}
+          className="absolute right-4 top-1/2 z-20 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-xl transition duration-200 hover:scale-105 hover:bg-black/40 active:scale-95"
+          aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} occupied`}
         >
-          <Headphones className="h-5 w-5" strokeWidth={1.9} />
-          <span
-            className={`absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-black/30 px-1 text-[9px] font-bold ${
-              occupiedSeats > 0
-                ? "bg-white text-black"
-                : "bg-white/10 text-white/50 backdrop-blur-sm"
-            }`}
-          >
+          <Headphones className="h-5 w-5" strokeWidth={1.8} />
+          <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border border-black/50 bg-white px-1 text-[9px] font-bold text-black">
             {occupiedSeats}
           </span>
         </button>
 
         {speakerPanelOpen && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[6px]"
             onClick={() => setSpeakerPanelOpen(false)}
           >
             <div
-              className="relative max-h-[86dvh] w-full max-w-md overflow-hidden rounded-[30px] border border-white/15 bg-[#101017]/75 shadow-[0_30px_120px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+              className="relative w-full max-w-sm overflow-hidden rounded-[28px] border border-white/10 bg-[#0d0d12]/90 shadow-[0_30px_100px_rgba(0,0,0,0.6)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200"
               onClick={(event) => event.stopPropagation()}
             >
               <button
                 type="button"
                 onClick={() => setSpeakerPanelOpen(false)}
-                className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] text-white/70 transition hover:bg-white/[0.12] hover:text-white"
+                className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.05] text-white/40 transition hover:bg-white/[0.09] hover:text-white"
                 aria-label="Close audio stage"
               >
                 <X className="h-4 w-4" />
               </button>
+
               <AudioSeatPanel
                 isHost={isHost}
                 requests={speakerRequests}
@@ -2135,68 +2130,59 @@ function AudioSeatPanel({
   hostName: string;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#0b0b10]/70">
-      <div className="border-b border-white/[0.07] px-5 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15">
-              <Headphones className="h-4 w-4 text-violet-200" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold tracking-tight text-white">Audio stage</p>
-              <p className="text-[11px] text-white/35">{speakers.length} of {seatCount} seats live</p>
-            </div>
+    <div className="flex max-h-[78dvh] flex-col">
+      <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-200">
+            <Headphones className="h-4 w-4" />
           </div>
-
-          <div className="flex h-8 min-w-8 items-center justify-center rounded-full bg-white/[0.05] px-2 text-[10px] font-semibold text-white/45">
-            {speakers.length}/{seatCount}
+          <div>
+            <p className="text-sm font-semibold text-white">Audio stage</p>
+            <p className="text-[10px] text-white/30">{speakers.length}/{seatCount} live</p>
           </div>
+        </div>
+        <div className="h-1.5 w-14 overflow-hidden rounded-full bg-white/[0.06]">
+          <div
+            className="h-full rounded-full bg-violet-400 transition-all duration-500"
+            style={{ width: `${Math.min((speakers.length / seatCount) * 100, 100)}%` }}
+          />
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-3">
-        <div className="space-y-2">
+      <div className="px-5 pt-4">
+        <div className="flex items-center justify-center gap-4">
           {Array.from({ length: seatCount }).map((_, index) => {
             const speaker = speakers[index];
 
             return (
               <div
                 key={speaker?.userId ?? `empty-${index}`}
-                className={`group flex min-h-[68px] items-center gap-3 rounded-2xl border px-3 transition-all duration-300 ${
-                  speaker
-                    ? "border-white/[0.08] bg-white/[0.035]"
-                    : "border-white/[0.06] bg-white/[0.018]"
-                }`}
+                className="flex flex-col items-center gap-2 animate-in fade-in zoom-in-95 duration-300"
+                style={{ animationDelay: `${index * 60}ms` }}
               >
                 <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
+                  className={`relative flex h-14 w-14 items-center justify-center rounded-full transition-all duration-300 ${
                     speaker
-                      ? "bg-violet-500/15 text-violet-200 ring-1 ring-violet-300/10"
-                      : "border border-dashed border-white/[0.10] text-white/20"
+                      ? "bg-gradient-to-br from-violet-500/25 to-fuchsia-500/15 ring-1 ring-violet-300/20"
+                      : "border border-dashed border-white/[0.10] bg-white/[0.02]"
                   }`}
                 >
-                  {speaker ? <Mic className="h-4 w-4" /> : <Headphones className="h-4 w-4" />}
-                </div>
-
-                <div className="min-w-0 flex-1">
                   {speaker ? (
                     <>
-                      <p className="truncate text-[13px] font-semibold text-white/90">Guest {index + 1}</p>
-                      <p className="mt-0.5 truncate text-[10px] text-white/30">{speaker.userId}</p>
+                      <div className="absolute inset-1 rounded-full border border-emerald-300/20" />
+                      <UserRound className="h-5 w-5 text-white/65" />
+                      <span className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#0d0d12] bg-emerald-400 text-[#062513]">
+                        <Mic className="h-2.5 w-2.5" />
+                      </span>
                     </>
                   ) : (
-                    <>
-                      <p className="text-[13px] font-medium text-white/40">Open seat</p>
-                      <p className="mt-0.5 text-[10px] text-white/20">Available</p>
-                    </>
+                    <Headphones className="h-5 w-5 text-white/20" />
                   )}
                 </div>
 
-                {speaker && (
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-300">
-                    <Mic className="h-3.5 w-3.5" />
-                  </span>
-                )}
+                <span className="max-w-[72px] truncate text-[10px] font-medium text-white/35">
+                  {speaker ? `Guest ${index + 1}` : "Open"}
+                </span>
               </div>
             );
           })}
@@ -2204,10 +2190,9 @@ function AudioSeatPanel({
       </div>
 
       {isHost ? (
-        <div className="border-t border-white/[0.07] px-4 py-3">
-          <div className="mb-2 flex items-center justify-between px-1">
-            <span className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/30">
-              <BellRing className="h-3.5 w-3.5" />
+        <div className="px-5 pb-5 pt-5">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/25">
               Requests
             </span>
             {requests.length > 0 && (
@@ -2218,77 +2203,88 @@ function AudioSeatPanel({
           </div>
 
           {requests.length === 0 ? (
-            <div className="rounded-2xl bg-white/[0.025] px-4 py-3 text-center text-[11px] text-white/25">
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center text-[11px] text-white/25">
               No pending requests
             </div>
           ) : (
             <div className="space-y-2">
-              {requests.map((request) => (
+              {requests.map((request, index) => (
                 <div
                   key={request.id}
-                  className="animate-in fade-in slide-in-from-bottom-1 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-3 duration-300"
+                  className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 animate-in fade-in slide-in-from-bottom-1 duration-250"
+                  style={{ animationDelay: `${index * 45}ms` }}
                 >
-                  <div className="flex items-center gap-3">
-                    <Avatar
-                      name={request.user?.name || "Viewer"}
-                      src={request.user?.avatar ?? undefined}
-                      size="sm"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12px] font-semibold text-white/85">{request.user?.name || "Viewer"}</p>
-                      <p className="truncate text-[10px] text-white/25">ID · {request.user?.public_id || request.user_id}</p>
-                    </div>
+                  <Avatar
+                    name={request.user?.name || "Viewer"}
+                    src={request.user?.avatar ?? undefined}
+                    size="sm"
+                  />
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12px] font-semibold text-white/80">
+                      {request.user?.name || "Viewer"}
+                    </p>
+                    <p className="truncate text-[9px] text-white/25">
+                      {request.user?.public_id || request.user_id}
+                    </p>
                   </div>
 
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      onClick={() => onReject(request.id)}
-                      className="flex-1 rounded-xl bg-white/[0.05] py-2 text-[11px] font-semibold text-white/55 transition hover:bg-white/[0.08] hover:text-white/75"
-                    >
-                      Decline
-                    </button>
-                    <button
-                      onClick={() => onApprove(request.id)}
-                      disabled={speakers.length >= seatCount}
-                      className="flex-1 rounded-xl bg-violet-500/90 py-2 text-[11px] font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-35"
-                    >
-                      Accept
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onReject(request.id)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.05] text-white/40 transition hover:bg-white/[0.09] hover:text-white"
+                    aria-label="Decline request"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onApprove(request.id)}
+                    disabled={speakers.length >= seatCount}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500 text-white shadow-[0_6px_18px_rgba(139,92,246,0.25)] transition hover:bg-violet-400 disabled:opacity-30"
+                    aria-label="Accept request"
+                  >
+                    <Mic className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               ))}
             </div>
           )}
         </div>
       ) : (
-        <div className="border-t border-white/[0.07] px-4 py-3">
+        <div className="px-5 pb-5 pt-5">
           {pending ? (
-            <div className="animate-in fade-in rounded-2xl bg-amber-300/[0.05] px-4 py-3 duration-300">
-              <div className="flex items-center gap-2 text-[12px] font-semibold text-amber-200/80">
-                <BellRing className="h-3.5 w-3.5" />
-                Waiting for approval
+            <div className="flex items-center justify-between rounded-2xl bg-amber-300/[0.05] px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-amber-300" />
+                <div>
+                  <p className="text-[12px] font-semibold text-white/75">Request sent</p>
+                  <p className="text-[9px] text-white/25">Waiting for the host</p>
+                </div>
               </div>
-              <p className="mt-1 text-[10px] leading-4 text-white/30">
-                You will join automatically when the host accepts.
-              </p>
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-white/25" />
             </div>
           ) : speakers.length >= seatCount ? (
             <div className="rounded-2xl bg-white/[0.025] px-4 py-3 text-center text-[11px] text-white/25">
-              All seats are currently occupied
+              Stage is full
             </div>
           ) : (
             <button
+              type="button"
               onClick={onRequest}
               disabled={requestLoading}
-              className="group flex w-full items-center justify-between rounded-2xl border border-violet-400/15 bg-violet-500/[0.08] px-4 py-3.5 text-left transition-all duration-200 hover:border-violet-300/25 hover:bg-violet-500/[0.13] active:scale-[0.99] disabled:opacity-40"
+              className="group flex w-full items-center justify-between rounded-2xl bg-white/[0.06] px-4 py-3.5 transition-all duration-200 hover:bg-violet-500/[0.12] active:scale-[0.99] disabled:opacity-40"
             >
               <div>
                 <p className="text-[12px] font-semibold text-white/85">Request to speak</p>
-                <p className="mt-0.5 text-[10px] text-white/30">
-                  {seatCount - speakers.length} seat{seatCount - speakers.length === 1 ? "" : "s"} available
+                <p className="mt-0.5 text-[9px] text-white/25">
+                  {seatCount - speakers.length} seat{seatCount - speakers.length === 1 ? "" : "s"} open
                 </p>
               </div>
-              <ChevronRight className="h-4 w-4 text-white/35 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-white/60" />
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-500/15 text-violet-200 transition-transform duration-200 group-hover:translate-x-0.5">
+                <Mic className="h-3.5 w-3.5" />
+              </span>
             </button>
           )}
         </div>
