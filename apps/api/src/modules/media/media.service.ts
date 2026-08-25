@@ -71,6 +71,134 @@ function parseRedisJson<T>(
   return JSON.parse(value) as T;
 }
 
+async function normalizeViewerCollectionKey(
+  roomId: string,
+): Promise<string[]> {
+  const collectionKey =
+    mediaKeys.viewers(roomId);
+
+  const keyType =
+    await redis.type(collectionKey);
+
+  if (keyType === "none") {
+    return [];
+  }
+
+  if (keyType === "set") {
+    return redis.sMembers(
+      collectionKey,
+    );
+  }
+
+  /*
+   * Older/broken deployments used this same key as a HASH of
+   * viewer JSON. Migrate that data once to the correct layout:
+   *   collection key -> SET of user IDs
+   *   viewer:<userId> -> HASH of viewer state
+   */
+  if (keyType === "hash") {
+    const legacyEntries =
+      await redis.hGetAll(
+        collectionKey,
+      );
+
+    const viewerIds: string[] = [];
+
+    await redis.del(
+      collectionKey,
+    );
+
+    for (const [
+      userId,
+      value,
+    ] of Object.entries(
+      legacyEntries,
+    ) as Array<[string, string]>) {
+      let parsed: Record<
+        string,
+        unknown
+      >;
+
+      try {
+        parsed = JSON.parse(value) as Record<
+          string,
+          unknown
+        >;
+      } catch {
+        continue;
+      }
+
+      const actualUserId =
+        typeof parsed.userId === "string" &&
+        parsed.userId
+          ? parsed.userId
+          : userId;
+
+      viewerIds.push(
+        actualUserId,
+      );
+
+      await redis.hSet(
+        mediaKeys.viewer(
+          roomId,
+          actualUserId,
+        ),
+        {
+          userId: actualUserId,
+          sessionId:
+            typeof parsed.sessionId === "string"
+              ? parsed.sessionId
+              : "",
+          generation: String(
+            Number(parsed.generation ?? 0),
+          ),
+          status:
+            typeof parsed.status === "string"
+              ? parsed.status
+              : "connected",
+          joinedAt: String(
+            Number(
+              parsed.joinedAt ??
+                parsed.connectedAt ??
+                0,
+            ),
+          ),
+          lastHeartbeatAt: String(
+            Number(
+              parsed.lastHeartbeatAt ??
+                0,
+            ),
+          ),
+          lastSequence: String(
+            Number(
+              parsed.lastSequence ?? 0,
+            ),
+          ),
+        },
+      );
+    }
+
+    if (viewerIds.length > 0) {
+      await redis.sAdd(
+        collectionKey,
+        viewerIds,
+      );
+    }
+
+    return viewerIds;
+  }
+
+  /*
+   * The key has an unexpected Redis type. Remove it so the next
+   * write can recreate the collection as the correct SET.
+   */
+  await redis.del(
+    collectionKey,
+  );
+
+  return [];
+}
+
 export function createMediaService(
   dependencies: MediaServiceDependencies,
 ) {
@@ -136,29 +264,72 @@ export function createMediaService(
         RoomMediaState["viewers"] =
         {};
 
-      const viewerEntries =
-        await redis.hGetAll(
-          mediaKeys.viewers(
-            roomId,
-          ),
+      /*
+       * Viewer collection and viewer details deliberately use
+       * different Redis keys. The collection key is a SET of IDs;
+       * each per-viewer key is a HASH containing that viewer's state.
+       */
+      const viewerIds =
+        await normalizeViewerCollectionKey(
+          roomId,
         );
 
-      for (const [
-        userId,
-        value,
-      ] of Object.entries(
-        viewerEntries,
-      )) {
-        viewers[userId] =
-          parseRedisJson(value);
+      for (const userId of viewerIds) {
+        const value =
+          await redis.hGetAll(
+            mediaKeys.viewer(
+              roomId,
+              userId,
+            ),
+          );
+
+        if (Object.keys(value).length === 0) {
+          continue;
+        }
+
+        viewers[userId] = {
+          userId:
+            value.userId ??
+            userId,
+
+          sessionId:
+            value.sessionId ??
+            "",
+
+          generation:
+            Number(
+              value.generation ??
+                0,
+            ),
+
+          status:
+            value.status as
+              NonNullable<
+                RoomMediaState["viewers"][string]
+              >["status"],
+
+          joinedAt:
+            Number(
+              value.joinedAt ??
+                0,
+            ),
+
+          lastHeartbeatAt:
+            Number(
+              value.lastHeartbeatAt ??
+                0,
+            ),
+
+          lastSequence:
+            Number(
+              value.lastSequence ??
+                0,
+            ),
+        };
       }
 
       const viewerCount =
-        await redis.sCard(
-          mediaKeys.viewers(
-            roomId,
-          ),
-        );
+        viewerIds.length;
 
       return {
         roomId,
@@ -537,7 +708,6 @@ export function createMediaService(
         ),
       );
     },
-
     async saveViewerSession(
       session: MediaSession,
     ): Promise<void> {
@@ -550,19 +720,25 @@ export function createMediaService(
         );
       }
 
-      await redis.sAdd(
+      const collectionKey =
         mediaKeys.viewers(
           session.roomId,
-        ),
+        );
+
+      const participantKey =
+        mediaKeys.viewer(
+          session.roomId,
+          session.userId,
+        );
+
+      await redis.sAdd(
+        collectionKey,
         session.userId,
       );
 
       await redis.hSet(
-        mediaKeys.viewers(
-          session.roomId,
-        ),
-        session.userId,
-        JSON.stringify({
+        participantKey,
+        {
           userId:
             session.userId,
 
@@ -570,30 +746,42 @@ export function createMediaService(
             session.sessionId,
 
           generation:
-            session.generation,
+            String(
+              session.generation,
+            ),
 
           status:
             session.status,
 
           joinedAt:
-            session.createdAt,
+            String(
+              session.createdAt,
+            ),
 
           lastHeartbeatAt:
-            session.lastHeartbeatAt,
+            String(
+              session.lastHeartbeatAt,
+            ),
 
-          lastSequence: 0,
-        }),
+          lastSequence:
+            "0",
+        },
       );
 
       await redis.expire(
-        mediaKeys.viewers(
-          session.roomId,
-        ),
+        collectionKey,
+        mediaConfig.redis
+          .roomStateTtlSeconds,
+      );
+
+      await redis.expire(
+        participantKey,
         mediaConfig.redis
           .roomStateTtlSeconds,
       );
     },
-async removeHostSession(
+
+    async removeHostSession(
     roomId: string,
   ): Promise<void> {
     const state = await this.getRoomState(roomId);
@@ -624,8 +812,6 @@ async removeHostSession(
       mediaConfig.redis.roomStateTtlSeconds,
     );
   },
-
-
     async clearParticipants(
       roomId: string,
     ): Promise<void> {
@@ -635,6 +821,41 @@ async removeHostSession(
         ),
         "host",
       );
+
+      const speakerIds =
+        await redis.hKeys(
+          mediaKeys.speakers(
+            roomId,
+          ),
+        );
+
+      const viewerIds =
+        await redis.sMembers(
+          mediaKeys.viewers(
+            roomId,
+          ),
+        );
+
+      const participantKeys = [
+        ...speakerIds.map((userId: string) =>
+          mediaKeys.speaker(
+            roomId,
+            userId,
+          ),
+        ),
+        ...viewerIds.map((userId: string) =>
+          mediaKeys.viewer(
+            roomId,
+            userId,
+          ),
+        ),
+      ];
+
+      if (participantKeys.length > 0) {
+        await redis.del(
+          participantKeys,
+        );
+      }
 
       await redis.del([
         mediaKeys.speakers(
@@ -650,18 +871,18 @@ async removeHostSession(
       roomId: string,
       userId: string,
     ): Promise<void> {
-      await redis.hDel(
+      await redis.sRem(
         mediaKeys.viewers(
           roomId,
         ),
         userId,
       );
 
-      await redis.sRem(
-        mediaKeys.viewers(
+      await redis.del(
+        mediaKeys.viewer(
           roomId,
+          userId,
         ),
-        userId,
       );
 
       await redis.del(
@@ -829,141 +1050,6 @@ async removeHostSession(
           );
         }
       }
-
-      if (
-        role === "viewer"
-      ) {
-        const viewer =
-          state.viewers[
-            userId
-          ];
-
-        if (
-          !viewer ||
-          viewer.userId !==
-            userId ||
-          viewer.sessionId !==
-            sessionId ||
-          viewer.generation !==
-            generation
-        ) {
-          throw new MediaStateConflictError(
-            "Viewer heartbeat does not match the active media session",
-          );
-        }
-      }
-
-      /*
-       * Lease key:
-       *
-       * This is what allows stale-session cleanup to
-       * determine that a participant disappeared.
-       */
-      const leaseKey =
-        mediaKeys.lease(
-          roomId,
-          userId,
-        );
-
-      const expiresAt =
-        timestamp +
-        mediaConfig.heartbeat
-          .timeoutMs;
-
-      await redis.hSet(
-        leaseKey,
-        {
-          participantId:
-            userId,
-
-          sessionId,
-
-          role,
-
-          generation:
-            String(generation),
-
-          lastHeartbeatAt:
-            String(timestamp),
-
-          expiresAt:
-            String(expiresAt),
-        },
-      );
-
-      await redis.expire(
-        leaseKey,
-        Math.ceil(
-          mediaConfig.heartbeat
-            .timeoutMs /
-            1000,
-        ),
-      );
-
-      /*
-       * Keep the media participant state in sync
-       * with the lease.
-       */
-      if (
-        role === "host"
-      ) {
-        await redis.hSet(
-          mediaKeys.media(
-            roomId,
-          ),
-          {
-            host:
-              JSON.stringify({
-                ...state.host,
-                lastHeartbeatAt:
-                  timestamp,
-              }),
-
-            updatedAt:
-              String(timestamp),
-          },
-        );
-
-        await redis.expire(
-          mediaKeys.media(
-            roomId,
-          ),
-          mediaConfig.redis
-            .roomStateTtlSeconds,
-        );
-      }
-
-      if (
-        role === "speaker"
-      ) {
-        const speaker =
-          state.speakers[
-            userId
-          ];
-
-        if (speaker) {
-          await redis.hSet(
-            mediaKeys.speakers(
-              roomId,
-            ),
-            userId,
-            JSON.stringify({
-              ...speaker,
-              lastHeartbeatAt:
-                timestamp,
-            }),
-          );
-
-          await redis.expire(
-            mediaKeys.speakers(
-              roomId,
-            ),
-            mediaConfig.redis
-              .roomStateTtlSeconds,
-          );
-        }
-      }
-
       if (
         role === "viewer"
       ) {
@@ -974,15 +1060,50 @@ async removeHostSession(
 
         if (viewer) {
           await redis.hSet(
-            mediaKeys.viewers(
+            mediaKeys.viewer(
               roomId,
+              userId,
             ),
-            userId,
-            JSON.stringify({
-              ...viewer,
+            {
+              userId:
+                viewer.userId,
+
+              sessionId:
+                viewer.sessionId,
+
+              generation:
+                String(
+                  viewer.generation,
+                ),
+
+              status:
+                viewer.status,
+
+              joinedAt:
+                String(
+                  viewer.joinedAt,
+                ),
+
               lastHeartbeatAt:
-                timestamp,
-            }),
+                String(
+                  timestamp,
+                ),
+
+              lastSequence:
+                String(
+                  viewer.lastSequence ??
+                    0,
+                ),
+            },
+          );
+
+          await redis.expire(
+            mediaKeys.viewer(
+              roomId,
+              userId,
+            ),
+            mediaConfig.redis
+              .roomStateTtlSeconds,
           );
 
           await redis.expire(
