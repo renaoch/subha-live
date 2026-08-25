@@ -2,6 +2,24 @@ import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../../errors/app-error";
 import { roomService } from "./room.service";
 
+
+export async function listRooms(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const rooms = await roomService.listRooms();
+
+    res.status(200).json({
+      success: true,
+      data: rooms,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function createRoom(
   req: Request,
   res: Response,

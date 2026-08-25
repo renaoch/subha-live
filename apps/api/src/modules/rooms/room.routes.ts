@@ -1,6 +1,7 @@
 import { Router } from "express";
+import roomMediaRoutes from "./room-media.routes";
 import { authMiddleware } from "../auth/auth.middleware";
-import { createRoom, getRoom, startRoom, endRoom } from "./room.controller";
+import { listRooms, createRoom, getRoom, startRoom, endRoom } from "./room.controller";
 import { joinRoom, leaveRoom } from "./room-participant.controller";
 import {
   createSpeakerRequest,
@@ -14,6 +15,7 @@ import {
 
 const router = Router();
 
+router.get("/", authMiddleware, listRooms);
 router.post("/", authMiddleware, createRoom);
 router.get("/:id", authMiddleware, getRoom);
 router.post("/:id/start", authMiddleware, startRoom);
@@ -45,6 +47,8 @@ router.delete(
   authMiddleware,
   removeSpeaker,
 );
+
+router.use("/", roomMediaRoutes);
 
 // Backward-compatible endpoints.
 router.post("/:id/audio-request", authMiddleware, createSpeakerRequest);

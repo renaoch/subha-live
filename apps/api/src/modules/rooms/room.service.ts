@@ -17,6 +17,95 @@ type CreateRoomInput = Pick<
 >;
 
 export const roomService = {
+
+  async listRooms(): Promise<
+    Array<
+      Room & {
+        host: {
+          id: string;
+          name: string;
+          handle: string;
+          avatar: string | null;
+          country_flag: string | null;
+        } | null;
+        viewerCount: number;
+      }
+    >
+  > {
+    const { data: rooms, error } = await supabase
+      .from("rooms")
+      .select("*")
+      .neq("status", "ended")
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) {
+      throw new AppError(500, "Failed to list rooms", {
+        code: "ROOM_LIST_FAILED",
+        details: error.message,
+      });
+    }
+const roomRows = (rooms ?? []) as Tables<"rooms">[];
+
+const hostIds = [
+  ...new Set(
+    roomRows
+      .map((room: Tables<"rooms">) => room.host_id)
+      .filter((id): id is string => Boolean(id)),
+  ),
+];
+
+    let profiles: Array<{
+      id: string;
+      name: string;
+      handle: string;
+      avatar: string | null;
+      country_flag: string | null;
+    }> = [];
+
+    if (hostIds.length > 0) {
+      const { data, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, name, handle, avatar, country_flag")
+        .in("id", hostIds);
+
+      if (profileError) {
+        throw new AppError(500, "Failed to load room hosts", {
+          code: "ROOM_HOSTS_FETCH_FAILED",
+          details: profileError.message,
+        });
+      }
+
+      profiles = data ?? [];
+    }
+
+    const profileMap = new Map(
+      profiles.map((profile) => [profile.id, profile]),
+    );
+
+const result = await Promise.all(
+  roomRows.map(
+    async (room: Tables<"rooms">) => {
+      const state =
+        await roomMediaService.getState(
+          room.id,
+        );
+
+      return {
+        ...room,
+        host:
+          profileMap.get(
+            room.host_id,
+          ) ?? null,
+        viewerCount:
+          state.viewerCount,
+      };
+    },
+  ),
+);
+    return result;
+  },
+
   async createRoom(input: CreateRoomInput): Promise<Room> {
     const { data, error } = await supabase
       .from("rooms")
