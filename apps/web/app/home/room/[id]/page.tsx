@@ -181,13 +181,6 @@ function waitForPeerConnectionConnected(
   });
 }
 
-/**
- * The room can become "live" before the host's media session
- * has finished being registered in the backend/Redis state.
- *
- * Viewers therefore must not fail immediately when state.host
- * is null. Wait briefly and poll until the host media state exists.
- */
 async function waitForHostMediaState(
   roomId: string,
   timeoutMs = 20000,
@@ -265,10 +258,6 @@ function createViewerTransceivers(
 ) {
   if (!state.host) return;
 
-  /*
-   * Keep the browser's receive M-lines aligned with the
-   * media that the backend is going to subscribe to.
-   */
   peer.addTransceiver(
     "video",
     {
@@ -561,8 +550,6 @@ async function syncHostGuestAudio(state: RoomMediaState) {
 
     const peer = hostPeerRef.current;
 
-    // Track which ids we attempted this round so we can roll back on
-    // failure instead of leaving them permanently marked as "handled".
     const attemptedIds: string[] = [];
 
     try {
@@ -594,12 +581,10 @@ async function syncHostGuestAudio(state: RoomMediaState) {
         throw new Error("Host guest-audio negotiation returned no SDP.");
       }
 
-      // Only now that negotiation fully succeeded do we mark these ids done.
       for (const speakerId of attemptedIds) {
         hostSpeakerIdsRef.current.add(speakerId);
       }
     } catch (error) {
-      // If any step fails, we roll back the attempted ids.
       for (const speakerId of attemptedIds) {
         hostSpeakerIdsRef.current.delete(speakerId);
       }
@@ -807,14 +792,6 @@ if (result.offerSdp) {
         transceivers,
       );
 
-    /*
-     * Cloudflare sessions map directly to the browser
-     * RTCPeerConnection. The first /sessions/new call
-     * establishes the PeerConnection and returns its SDP
-     * answer. We must apply that answer and wait for the
-     * connection to become connected before asking Cloudflare
-     * to add the local media tracks.
-     */
     const initialResult =
       await roomsApi.publishHost(
         currentRoom.id,
@@ -890,13 +867,6 @@ if (result.offerSdp) {
         result.session.generation,
     };
 
-    /*
-     * The backend should have registered the host
-     * media state before publishHost() returns.
-     *
-     * Confirm that state is actually visible before
-     * changing the UI to "Streaming to the room".
-     */
     const mediaState =
       await waitForHostMediaState(
         currentRoom.id,
@@ -934,13 +904,6 @@ if (result.offerSdp) {
   async function connectViewer(
     currentRoom: RoomRecord,
   ) {
-    /*
-     * Do not assume that room.status === "live"
-     * means the host media is already available.
-     *
-     * Wait until the host session is actually marked
-     * connected in backend media state.
-     */
     const state =
       await waitForHostMediaState(
         currentRoom.id,
@@ -1043,13 +1006,6 @@ if (result.offerSdp) {
 
     viewerSpeakerIdsRef.current = new Set(Object.keys(state.speakers));
 
-    /*
-     * Phase 1:
-     * Establish the Cloudflare session.
-     *
-     * The backend sends this offer to /sessions/new
-     * and returns the initial SDP answer.
-     */
     const offer =
       await peer.createOffer();
 
@@ -1092,25 +1048,12 @@ if (result.offerSdp) {
         initialResult.answerSdp,
     });
 
-    /*
-     * Cloudflare requires the PeerConnection for a session
-     * to be connected before operations such as pulling tracks.
-     *
-     * Wait for BOTH the browser connection state and ICE
-     * state, then allow a short stabilization window before
-     * calling tracks/new.
-     */
     await waitForPeerConnectionConnected(
       peer,
       20000,
       500,
     );
 
-    /*
-     * Keep the session ID immediately after the first
-     * successful session creation. The second API call uses
-     * the same Cloudflare session.
-     */
     viewerSessionRef.current = {
       sessionId:
         initialResult.session.sessionId,
@@ -1118,12 +1061,6 @@ if (result.offerSdp) {
         initialResult.session.generation,
     };
 
-    /*
-     * Phase 2:
-     * Now that the Cloudflare PeerConnection is connected,
-     * create a fresh offer and ask the backend to add the
-     * host/speaker remote tracks through /tracks/new.
-     */
     const renegotiationOffer =
       await peer.createOffer();
 
@@ -1152,16 +1089,6 @@ if (result.offerSdp) {
         renegotiationDescription.sdp,
       );
 
-    /*
-     * Cloudflare can return either:
-     *
-     * 1. SDP answer:
-     *    apply it directly.
-     *
-     * 2. SDP offer:
-     *    apply it, create the browser answer, and send
-     *    that answer through /renegotiate.
-     */
     if (
       result.answerSdp
     ) {
@@ -1211,12 +1138,6 @@ if (result.offerSdp) {
       );
     }
 
-    /*
-     * Keep the same Cloudflare session identity from the
-     * backend. The second response should refer to the same
-     * session, but the first response is the authoritative
-     * session created for this browser PeerConnection.
-     */
     viewerSessionRef.current = {
       sessionId:
         initialResult.session.sessionId,
@@ -1311,14 +1232,6 @@ if (result.offerSdp) {
     };
   }, [id]);
 
-  /*
-   * Once the room is live, independently confirm that
-   * the host media session exists in backend state.
-   *
-   * This prevents the host UI from getting stuck showing
-   * "Connecting..." simply because the first state check
-   * happened before Redis/API propagation completed.
-   */
   useEffect(() => {
     if (
       !isHost ||
@@ -1474,9 +1387,6 @@ if (result.offerSdp) {
     void handleJoin();
   }, [room?.id, room?.status, isHost]);
 
-  /*
-   * Host camera/microphone preview.
-   */
   useEffect(() => {
     if (
       !isHost ||
@@ -1532,9 +1442,6 @@ if (result.offerSdp) {
     micEnabled,
   ]);
 
-  /*
-   * Host heartbeat.
-   */
   useEffect(() => {
     if (
       !hostSessionRef.current ||
@@ -1579,9 +1486,6 @@ if (result.offerSdp) {
     hostPublishing,
   ]);
 
-  /*
-   * Viewer heartbeat.
-   */
   useEffect(() => {
     if (
       !viewerSessionRef.current ||
@@ -1742,10 +1646,6 @@ if (result.offerSdp) {
 
       setJoined(true);
 
-      /*
-       * connectViewer() now waits for the host media
-       * state instead of immediately failing.
-       */
       await connectViewer(
         room,
       );
@@ -1960,7 +1860,7 @@ if (result.offerSdp) {
   return (
     <main className="min-h-[100svh] w-full overflow-hidden bg-black text-white">
       <section className="relative mx-auto h-[100svh] w-full max-w-[430px] overflow-hidden bg-black">
-        {/* Full-screen room media */}
+
         {isHost && isWaiting ? (
           <video
             ref={localVideoRef}
@@ -1989,7 +1889,6 @@ if (result.offerSdp) {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(120,70,40,0.45),transparent_34%),radial-gradient(circle_at_25%_55%,rgba(60,40,25,0.42),transparent_45%),#111]" />
         )}
 
-        {/* Cinematic darkening exactly for the UI treatment */}
         <div className="pointer-events-none absolute inset-0 bg-black/35" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[34%] bg-gradient-to-b from-black/80 via-black/35 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%] bg-gradient-to-t from-black/95 via-black/50 to-transparent" />
@@ -2000,7 +1899,6 @@ if (result.offerSdp) {
           </div>
         )}
 
-        {/* Top profile row */}
         <div className="absolute inset-x-0 top-0 z-30 px-[13px] pt-[53px] sm:pt-[53px]">
           <div className="flex items-center gap-[5px]">
             <Avatar
@@ -2055,7 +1953,6 @@ if (result.offerSdp) {
           </div>
         </div>
 
-        {/* Top navigation pills */}
         <div className="absolute inset-x-0 top-[102px] z-30 flex items-center justify-between px-[13px]">
           <button type="button" className="flex h-[28px] w-[94px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
             <Trophy className="h-[13px] w-[13px]" strokeWidth={1.7} />
@@ -2076,7 +1973,6 @@ if (result.offerSdp) {
           </button>
         </div>
 
-        {/* Reward card */}
         <div className="absolute right-[12px] top-[148px] z-30 w-[214px] max-w-[calc(100%-48px)] rounded-[14px] border border-white/20 bg-[#0c0b0d]/85 p-[10px] backdrop-blur-2xl">
           <div className="flex items-center gap-1.5">
             <div className="h-[44px] w-[44px] shrink-0 overflow-hidden rounded-[10px] bg-gradient-to-br from-white/40 via-white/10 to-black/60 ring-1 ring-white/10">
@@ -2104,7 +2000,6 @@ if (result.offerSdp) {
           </div>
         </div>
 
-        {/* Live comments */}
         <div className="absolute left-[15px] bottom-[194px] z-30 w-[142px] space-y-2">
           {[
             { name: "Riya", text: "This stream is awesome!" },
@@ -2123,7 +2018,6 @@ if (result.offerSdp) {
           ))}
         </div>
 
-        {/* Community guidelines */}
         <div className="absolute left-[15px] bottom-[153px] z-30 w-[181px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[10px] backdrop-blur-2xl">
           <div className="flex items-start gap-1">
             <ShieldCheck className="mt-1 h-[13px] w-[13px] shrink-0" strokeWidth={1.6} />
@@ -2136,7 +2030,6 @@ if (result.offerSdp) {
           </div>
         </div>
 
-        {/* Room boost */}
         <div className="absolute left-[15px] bottom-[95px] z-30 w-[181px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[9px] backdrop-blur-2xl">
           <div className="flex items-start gap-1">
             <Bell className="mt-1 h-[13px] w-[13px] shrink-0" strokeWidth={1.6} />
@@ -2150,7 +2043,6 @@ if (result.offerSdp) {
           </div>
         </div>
 
-        {/* Right-side utility buttons */}
         <div className="absolute right-[15px] bottom-[153px] z-30 flex w-[111px] flex-col gap-1.5">
           <button type="button" className="flex h-[28px] items-center justify-between rounded-full border border-white/15 bg-black/45 px-3.5 backdrop-blur-xl">
             <span className="flex items-center gap-2 text-[11px]"><BarChart3 className="h-[13px] w-[13px]" strokeWidth={1.7} />Game Ranking</span>
@@ -2162,7 +2054,6 @@ if (result.offerSdp) {
           </button>
         </div>
 
-        {/* Vertical audio-stage button */}
         <button
           type="button"
           onClick={() => setSpeakerPanelOpen(true)}
@@ -2175,7 +2066,6 @@ if (result.offerSdp) {
           )}
         </button>
 
-        {/* Bottom interaction bar */}
         <div className="absolute inset-x-0 bottom-[10px] z-40 flex items-center gap-[5px] px-[14px]">
           <div className="flex h-[29px] min-w-0 flex-1 items-center rounded-full border border-white/10 bg-black/45 px-[10px] text-[13px] text-white/45 backdrop-blur-xl">
             Say something...
@@ -2197,7 +2087,6 @@ if (result.offerSdp) {
           </button>
         </div>
 
-        {/* Host preview/live controls stay functional, but are visually integrated into the bottom UI */}
         {isHost && isWaiting && (
           <div className="absolute left-1/2 bottom-[43px] z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/10 bg-black/55 p-1 backdrop-blur-2xl">
             <button
@@ -2257,7 +2146,6 @@ if (result.offerSdp) {
           </div>
         )}
 
-        {/* Audio stage modal */}
         {speakerPanelOpen && (
           <div
             className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 px-4 pb-5"
@@ -2325,7 +2213,6 @@ function AudioSeatPanel({
 }) {
   return (
     <div className="flex max-h-[75dvh] flex-col">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 pb-3 pt-5">
         <p className="text-[8px] font-semibold text-white">Audio stage</p>
         <p className="text-[8px] text-white/35">
@@ -2333,7 +2220,6 @@ function AudioSeatPanel({
         </p>
       </div>
 
-      {/* Seats — flat row, no glow rings, minimal state changes */}
       <div className="flex items-center gap-1.5 px-5 pb-5">
         {Array.from({ length: seatCount }).map((_, index) => {
           const speaker = speakers[index];
@@ -2367,7 +2253,6 @@ function AudioSeatPanel({
 
       <div className="h-px bg-white/[0.06]" />
 
-      {/* Host: request list */}
       {isHost ? (
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {requests.length === 0 ? (
