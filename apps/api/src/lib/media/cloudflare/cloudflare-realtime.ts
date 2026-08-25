@@ -352,7 +352,23 @@ export class CloudflareRealtimeProvider
         }),
       ),
     );
+const requestBody = {
+  sessionDescription: {
+    sdp: input.offerSdp,
+    type: "offer",
+  },
+  tracks,
+};
 
+console.log(
+  "[cloudflare-realtime] TRACKS/NEW REQUEST",
+  {
+    sessionId: input.sessionId,
+    sdpLength: input.offerSdp.length,
+    tracks,
+    bodyLength: JSON.stringify(requestBody).length,
+  },
+);
     const response =
       await this.getHttp().request<CloudflareTracksResponse>(
         `/sessions/${encodeURIComponent(
