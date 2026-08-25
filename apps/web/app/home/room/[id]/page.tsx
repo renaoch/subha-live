@@ -41,13 +41,6 @@ import {
 } from "@/lib/api/rooms";
 import { createClient } from "@/lib/supabase/client";
 
-function formatCompactCount(value: number): string {
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(1).replace(/\.0$/, "")}K`;
-  }
-  return String(value);
-}
-
 function waitForIceGatheringComplete(
   peer: RTCPeerConnection,
 ): Promise<void> {
@@ -58,20 +51,28 @@ function waitForIceGatheringComplete(
   return new Promise((resolve) => {
     const onStateChange = () => {
       if (peer.iceGatheringState === "complete") {
-        peer.removeEventListener("icegatheringstatechange", onStateChange);
+        peer.removeEventListener(
+          "icegatheringstatechange",
+          onStateChange,
+        );
         resolve();
       }
     };
 
-    peer.addEventListener("icegatheringstatechange", onStateChange);
+    peer.addEventListener(
+      "icegatheringstatechange",
+      onStateChange,
+    );
 
     window.setTimeout(() => {
-      peer.removeEventListener("icegatheringstatechange", onStateChange);
+      peer.removeEventListener(
+        "icegatheringstatechange",
+        onStateChange,
+      );
       resolve();
     }, 8000);
   });
 }
-
 function waitForPeerConnectionConnected(
   peer: RTCPeerConnection,
   timeoutMs = 20000,
@@ -79,8 +80,10 @@ function waitForPeerConnectionConnected(
 ): Promise<void> {
   const isReady = () =>
     peer.connectionState === "connected" &&
-    (peer.iceConnectionState === "connected" ||
-      peer.iceConnectionState === "completed");
+    (
+      peer.iceConnectionState === "connected" ||
+      peer.iceConnectionState === "completed"
+    );
 
   if (isReady()) {
     return new Promise((resolve) => {
@@ -89,18 +92,32 @@ function waitForPeerConnectionConnected(
   }
 
   return new Promise((resolve, reject) => {
-    let stableTimer: number | null = null;
+    let stableTimer: number | null =
+      null;
 
     const cleanup = () => {
       window.clearTimeout(timeout);
+
       if (stableTimer !== null) {
-        window.clearTimeout(stableTimer);
+        window.clearTimeout(
+          stableTimer,
+        );
       }
-      peer.removeEventListener("connectionstatechange", handleStateChange);
-      peer.removeEventListener("iceconnectionstatechange", handleStateChange);
+
+      peer.removeEventListener(
+        "connectionstatechange",
+        handleStateChange,
+      );
+
+      peer.removeEventListener(
+        "iceconnectionstatechange",
+        handleStateChange,
+      );
     };
 
-    const fail = (message: string) => {
+    const fail = (
+      message: string,
+    ) => {
       cleanup();
       reject(new Error(message));
     };
@@ -111,42 +128,66 @@ function waitForPeerConnectionConnected(
       );
     }, timeoutMs);
 
-    const handleStateChange = () => {
-      if (
-        peer.connectionState === "failed" ||
-        peer.connectionState === "closed" ||
-        peer.iceConnectionState === "failed" ||
-        peer.iceConnectionState === "closed"
-      ) {
-        fail(
-          `Viewer PeerConnection failed. connectionState=${peer.connectionState}, iceConnectionState=${peer.iceConnectionState}`,
-        );
-        return;
-      }
-
-      if (!isReady()) {
-        return;
-      }
-
-      if (stableTimer !== null) {
-        return;
-      }
-
-      stableTimer = window.setTimeout(() => {
-        stableTimer = null;
-        if (isReady()) {
-          cleanup();
-          resolve();
+    const handleStateChange =
+      () => {
+        if (
+          peer.connectionState ===
+            "failed" ||
+          peer.connectionState ===
+            "closed" ||
+          peer.iceConnectionState ===
+            "failed" ||
+          peer.iceConnectionState ===
+            "closed"
+        ) {
+          fail(
+            `Viewer PeerConnection failed. connectionState=${peer.connectionState}, iceConnectionState=${peer.iceConnectionState}`,
+          );
+          return;
         }
-      }, stableMs);
-    };
 
-    peer.addEventListener("connectionstatechange", handleStateChange);
-    peer.addEventListener("iceconnectionstatechange", handleStateChange);
+        if (!isReady()) {
+          return;
+        }
+
+        if (
+          stableTimer !== null
+        ) {
+          return;
+        }
+
+        stableTimer =
+          window.setTimeout(() => {
+            stableTimer = null;
+
+            if (isReady()) {
+              cleanup();
+              resolve();
+            }
+          }, stableMs);
+      };
+
+    peer.addEventListener(
+      "connectionstatechange",
+      handleStateChange,
+    );
+
+    peer.addEventListener(
+      "iceconnectionstatechange",
+      handleStateChange,
+    );
+
     handleStateChange();
   });
 }
 
+/**
+ * The room can become "live" before the host's media session
+ * has finished being registered in the backend/Redis state.
+ *
+ * Viewers therefore must not fail immediately when state.host
+ * is null. Wait briefly and poll until the host media state exists.
+ */
 async function waitForHostMediaState(
   roomId: string,
   timeoutMs = 20000,
@@ -158,7 +199,10 @@ async function waitForHostMediaState(
   while (Date.now() - startedAt < timeoutMs) {
     lastState = await roomsApi.getMediaState(roomId);
 
-    if (lastState.host && lastState.host.status === "connected") {
+    if (
+      lastState.host &&
+      lastState.host.status === "connected"
+    ) {
       return lastState;
     }
 
@@ -174,7 +218,10 @@ async function waitForHostMediaState(
   throw new Error("Host media state could not be loaded.");
 }
 
-function createTrackName(kind: "audio" | "video", userId: string) {
+function createTrackName(
+  kind: "audio" | "video",
+  userId: string,
+) {
   return `room-${kind}-${userId}-${crypto.randomUUID()}`;
 }
 
@@ -185,22 +232,31 @@ function createPublishTracks(
     trackName: string;
   }>,
 ): MediaTrackInput[] {
-  return transceivers.map(({ transceiver, track, trackName }) => {
-    const mid = transceiver.mid;
-
-    if (!mid) {
-      throw new Error(
-        `Browser did not assign an SDP MID for ${track.kind} track.`,
-      );
-    }
-
-    return {
+  return transceivers.map(
+    ({
+      transceiver,
+      track,
       trackName,
-      kind: track.kind === "video" ? "video" : "audio",
-      direction: "publish",
-      mid,
-    };
-  });
+    }) => {
+      const mid = transceiver.mid;
+
+      if (!mid) {
+        throw new Error(
+          `Browser did not assign an SDP MID for ${track.kind} track.`,
+        );
+      }
+
+      return {
+        trackName,
+        kind:
+          track.kind === "video"
+            ? "video"
+            : "audio",
+        direction: "publish",
+        mid,
+      };
+    },
+  );
 }
 
 function createViewerTransceivers(
@@ -209,14 +265,41 @@ function createViewerTransceivers(
 ) {
   if (!state.host) return;
 
-  peer.addTransceiver("video", { direction: "recvonly" });
-  peer.addTransceiver("audio", { direction: "recvonly" });
+  /*
+   * Keep the browser's receive M-lines aligned with the
+   * media that the backend is going to subscribe to.
+   */
+  peer.addTransceiver(
+    "video",
+    {
+      direction: "recvonly",
+    },
+  );
 
-  for (const speaker of Object.values(state.speakers)) {
-    peer.addTransceiver("audio", { direction: "recvonly" });
+  peer.addTransceiver(
+    "audio",
+    {
+      direction: "recvonly",
+    },
+  );
+
+  for (const speaker of Object.values(
+    state.speakers,
+  )) {
+    peer.addTransceiver(
+      "audio",
+      {
+        direction: "recvonly",
+      },
+    );
 
     if (speaker.videoTrackName) {
-      peer.addTransceiver("video", { direction: "recvonly" });
+      peer.addTransceiver(
+        "video",
+        {
+          direction: "recvonly",
+        },
+      );
     }
   }
 }
@@ -229,74 +312,144 @@ export default function RoomStagePage({
   const { id } = use(params);
   const router = useRouter();
 
-  const [room, setRoom] = useState<RoomRecord | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [joined, setJoined] = useState(false);
-  const [hostPublishing, setHostPublishing] = useState(false);
-  const [hostMediaReady, setHostMediaReady] = useState(false);
-  const [viewerConnected, setViewerConnected] = useState(false);
-  const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [micEnabled, setMicEnabled] = useState(true);
-  const [mediaError, setMediaError] = useState("");
-  const [mediaState, setMediaState] = useState<RoomMediaState | null>(null);
-  const [speakerPanelOpen, setSpeakerPanelOpen] = useState(false);
-  const [speakerRequests, setSpeakerRequests] = useState<SpeakerRequest[]>([]);
-  const [requestPending, setRequestPending] = useState(false);
-  const [speakerPublishing, setSpeakerPublishing] = useState(false);
-  const [speakerMediaError, setSpeakerMediaError] = useState("");
+  const [room, setRoom] =
+    useState<RoomRecord | null>(null);
 
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const hostPeerRef = useRef<RTCPeerConnection | null>(null);
-  const viewerPeerRef = useRef<RTCPeerConnection | null>(null);
-  const remoteStreamRef = useRef<MediaStream | null>(null);
-  const hostSessionRef = useRef<{
-    sessionId: string;
-    generation: number;
-  } | null>(null);
-  const viewerSessionRef = useRef<{
-    sessionId: string;
-    generation: number;
-  } | null>(null);
-  const guestPeerRef = useRef<RTCPeerConnection | null>(null);
-  const guestStreamRef = useRef<MediaStream | null>(null);
-  const viewerSpeakerIdsRef = useRef<Set<string>>(new Set());
-  const hostSpeakerIdsRef = useRef<Set<string>>(new Set());
-  const speakerApprovalSeenRef = useRef(false);
+  const [userId, setUserId] =
+    useState<string | null>(null);
 
-  const isHost = Boolean(room && userId && room.host_id === userId);
-  const isLive = room?.status === "live";
+  const [loading, setLoading] =
+    useState(true);
+
+  const [actionLoading, setActionLoading] =
+    useState(false);
+
+  const [joined, setJoined] =
+    useState(false);
+
+  const [hostPublishing, setHostPublishing] =
+    useState(false);
+
+  const [hostMediaReady, setHostMediaReady] =
+    useState(false);
+
+  const [viewerConnected, setViewerConnected] =
+    useState(false);
+
+  const [cameraEnabled, setCameraEnabled] =
+    useState(true);
+
+  const [micEnabled, setMicEnabled] =
+    useState(true);
+
+  const [mediaError, setMediaError] =
+    useState("");
+
+  const [mediaState, setMediaState] =
+    useState<RoomMediaState | null>(null);
+
+  const [speakerPanelOpen, setSpeakerPanelOpen] =
+    useState(false);
+
+  const [speakerRequests, setSpeakerRequests] =
+    useState<SpeakerRequest[]>([]);
+
+  const [requestPending, setRequestPending] =
+    useState(false);
+
+  const [speakerPublishing, setSpeakerPublishing] =
+    useState(false);
+
+  const [speakerMediaError, setSpeakerMediaError] =
+    useState("");
+
+  const localVideoRef =
+    useRef<HTMLVideoElement | null>(null);
+
+  const remoteVideoRef =
+    useRef<HTMLVideoElement | null>(null);
+
+  const localStreamRef =
+    useRef<MediaStream | null>(null);
+
+  const hostPeerRef =
+    useRef<RTCPeerConnection | null>(null);
+
+  const viewerPeerRef =
+    useRef<RTCPeerConnection | null>(null);
+
+  const remoteStreamRef =
+    useRef<MediaStream | null>(null);
+
+  const hostSessionRef =
+    useRef<{
+      sessionId: string;
+      generation: number;
+    } | null>(null);
+
+  const viewerSessionRef =
+    useRef<{
+      sessionId: string;
+      generation: number;
+    } | null>(null);
+
+  const guestPeerRef =
+    useRef<RTCPeerConnection | null>(null);
+
+  const guestStreamRef =
+    useRef<MediaStream | null>(null);
+
+  const viewerSpeakerIdsRef =
+    useRef<Set<string>>(new Set());
+
+  const hostSpeakerIdsRef =
+    useRef<Set<string>>(new Set());
+
+  const speakerApprovalSeenRef =
+    useRef(false);
+
+  const isHost = Boolean(
+    room &&
+      userId &&
+      room.host_id === userId,
+  );
+
+  const isLive =
+    room?.status === "live";
 
   function stopLocalMedia() {
-    localStreamRef.current?.getTracks().forEach((track) => {
-      track.stop();
-    });
+    localStreamRef.current
+      ?.getTracks()
+      .forEach((track) => {
+        track.stop();
+      });
 
     localStreamRef.current = null;
 
     if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
+      localVideoRef.current.srcObject =
+        null;
     }
   }
 
   function closeHostPeer() {
     hostPeerRef.current?.close();
+
     hostPeerRef.current = null;
     hostSessionRef.current = null;
   }
 
   function closeViewerPeer() {
     viewerPeerRef.current?.close();
+
     viewerPeerRef.current = null;
     viewerSessionRef.current = null;
     remoteStreamRef.current = null;
     viewerSpeakerIdsRef.current.clear();
 
     if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
+      remoteVideoRef.current.srcObject =
+        null;
     }
   }
 
@@ -344,28 +497,21 @@ export default function RoomStagePage({
     await waitForIceGatheringComplete(peer);
 
     const firstDescription = peer.localDescription;
-    if (!firstDescription?.sdp)
-      throw new Error("Microphone SDP offer was not created.");
+    if (!firstDescription?.sdp) throw new Error("Microphone SDP offer was not created.");
 
-    const tracks = createPublishTracks([
-      {
-        transceiver,
-        track,
-        trackName: createTrackName("audio", userId ?? "speaker"),
-      },
-    ]);
+    const tracks = createPublishTracks([{
+      transceiver,
+      track,
+      trackName: createTrackName("audio", userId ?? "speaker"),
+    }]);
 
     const initial = await roomsApi.publishGuest(room.id, {
       offerSdp: firstDescription.sdp,
       tracks,
     });
 
-    if (!initial.answerSdp)
-      throw new Error("Guest media session did not return an SDP answer.");
-    await peer.setRemoteDescription({
-      type: "answer",
-      sdp: initial.answerSdp,
-    });
+    if (!initial.answerSdp) throw new Error("Guest media session did not return an SDP answer.");
+    await peer.setRemoteDescription({ type: "answer", sdp: initial.answerSdp });
     await waitForPeerConnectionConnected(peer, 20000, 400);
 
     const renegotiationOffer = await peer.createOffer();
@@ -373,24 +519,19 @@ export default function RoomStagePage({
     await waitForIceGatheringComplete(peer);
 
     const renegotiationDescription = peer.localDescription;
-    if (!renegotiationDescription?.sdp)
-      throw new Error("Guest audio negotiation offer was not created.");
+    if (!renegotiationDescription?.sdp) throw new Error("Guest audio negotiation offer was not created.");
 
     const result = await roomsApi.publishGuest(room.id, {
       offerSdp: renegotiationDescription.sdp,
       tracks,
     });
 
-    if (!result.answerSdp)
-      throw new Error("Guest audio negotiation failed.");
+    if (!result.answerSdp) throw new Error("Guest audio negotiation failed.");
     await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
 
     const speakerSession = result.session;
     peer.onconnectionstatechange = () => {
-      if (
-        peer.connectionState === "failed" ||
-        peer.connectionState === "closed"
-      ) {
+      if (peer.connectionState === "failed" || peer.connectionState === "closed") {
         setSpeakerPublishing(false);
       }
     };
@@ -400,12 +541,17 @@ export default function RoomStagePage({
     return speakerSession;
   }
 
-  async function syncHostGuestAudio(state: RoomMediaState) {
-    const currentRoom = room;
+async function syncHostGuestAudio(state: RoomMediaState) {
+  const currentRoom = room;
 
-    if (!currentRoom || !isHost || !hostPeerRef.current || !hostMediaReady) {
-      return;
-    }
+  if (
+    !currentRoom ||
+    !isHost ||
+    !hostPeerRef.current ||
+    !hostMediaReady
+  ) {
+    return;
+  }
 
     const speakerIds = Object.keys(state.speakers).filter(
       (speakerId) => !hostSpeakerIdsRef.current.has(speakerId),
@@ -414,6 +560,9 @@ export default function RoomStagePage({
     if (speakerIds.length === 0) return;
 
     const peer = hostPeerRef.current;
+
+    // Track which ids we attempted this round so we can roll back on
+    // failure instead of leaving them permanently marked as "handled".
     const attemptedIds: string[] = [];
 
     try {
@@ -427,45 +576,36 @@ export default function RoomStagePage({
       await waitForIceGatheringComplete(peer);
 
       const localDescription = peer.localDescription;
-      if (!localDescription?.sdp)
-        throw new Error("Host guest-audio SDP was not created.");
+      if (!localDescription?.sdp) throw new Error("Host guest-audio SDP was not created.");
 
-      const result = await roomsApi.subscribeHostToGuests(currentRoom.id, {
-        offerSdp: localDescription.sdp,
-      });
+      const result = await roomsApi.subscribeHostToGuests(currentRoom.id, { offerSdp: localDescription.sdp });
 
       if (result.answerSdp) {
-        await peer.setRemoteDescription({
-          type: "answer",
-          sdp: result.answerSdp,
-        });
+        await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
       } else if (result.offerSdp) {
-        await peer.setRemoteDescription({
-          type: "offer",
-          sdp: result.offerSdp,
-        });
+        await peer.setRemoteDescription({ type: "offer", sdp: result.offerSdp });
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
         await waitForIceGatheringComplete(peer);
         const localAnswer = peer.localDescription;
-        if (!localAnswer?.sdp)
-          throw new Error("Host guest-audio answer was not created.");
-        await roomsApi.subscribeHostToGuests(currentRoom.id, {
-          answerSdp: localAnswer.sdp,
-        });
+        if (!localAnswer?.sdp) throw new Error("Host guest-audio answer was not created.");
+        await roomsApi.subscribeHostToGuests(currentRoom.id, { answerSdp: localAnswer.sdp });
       } else {
         throw new Error("Host guest-audio negotiation returned no SDP.");
       }
 
+      // Only now that negotiation fully succeeded do we mark these ids done.
       for (const speakerId of attemptedIds) {
         hostSpeakerIdsRef.current.add(speakerId);
       }
     } catch (error) {
+      // If any step fails, we roll back the attempted ids.
       for (const speakerId of attemptedIds) {
         hostSpeakerIdsRef.current.delete(speakerId);
       }
       throw error;
     }
+
   }
 
   async function syncViewerSpeakerAudio(state: RoomMediaState) {
@@ -497,40 +637,47 @@ export default function RoomStagePage({
     await waitForIceGatheringComplete(peer);
 
     const localDescription = peer.localDescription;
-    if (!localDescription?.sdp)
-      throw new Error("Viewer speaker-audio offer was not created.");
+    if (!localDescription?.sdp) throw new Error("Viewer speaker-audio offer was not created.");
 
     const result = await roomsApi.createViewerSession(
-      currentRoom.id,
-      localDescription.sdp,
-    );
+  currentRoom.id,
+  localDescription.sdp,
+);
 
-    if (result.answerSdp) {
-      await peer.setRemoteDescription({
-        type: "answer",
-        sdp: result.answerSdp,
-      });
-      return;
-    }
+if (result.answerSdp) {
+  await peer.setRemoteDescription({
+    type: "answer",
+    sdp: result.answerSdp,
+  });
 
-    if (result.offerSdp) {
-      await peer.setRemoteDescription({
-        type: "offer",
-        sdp: result.offerSdp,
-      });
+  return;
+}
 
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      await waitForIceGatheringComplete(peer);
+if (result.offerSdp) {
+  await peer.setRemoteDescription({
+    type: "offer",
+    sdp: result.offerSdp,
+  });
 
-      const localAnswer = peer.localDescription;
-      if (!localAnswer?.sdp) {
-        throw new Error("Viewer speaker-audio answer was not created.");
-      }
+  const answer = await peer.createAnswer();
 
-      await roomsApi.completeRenegotiation(currentRoom.id, localAnswer.sdp);
-      return;
-    }
+  await peer.setLocalDescription(answer);
+
+  await waitForIceGatheringComplete(peer);
+
+  const localAnswer = peer.localDescription;
+
+  if (!localAnswer?.sdp) {
+    throw new Error("Viewer speaker-audio answer was not created.");
+  }
+
+  await roomsApi.completeRenegotiation(
+    currentRoom.id,
+    localAnswer.sdp,
+  );
+
+  return;
+}
 
     throw new Error("Viewer speaker-audio negotiation returned no SDP.");
   }
@@ -540,41 +687,65 @@ export default function RoomStagePage({
       return localStreamRef.current;
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: {
-        facingMode: "user",
-        width: { ideal: 1080 },
-        height: { ideal: 1920 },
-      },
-    });
+    const stream =
+      await navigator.mediaDevices.getUserMedia(
+        {
+          audio: true,
+          video: {
+            facingMode: "user",
+            width: {
+              ideal: 1080,
+            },
+            height: {
+              ideal: 1920,
+            },
+          },
+        },
+      );
 
-    stream.getVideoTracks().forEach((track) => {
-      track.enabled = cameraEnabled;
-    });
+    stream
+      .getVideoTracks()
+      .forEach((track) => {
+        track.enabled =
+          cameraEnabled;
+      });
 
-    stream.getAudioTracks().forEach((track) => {
-      track.enabled = micEnabled;
-    });
+    stream
+      .getAudioTracks()
+      .forEach((track) => {
+        track.enabled =
+          micEnabled;
+      });
 
-    localStreamRef.current = stream;
+    localStreamRef.current =
+      stream;
 
     if (localVideoRef.current) {
-      localVideoRef.current.srcObject = stream;
+      localVideoRef.current.srcObject =
+        stream;
     }
 
     return stream;
   }
 
-  async function publishHostMedia(currentRoom: RoomRecord) {
-    const stream = await ensureLocalPreview();
+  async function publishHostMedia(
+    currentRoom: RoomRecord,
+  ) {
+    const stream =
+      await ensureLocalPreview();
 
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
-      bundlePolicy: "max-bundle",
-    });
+    const peer =
+      new RTCPeerConnection({
+        iceServers: [
+          {
+            urls: "stun:stun.cloudflare.com:3478",
+          },
+        ],
+        bundlePolicy: "max-bundle",
+      });
 
-    hostPeerRef.current = peer;
+    hostPeerRef.current =
+      peer;
 
     const transceivers: Array<{
       transceiver: RTCRtpTransceiver;
@@ -582,39 +753,82 @@ export default function RoomStagePage({
       trackName: string;
     }> = [];
 
-    for (const track of stream.getTracks()) {
-      const transceiver = peer.addTransceiver(track, {
-        direction: "sendonly",
-      });
+    for (
+      const track of stream.getTracks()
+    ) {
+      const transceiver =
+        peer.addTransceiver(
+          track,
+          {
+            direction:
+              "sendonly",
+          },
+        );
 
       transceivers.push({
         transceiver,
         track,
-        trackName: createTrackName(
-          track.kind === "video" ? "video" : "audio",
-          userId ?? "host",
-        ),
+        trackName:
+          createTrackName(
+            track.kind ===
+            "video"
+              ? "video"
+              : "audio",
+            userId ??
+              "host",
+          ),
       });
     }
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    await waitForIceGatheringComplete(peer);
+    const offer =
+      await peer.createOffer();
 
-    const localDescription = peer.localDescription;
-    if (!localDescription?.sdp) {
-      throw new Error("Browser did not generate a valid SDP offer.");
+    await peer.setLocalDescription(
+      offer,
+    );
+
+    await waitForIceGatheringComplete(
+      peer,
+    );
+
+    const localDescription =
+      peer.localDescription;
+
+    if (
+      !localDescription?.sdp
+    ) {
+      throw new Error(
+        "Browser did not generate a valid SDP offer.",
+      );
     }
 
-    const tracks = createPublishTracks(transceivers);
+    const tracks =
+      createPublishTracks(
+        transceivers,
+      );
 
-    const initialResult = await roomsApi.publishHost(currentRoom.id, {
-      offerSdp: localDescription.sdp,
-      tracks,
-    });
+    /*
+     * Cloudflare sessions map directly to the browser
+     * RTCPeerConnection. The first /sessions/new call
+     * establishes the PeerConnection and returns its SDP
+     * answer. We must apply that answer and wait for the
+     * connection to become connected before asking Cloudflare
+     * to add the local media tracks.
+     */
+    const initialResult =
+      await roomsApi.publishHost(
+        currentRoom.id,
+        {
+          offerSdp:
+            localDescription.sdp,
+          tracks,
+        },
+      );
 
     if (!initialResult.answerSdp) {
-      throw new Error("Cloudflare did not return the initial host SDP answer.");
+      throw new Error(
+        "Cloudflare did not return the initial host SDP answer.",
+      );
     }
 
     await peer.setRemoteDescription({
@@ -622,23 +836,41 @@ export default function RoomStagePage({
       sdp: initialResult.answerSdp,
     });
 
-    await waitForPeerConnectionConnected(peer);
+    await waitForPeerConnectionConnected(
+      peer,
+    );
 
-    const renegotiationOffer = await peer.createOffer();
-    await peer.setLocalDescription(renegotiationOffer);
-    await waitForIceGatheringComplete(peer);
+    const renegotiationOffer =
+      await peer.createOffer();
 
-    const renegotiationDescription = peer.localDescription;
-    if (!renegotiationDescription?.sdp) {
+    await peer.setLocalDescription(
+      renegotiationOffer,
+    );
+
+    await waitForIceGatheringComplete(
+      peer,
+    );
+
+    const renegotiationDescription =
+      peer.localDescription;
+
+    if (
+      !renegotiationDescription?.sdp
+    ) {
       throw new Error(
         "Browser did not generate a valid host track negotiation offer.",
       );
     }
 
-    const result = await roomsApi.publishHost(currentRoom.id, {
-      offerSdp: renegotiationDescription.sdp,
-      tracks,
-    });
+    const result =
+      await roomsApi.publishHost(
+        currentRoom.id,
+        {
+          offerSdp:
+            renegotiationDescription.sdp,
+          tracks,
+        },
+      );
 
     if (!result.answerSdp) {
       throw new Error(
@@ -652,13 +884,31 @@ export default function RoomStagePage({
     });
 
     hostSessionRef.current = {
-      sessionId: result.session.sessionId,
-      generation: result.session.generation,
+      sessionId:
+        result.session.sessionId,
+      generation:
+        result.session.generation,
     };
 
-    const mediaState = await waitForHostMediaState(currentRoom.id, 5000, 250);
+    /*
+     * The backend should have registered the host
+     * media state before publishHost() returns.
+     *
+     * Confirm that state is actually visible before
+     * changing the UI to "Streaming to the room".
+     */
+    const mediaState =
+      await waitForHostMediaState(
+        currentRoom.id,
+        5000,
+        250,
+      );
 
-    if (!mediaState.host || mediaState.host.sessionId !== result.session.sessionId) {
+    if (
+      !mediaState.host ||
+      mediaState.host.sessionId !==
+        result.session.sessionId
+    ) {
       throw new Error(
         "Host media was published, but the room has not registered the host media state yet.",
       );
@@ -667,80 +917,170 @@ export default function RoomStagePage({
     setHostMediaReady(true);
     setHostPublishing(true);
 
-    peer.onconnectionstatechange = () => {
-      if (
-        peer.connectionState === "failed" ||
-        peer.connectionState === "closed"
-      ) {
-        setHostPublishing(false);
-        setHostMediaReady(false);
-      }
-    };
+    peer.onconnectionstatechange =
+      () => {
+        if (
+          peer.connectionState ===
+            "failed" ||
+          peer.connectionState ===
+            "closed"
+        ) {
+          setHostPublishing(false);
+          setHostMediaReady(false);
+        }
+      };
   }
 
-  async function connectViewer(currentRoom: RoomRecord) {
-    const state = await waitForHostMediaState(currentRoom.id, 20000, 500);
+  async function connectViewer(
+    currentRoom: RoomRecord,
+  ) {
+    /*
+     * Do not assume that room.status === "live"
+     * means the host media is already available.
+     *
+     * Wait until the host session is actually marked
+     * connected in backend media state.
+     */
+    const state =
+      await waitForHostMediaState(
+        currentRoom.id,
+        20000,
+        500,
+      );
 
-    if (!state.host || state.host.status !== "connected") {
+    if (
+      !state.host ||
+      state.host.status !==
+        "connected"
+    ) {
       throw new Error(
         "The host is still connecting. Please try joining again in a moment.",
       );
     }
 
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
-      bundlePolicy: "max-bundle",
-    });
+    const peer =
+      new RTCPeerConnection({
+        iceServers: [
+          {
+            urls:
+              "stun:stun.cloudflare.com:3478",
+          },
+        ],
+        bundlePolicy: "max-bundle",
+      });
 
-    viewerPeerRef.current = peer;
+    viewerPeerRef.current =
+      peer;
 
-    const remoteStream = new MediaStream();
-    remoteStreamRef.current = remoteStream;
+    const remoteStream =
+      new MediaStream();
 
-    peer.ontrack = (event) => {
-      for (const track of event.streams[0]?.getTracks() ?? [event.track]) {
-        if (!remoteStream.getTracks().some((item) => item.id === track.id)) {
-          remoteStream.addTrack(track);
+    remoteStreamRef.current =
+      remoteStream;
+
+    peer.ontrack = (
+      event,
+    ) => {
+      for (
+        const track of
+          event.streams[0]
+            ?.getTracks() ??
+          [event.track]
+      ) {
+        if (
+          !remoteStream
+            .getTracks()
+            .some(
+              (item) =>
+                item.id ===
+                track.id,
+            )
+        ) {
+          remoteStream.addTrack(
+            track,
+          );
         }
       }
 
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
-        void remoteVideoRef.current.play().catch(() => {});
-      }
-    };
-
-    peer.onconnectionstatechange = () => {
-      const ready = peer.connectionState === "connected";
-      setViewerConnected(ready);
-
       if (
-        peer.connectionState === "failed" ||
-        peer.connectionState === "closed"
+        remoteVideoRef.current
       ) {
-        setViewerConnected(false);
+        remoteVideoRef.current.srcObject =
+          remoteStream;
+
+        void remoteVideoRef.current
+          .play()
+          .catch(() => {});
       }
     };
 
-    createViewerTransceivers(peer, state);
+    peer.onconnectionstatechange =
+      () => {
+        const ready =
+          peer.connectionState ===
+          "connected";
+
+        setViewerConnected(
+          ready,
+        );
+
+        if (
+          peer.connectionState ===
+            "failed" ||
+          peer.connectionState ===
+            "closed"
+        ) {
+          setViewerConnected(
+            false,
+          );
+        }
+      };
+
+    createViewerTransceivers(
+      peer,
+      state,
+    );
 
     viewerSpeakerIdsRef.current = new Set(Object.keys(state.speakers));
 
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    await waitForIceGatheringComplete(peer);
+    /*
+     * Phase 1:
+     * Establish the Cloudflare session.
+     *
+     * The backend sends this offer to /sessions/new
+     * and returns the initial SDP answer.
+     */
+    const offer =
+      await peer.createOffer();
 
-    const localDescription = peer.localDescription;
-    if (!localDescription?.sdp) {
-      throw new Error("Browser did not generate a valid viewer SDP.");
-    }
-
-    const initialResult = await roomsApi.createViewerSession(
-      currentRoom.id,
-      localDescription.sdp,
+    await peer.setLocalDescription(
+      offer,
     );
 
-    if (!initialResult.answerSdp) {
+    await waitForIceGatheringComplete(
+      peer,
+    );
+
+    const localDescription =
+      peer.localDescription;
+
+    if (
+      !localDescription?.sdp
+    ) {
+      throw new Error(
+        "Browser did not generate a valid viewer SDP.",
+      );
+    }
+
+    const initialResult =
+      await roomsApi.createViewerSession(
+        currentRoom.id,
+        localDescription.sdp,
+      );
+
+    if (
+      !initialResult.answerSdp
+    ) {
       throw new Error(
         "Cloudflare did not return the initial viewer SDP answer.",
       );
@@ -748,69 +1088,151 @@ export default function RoomStagePage({
 
     await peer.setRemoteDescription({
       type: "answer",
-      sdp: initialResult.answerSdp,
+      sdp:
+        initialResult.answerSdp,
     });
 
-    await waitForPeerConnectionConnected(peer, 20000, 500);
+    /*
+     * Cloudflare requires the PeerConnection for a session
+     * to be connected before operations such as pulling tracks.
+     *
+     * Wait for BOTH the browser connection state and ICE
+     * state, then allow a short stabilization window before
+     * calling tracks/new.
+     */
+    await waitForPeerConnectionConnected(
+      peer,
+      20000,
+      500,
+    );
 
+    /*
+     * Keep the session ID immediately after the first
+     * successful session creation. The second API call uses
+     * the same Cloudflare session.
+     */
     viewerSessionRef.current = {
-      sessionId: initialResult.session.sessionId,
-      generation: initialResult.session.generation,
+      sessionId:
+        initialResult.session.sessionId,
+      generation:
+        initialResult.session.generation,
     };
 
-    const renegotiationOffer = await peer.createOffer();
-    await peer.setLocalDescription(renegotiationOffer);
-    await waitForIceGatheringComplete(peer);
+    /*
+     * Phase 2:
+     * Now that the Cloudflare PeerConnection is connected,
+     * create a fresh offer and ask the backend to add the
+     * host/speaker remote tracks through /tracks/new.
+     */
+    const renegotiationOffer =
+      await peer.createOffer();
 
-    const renegotiationDescription = peer.localDescription;
-    if (!renegotiationDescription?.sdp) {
+    await peer.setLocalDescription(
+      renegotiationOffer,
+    );
+
+    await waitForIceGatheringComplete(
+      peer,
+    );
+
+    const renegotiationDescription =
+      peer.localDescription;
+
+    if (
+      !renegotiationDescription?.sdp
+    ) {
       throw new Error(
         "Browser did not generate a valid viewer track negotiation offer.",
       );
     }
 
-    const result = await roomsApi.createViewerSession(
-      currentRoom.id,
-      renegotiationDescription.sdp,
-    );
+    const result =
+      await roomsApi.createViewerSession(
+        currentRoom.id,
+        renegotiationDescription.sdp,
+      );
 
-    if (result.answerSdp) {
+    /*
+     * Cloudflare can return either:
+     *
+     * 1. SDP answer:
+     *    apply it directly.
+     *
+     * 2. SDP offer:
+     *    apply it, create the browser answer, and send
+     *    that answer through /renegotiate.
+     */
+    if (
+      result.answerSdp
+    ) {
       await peer.setRemoteDescription({
         type: "answer",
-        sdp: result.answerSdp,
+        sdp:
+          result.answerSdp,
       });
-    } else if (result.offerSdp) {
+    } else if (
+      result.offerSdp
+    ) {
       await peer.setRemoteDescription({
         type: "offer",
-        sdp: result.offerSdp,
+        sdp:
+          result.offerSdp,
       });
 
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      await waitForIceGatheringComplete(peer);
+      const answer =
+        await peer.createAnswer();
 
-      const localAnswer = peer.localDescription;
-      if (!localAnswer?.sdp) {
+      await peer.setLocalDescription(
+        answer,
+      );
+
+      await waitForIceGatheringComplete(
+        peer,
+      );
+
+      const localAnswer =
+        peer.localDescription;
+
+      if (
+        !localAnswer?.sdp
+      ) {
         throw new Error(
           "Browser did not generate a valid viewer renegotiation answer.",
         );
       }
 
-      await roomsApi.completeRenegotiation(currentRoom.id, localAnswer.sdp);
+      await roomsApi.completeRenegotiation(
+        currentRoom.id,
+        localAnswer.sdp,
+      );
     } else {
       throw new Error(
         "Cloudflare did not return a viewer track negotiation SDP.",
       );
     }
 
+    /*
+     * Keep the same Cloudflare session identity from the
+     * backend. The second response should refer to the same
+     * session, but the first response is the authoritative
+     * session created for this browser PeerConnection.
+     */
     viewerSessionRef.current = {
-      sessionId: initialResult.session.sessionId,
-      generation: initialResult.session.generation,
+      sessionId:
+        initialResult.session.sessionId,
+      generation:
+        initialResult.session.generation,
     };
 
-    await waitForPeerConnectionConnected(peer, 20000, 500);
+    await waitForPeerConnectionConnected(
+      peer,
+      20000,
+      500,
+    );
 
-    setViewerConnected(true);
+    setViewerConnected(
+      true,
+    );
   }
 
   useEffect(() => {
@@ -818,22 +1240,35 @@ export default function RoomStagePage({
 
     async function load() {
       try {
-        const supabase = createClient();
+        const supabase =
+          createClient();
 
-        const [{ data }, currentRoom] = await Promise.all([
-          supabase.auth.getUser(),
-          roomsApi.get(id),
-        ]);
+        const [
+          { data },
+          currentRoom,
+        ] =
+          await Promise.all([
+            supabase.auth.getUser(),
+            roomsApi.get(id),
+          ]);
 
         if (!active) {
           return;
         }
 
-        setUserId(data.user?.id ?? null);
-        setRoom(currentRoom);
+        setUserId(
+          data.user?.id ??
+            null,
+        );
+
+        setRoom(
+          currentRoom,
+        );
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : "Couldn't load room",
+          error instanceof Error
+            ? error.message
+            : "Couldn't load room",
         );
       } finally {
         if (active) {
@@ -844,31 +1279,55 @@ export default function RoomStagePage({
 
     load();
 
-    const interval = window.setInterval(async () => {
-      try {
-        const currentRoom = await roomsApi.get(id);
+    const interval =
+      window.setInterval(
+        async () => {
+          try {
+            const currentRoom =
+              await roomsApi.get(
+                id,
+              );
 
-        if (active) {
-          setRoom(currentRoom);
-        }
-      } catch {
-        /*
-         * Keep the current room state during
-         * transient API failures.
-         */
-      }
-    }, 3000);
+            if (active) {
+              setRoom(
+                currentRoom,
+              );
+            }
+          } catch {
+            /*
+             * Keep the current room state during
+             * transient API failures.
+             */
+          }
+        },
+        3000,
+      );
 
     return () => {
       active = false;
-      window.clearInterval(interval);
+      window.clearInterval(
+        interval,
+      );
     };
   }, [id]);
 
+  /*
+   * Once the room is live, independently confirm that
+   * the host media session exists in backend state.
+   *
+   * This prevents the host UI from getting stuck showing
+   * "Connecting..." simply because the first state check
+   * happened before Redis/API propagation completed.
+   */
   useEffect(() => {
-    if (!isHost || room?.status !== "live") {
+    if (
+      !isHost ||
+      room?.status !== "live"
+    ) {
       if (!isHost) {
-        setHostMediaReady(false);
+        setHostMediaReady(
+          false,
+        );
       }
 
       return;
@@ -876,38 +1335,59 @@ export default function RoomStagePage({
 
     let active = true;
 
-    const checkHostMedia = async () => {
-      try {
-        const state = await roomsApi.getMediaState(id);
+    const checkHostMedia =
+      async () => {
+        try {
+          const state =
+            await roomsApi.getMediaState(
+              id,
+            );
 
-        if (!active) {
-          return;
+          if (!active) {
+            return;
+          }
+
+          const ready =
+            state.host?.userId ===
+            userId;
+
+          setHostMediaReady(
+            ready,
+          );
+
+          if (ready) {
+            setHostPublishing(
+              true,
+            );
+          }
+        } catch {
+          /*
+           * Keep the current state during temporary
+           * API/Redis failures.
+           */
         }
-
-        const ready = state.host?.userId === userId;
-
-        setHostMediaReady(ready);
-
-        if (ready) {
-          setHostPublishing(true);
-        }
-      } catch {
-        /*
-         * Keep the current state during temporary
-         * API/Redis failures.
-         */
-      }
-    };
+      };
 
     void checkHostMedia();
 
-    const timer = window.setInterval(checkHostMedia, 1000);
+    const timer =
+      window.setInterval(
+        checkHostMedia,
+        1000,
+      );
 
     return () => {
       active = false;
-      window.clearInterval(timer);
+      window.clearInterval(
+        timer,
+      );
     };
-  }, [id, isHost, room?.status, userId]);
+  }, [
+    id,
+    isHost,
+    room?.status,
+    userId,
+  ]);
 
   useEffect(() => {
     if (!room || !isLive) return;
@@ -951,19 +1431,13 @@ export default function RoomStagePage({
             }
           }
         } else {
-          if (
-            state.speakers[userId ?? ""] &&
-            !speakerPublishing &&
-            !mediaBusy
-          ) {
+          if (state.speakers[userId ?? ""] && !speakerPublishing && !mediaBusy) {
             mediaBusy = true;
             try {
               await publishGuestAudio();
             } catch (error) {
               setSpeakerMediaError(
-                error instanceof Error
-                  ? error.message
-                  : "Microphone could not be connected.",
+                error instanceof Error ? error.message : "Microphone could not be connected.",
               );
               closeGuestPeer();
             } finally {
@@ -993,162 +1467,247 @@ export default function RoomStagePage({
       active = false;
       window.clearInterval(timer);
     };
-  }, [
-    id,
-    room,
-    isLive,
-    isHost,
-    userId,
-    viewerConnected,
-    speakerPublishing,
-    hostMediaReady,
-  ]);
+  }, [id, room, isLive, isHost, userId, viewerConnected, speakerPublishing, hostMediaReady]);
 
   useEffect(() => {
     if (!room || isHost || room.status !== "live" || joined) return;
     void handleJoin();
   }, [room?.id, room?.status, isHost]);
 
+  /*
+   * Host camera/microphone preview.
+   */
   useEffect(() => {
-    if (!isHost || room?.status !== "created") {
+    if (
+      !isHost ||
+      room?.status !==
+        "created"
+    ) {
       return;
     }
 
-    ensureLocalPreview().catch((error) => {
-      setMediaError(
-        error instanceof Error
-          ? error.message
-          : "Camera or microphone permission was denied.",
-      );
-    });
+    ensureLocalPreview().catch(
+      (error) => {
+        setMediaError(
+          error instanceof Error
+            ? error.message
+            : "Camera or microphone permission was denied.",
+        );
+      },
+    );
 
     return () => {
       /*
        * Keep the preview alive while this room remains mounted.
        */
     };
-  }, [isHost, room?.status]);
+  }, [
+    isHost,
+    room?.status,
+  ]);
 
   useEffect(() => {
-    localStreamRef.current?.getVideoTracks().forEach((track) => {
-      track.enabled = cameraEnabled;
-    });
-  }, [cameraEnabled]);
+    localStreamRef.current
+      ?.getVideoTracks()
+      .forEach(
+        (track) => {
+          track.enabled =
+            cameraEnabled;
+        },
+      );
+  }, [
+    cameraEnabled,
+  ]);
 
   useEffect(() => {
-    localStreamRef.current?.getAudioTracks().forEach((track) => {
-      track.enabled = micEnabled;
-    });
-  }, [micEnabled]);
+    localStreamRef.current
+      ?.getAudioTracks()
+      .forEach(
+        (track) => {
+          track.enabled =
+            micEnabled;
+        },
+      );
+  }, [
+    micEnabled,
+  ]);
 
+  /*
+   * Host heartbeat.
+   */
   useEffect(() => {
-    if (!hostSessionRef.current || !isHost) {
+    if (
+      !hostSessionRef.current ||
+      !isHost
+    ) {
       return;
     }
 
-    const timer = window.setInterval(() => {
-      const session = hostSessionRef.current;
+    const timer =
+      window.setInterval(
+        () => {
+          const session =
+            hostSessionRef.current;
 
-      if (!session) {
-        return;
-      }
+          if (!session) {
+            return;
+          }
 
-      roomsApi
-        .heartbeat(id, {
-          role: "host",
-          sessionId: session.sessionId,
-          generation: session.generation,
-        })
-        .catch(() => {});
-    }, 15000);
+          roomsApi
+            .heartbeat(
+              id,
+              {
+                role: "host",
+                sessionId:
+                  session.sessionId,
+                generation:
+                  session.generation,
+              },
+            )
+            .catch(() => {});
+        },
+        15000,
+      );
 
-    return () => window.clearInterval(timer);
-  }, [id, isHost, hostPublishing]);
+    return () =>
+      window.clearInterval(
+        timer,
+      );
+  }, [
+    id,
+    isHost,
+    hostPublishing,
+  ]);
 
+  /*
+   * Viewer heartbeat.
+   */
   useEffect(() => {
-    if (!viewerSessionRef.current || isHost) {
+    if (
+      !viewerSessionRef.current ||
+      isHost
+    ) {
       return;
     }
 
-    const timer = window.setInterval(() => {
-      const session = viewerSessionRef.current;
+    const timer =
+      window.setInterval(
+        () => {
+          const session =
+            viewerSessionRef.current;
 
-      if (!session) {
-        return;
-      }
+          if (!session) {
+            return;
+          }
 
-      roomsApi
-        .heartbeat(id, {
-          role: "viewer",
-          sessionId: session.sessionId,
-          generation: session.generation,
-        })
-        .catch(() => {});
-    }, 15000);
+          roomsApi
+            .heartbeat(
+              id,
+              {
+                role: "viewer",
+                sessionId:
+                  session.sessionId,
+                generation:
+                  session.generation,
+              },
+            )
+            .catch(() => {});
+        },
+        15000,
+      );
 
-    return () => window.clearInterval(timer);
-  }, [id, isHost, viewerConnected]);
+    return () =>
+      window.clearInterval(
+        timer,
+      );
+  }, [
+    id,
+    isHost,
+    viewerConnected,
+  ]);
 
   useEffect(() => {
     if (!speakerPublishing || isHost) return;
 
     const timer = window.setInterval(() => {
-      const session = guestPeerRef.current
-        ? mediaState?.speakers[userId ?? ""]
-        : null;
+      const session = guestPeerRef.current ? mediaState?.speakers[userId ?? ""] : null;
       if (!session) return;
-      roomsApi
-        .heartbeat(id, {
-          role: "speaker",
-          sessionId: session.sessionId,
-          generation: mediaState?.generation ?? 0,
-        })
-        .catch(() => {});
+      roomsApi.heartbeat(id, {
+        role: "speaker",
+        sessionId: session.sessionId,
+        generation: mediaState?.generation ?? 0,
+      }).catch(() => {});
     }, 15000);
 
     return () => window.clearInterval(timer);
-  }, [
-    id,
-    speakerPublishing,
-    isHost,
-    userId,
-    mediaState?.generation,
-    mediaState?.speakers,
-  ]);
+  }, [id, speakerPublishing, isHost, userId, mediaState?.generation, mediaState?.speakers]);
 
   async function handleStart() {
-    if (!isHost || !room) {
+    if (
+      !isHost ||
+      !room
+    ) {
       return;
     }
 
     try {
-      setActionLoading(true);
-      setMediaError("");
-      setHostMediaReady(false);
-      setHostPublishing(false);
+      setActionLoading(
+        true,
+      );
 
-      const updated = await roomsApi.start(room.id);
+      setMediaError("");
+
+      setHostMediaReady(
+        false,
+      );
+
+      setHostPublishing(
+        false,
+      );
+
+      const updated =
+        await roomsApi.start(
+          room.id,
+        );
 
       setRoom(updated);
 
-      await publishHostMedia(updated);
+      await publishHostMedia(
+        updated,
+      );
 
-      toast.success("You're live");
+      toast.success(
+        "You're live",
+      );
     } catch (error) {
       setMediaError(
-        error instanceof Error ? error.message : "Couldn't start media.",
+        error instanceof Error
+          ? error.message
+          : "Couldn't start media.",
       );
 
       try {
-        await roomsApi.end(room.id);
+        await roomsApi.end(
+          room.id,
+        );
 
         closeHostPeer();
+
         stopLocalMedia();
 
-        setHostPublishing(false);
-        setHostMediaReady(false);
+        setHostPublishing(
+          false,
+        );
 
-        setRoom(await roomsApi.get(room.id));
+        setHostMediaReady(
+          false,
+        );
+
+        setRoom(
+          await roomsApi.get(
+            room.id,
+          ),
+        );
       } catch {
         /*
          * Keep the original media error visible.
@@ -1156,10 +1715,14 @@ export default function RoomStagePage({
       }
 
       toast.error(
-        error instanceof Error ? error.message : "Couldn't start the live",
+        error instanceof Error
+          ? error.message
+          : "Couldn't start the live",
       );
     } finally {
-      setActionLoading(false);
+      setActionLoading(
+        false,
+      );
     }
   }
 
@@ -1169,25 +1732,41 @@ export default function RoomStagePage({
     }
 
     try {
-      setActionLoading(true);
+      setActionLoading(
+        true,
+      );
 
-      await roomsApi.join(room.id);
+      await roomsApi.join(
+        room.id,
+      );
 
       setJoined(true);
 
-      await connectViewer(room);
+      /*
+       * connectViewer() now waits for the host media
+       * state instead of immediately failing.
+       */
+      await connectViewer(
+        room,
+      );
 
-      toast.success("Connected to the live");
+      toast.success(
+        "Connected to the live",
+      );
     } catch (error) {
       setJoined(false);
 
       closeViewerPeer();
 
       toast.error(
-        error instanceof Error ? error.message : "Couldn't join the live",
+        error instanceof Error
+          ? error.message
+          : "Couldn't join the live",
       );
     } finally {
-      setActionLoading(false);
+      setActionLoading(
+        false,
+      );
     }
   }
 
@@ -1199,11 +1778,7 @@ export default function RoomStagePage({
       setRequestPending(true);
       toast.success("Audio seat requested");
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Couldn't request an audio seat",
-      );
+      toast.error(error instanceof Error ? error.message : "Couldn’t request an audio seat");
     } finally {
       setActionLoading(false);
     }
@@ -1212,29 +1787,19 @@ export default function RoomStagePage({
   async function approveRequest(requestId: string) {
     try {
       await roomsApi.approveSpeakerRequest(id, requestId);
-      setSpeakerRequests((current) =>
-        current.filter((request) => request.id !== requestId),
-      );
+      setSpeakerRequests((current) => current.filter((request) => request.id !== requestId));
       toast.success("Viewer is joining the audio room");
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Couldn't approve the request",
-      );
+      toast.error(error instanceof Error ? error.message : "Couldn’t approve the request");
     }
   }
 
   async function rejectRequest(requestId: string) {
     try {
       await roomsApi.rejectSpeakerRequest(id, requestId);
-      setSpeakerRequests((current) =>
-        current.filter((request) => request.id !== requestId),
-      );
+      setSpeakerRequests((current) => current.filter((request) => request.id !== requestId));
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Couldn't reject the request",
-      );
+      toast.error(error instanceof Error ? error.message : "Couldn’t reject the request");
     }
   }
 
@@ -1249,11 +1814,19 @@ export default function RoomStagePage({
       }
 
       if (joined) {
-        await roomsApi.leave(id).catch(() => {});
+        await roomsApi
+          .leave(id)
+          .catch(() => {});
       }
 
-      if (isHost && room?.status === "live") {
-        await roomsApi.end(id).catch(() => {});
+      if (
+        isHost &&
+        room?.status ===
+          "live"
+      ) {
+        await roomsApi
+          .end(id)
+          .catch(() => {});
       }
     } finally {
       closeViewerPeer();
@@ -1262,39 +1835,72 @@ export default function RoomStagePage({
       closeHostSubscriptions();
       stopLocalMedia();
 
-      setHostPublishing(false);
-      setHostMediaReady(false);
-      setViewerConnected(false);
+      setHostPublishing(
+        false,
+      );
 
-      router.push("/home");
+      setHostMediaReady(
+        false,
+      );
+
+      setViewerConnected(
+        false,
+      );
+
+      router.push(
+        "/home",
+      );
     }
   }
 
   async function handleEnd() {
-    if (!room || !isHost) {
+    if (
+      !room ||
+      !isHost
+    ) {
       return;
     }
 
     try {
-      setActionLoading(true);
+      setActionLoading(
+        true,
+      );
 
-      await roomsApi.end(room.id);
+      await roomsApi.end(
+        room.id,
+      );
 
       closeHostPeer();
+
       stopLocalMedia();
 
-      setHostPublishing(false);
-      setHostMediaReady(false);
+      setHostPublishing(
+        false,
+      );
 
-      setRoom(await roomsApi.get(room.id));
+      setHostMediaReady(
+        false,
+      );
 
-      toast.success("Live ended");
+      setRoom(
+        await roomsApi.get(
+          room.id,
+        ),
+      );
+
+      toast.success(
+        "Live ended",
+      );
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Couldn't end the live",
+        error instanceof Error
+          ? error.message
+          : "Couldn't end the live",
       );
     } finally {
-      setActionLoading(false);
+      setActionLoading(
+        false,
+      );
     }
   }
 
@@ -1320,10 +1926,16 @@ export default function RoomStagePage({
     return (
       <main className="flex min-h-dvh items-center justify-center bg-black px-6 text-center text-white">
         <div>
-          <p className="text-lg font-bold">Room not found</p>
+          <p className="text-lg font-bold">
+            Room not found
+          </p>
 
           <button
-            onClick={() => router.push("/home")}
+            onClick={() =>
+              router.push(
+                "/home",
+              )
+            }
             className="mt-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-black"
           >
             Back home
@@ -1333,19 +1945,22 @@ export default function RoomStagePage({
     );
   }
 
-  const hostName = room.host?.name || "Host";
-  const isWaiting = room.status === "created";
+  const hostName =
+    room.host?.name ||
+    "Host";
+
+  const isWaiting =
+    room.status ===
+    "created";
 
   const activeSpeakers = mediaState ? Object.values(mediaState.speakers) : [];
   const seatCount = Math.min(room.max_guest_slots || 3, 3);
   const occupiedSeats = Math.min(activeSpeakers.length, seatCount);
-  const viewerCountLabel = formatCompactCount(
-    room.viewerCount ?? mediaState?.viewerCount ?? 1200,
-  );
 
   return (
     <main className="min-h-[100svh] w-full overflow-hidden bg-black text-white">
       <section className="relative mx-auto h-[100svh] w-full max-w-[430px] overflow-hidden bg-black">
+        {/* Full-screen room media */}
         {isHost && isWaiting ? (
           <video
             ref={localVideoRef}
@@ -1374,6 +1989,7 @@ export default function RoomStagePage({
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(120,70,40,0.45),transparent_34%),radial-gradient(circle_at_25%_55%,rgba(60,40,25,0.42),transparent_45%),#111]" />
         )}
 
+        {/* Cinematic darkening exactly for the UI treatment */}
         <div className="pointer-events-none absolute inset-0 bg-black/35" />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[34%] bg-gradient-to-b from-black/80 via-black/35 to-transparent" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%] bg-gradient-to-t from-black/95 via-black/50 to-transparent" />
@@ -1384,9 +2000,9 @@ export default function RoomStagePage({
           </div>
         )}
 
-        {/* Top header */}
-        <div className="absolute inset-x-0 top-0 z-30 px-[13px] pt-[53px]">
-          <div className="flex items-center gap-[7px]">
+        {/* Top profile row */}
+        <div className="absolute inset-x-0 top-0 z-30 px-[13px] pt-[53px] sm:pt-[53px]">
+          <div className="flex items-center gap-[5px]">
             <Avatar
               name={hostName}
               src={room.host?.avatar ?? undefined}
@@ -1397,30 +2013,24 @@ export default function RoomStagePage({
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <p className="truncate text-[17px] font-bold leading-none">
-                  {hostName}
-                </p>
-                <span className="flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-full bg-white text-black">
-                  <span className="text-[8px] font-black leading-none">
-                    ✓
-                  </span>
+                <p className="truncate text-[17px] font-semibold leading-none">{hostName}</p>
+                <span className="flex h-[12px] w-[12px] items-center justify-center rounded-full bg-white text-black">
+                  <span className="text-[8px] font-black leading-none">✓</span>
                 </span>
               </div>
-              <p className="mt-[6px] text-[13px] leading-none text-white/55">
-                12.4K followers
-              </p>
+              <p className="mt-1 text-[13px] leading-none text-white/55">12.4K followers</p>
             </div>
 
             <button
               type="button"
-              className="flex h-[30px] shrink-0 items-center rounded-full border border-white/20 bg-black/25 px-[15px] text-[15px] font-medium backdrop-blur-xl"
+              className="flex h-[30px] shrink-0 items-center rounded-full border border-white/20 bg-black/25 px-[14px] text-[15px] font-medium backdrop-blur-xl"
             >
               Follow
             </button>
 
             <button
               type="button"
-              className="flex h-[30px] shrink-0 items-center gap-[6px] rounded-full border border-white/20 bg-black/25 px-[13px] text-[14px] font-medium backdrop-blur-xl"
+              className="flex h-[30px] shrink-0 items-center gap-2 rounded-full border border-white/20 bg-black/25 px-[13px] text-[15px] font-medium backdrop-blur-xl"
             >
               <Smartphone className="h-[12px] w-[12px]" strokeWidth={1.7} />
               2 devices
@@ -1428,10 +2038,10 @@ export default function RoomStagePage({
 
             <button
               type="button"
-              className="flex h-[30px] shrink-0 items-center gap-[6px] rounded-full border border-white/20 bg-black/25 px-[13px] text-[14px] font-medium backdrop-blur-xl"
+              className="flex h-[30px] shrink-0 items-center gap-2 rounded-full border border-white/20 bg-black/25 px-[13px] text-[15px] font-medium backdrop-blur-xl"
             >
               <UserRound className="h-[13px] w-[13px]" strokeWidth={1.7} />
-              {viewerCountLabel}
+              {room.viewerCount ?? mediaState?.viewerCount ?? 1200}
             </button>
 
             <button
@@ -1445,43 +2055,28 @@ export default function RoomStagePage({
           </div>
         </div>
 
-        {/* Ranking / explore row */}
+        {/* Top navigation pills */}
         <div className="absolute inset-x-0 top-[102px] z-30 flex items-center justify-between px-[13px]">
-          <div className="flex items-center gap-[8px]">
-            <button
-              type="button"
-              className="flex h-[28px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl"
-            >
-              <Trophy className="h-[13px] w-[13px]" strokeWidth={1.7} />
-              <span className="whitespace-nowrap text-[14px] font-medium leading-[1.15]">
-                Top Ranking
-              </span>
-              <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
-            </button>
+          <button type="button" className="flex h-[28px] w-[94px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
+            <Trophy className="h-[13px] w-[13px]" strokeWidth={1.7} />
+            <span className="text-center text-[14px] leading-[1.15] font-medium">Top Ranking</span>
+            <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
+          </button>
 
-            <button
-              type="button"
-              className="flex h-[28px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl"
-            >
-              <BarChart3 className="h-[13px] w-[13px]" strokeWidth={1.7} />
-              <span className="whitespace-nowrap text-[14px] font-medium leading-[1.15]">
-                Daily No. 6
-              </span>
-              <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
-            </button>
-          </div>
+          <button type="button" className="flex h-[28px] w-[88px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
+            <BarChart3 className="h-[13px] w-[13px]" strokeWidth={1.7} />
+            <span className="text-center text-[14px] leading-[1.15] font-medium">Daily No. 6</span>
+            <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
+          </button>
 
-          <button
-            type="button"
-            className="flex h-[28px] shrink-0 items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl"
-          >
+          <button type="button" className="flex h-[28px] w-[75px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
             <Compass className="h-[13px] w-[13px]" strokeWidth={1.7} />
             <span className="text-[14px] font-medium">Explore</span>
             <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
           </button>
         </div>
 
-        {/* Space Journey / income card */}
+        {/* Reward card */}
         <div className="absolute right-[12px] top-[148px] z-30 w-[214px] max-w-[calc(100%-48px)] rounded-[14px] border border-white/20 bg-[#0c0b0d]/85 p-[10px] backdrop-blur-2xl">
           <div className="flex items-center gap-1.5">
             <div className="h-[44px] w-[44px] shrink-0 overflow-hidden rounded-[10px] bg-gradient-to-br from-white/40 via-white/10 to-black/60 ring-1 ring-white/10">
@@ -1490,9 +2085,7 @@ export default function RoomStagePage({
             <div className="min-w-[58px]">
               <p className="text-[15px] leading-tight">Space</p>
               <p className="text-[15px] leading-tight">Journey</p>
-              <p className="mt-2 text-[25px] font-medium leading-none">
-                0 / 3
-              </p>
+              <p className="mt-2 text-[25px] font-medium leading-none">0 / 3</p>
             </div>
             <div className="h-[42px] w-px bg-white/20" />
             <div className="min-w-0 flex-1">
@@ -1505,61 +2098,46 @@ export default function RoomStagePage({
               </div>
               <div className="mt-2 flex items-center justify-between gap-1.5 text-[12px]">
                 <span>Lucky Stars</span>
-                <span className="flex items-center gap-1">
-                  160 <Star className="h-3 w-3" strokeWidth={1.6} />
-                </span>
+                <span className="flex items-center gap-1">160 <Star className="h-3 w-3" strokeWidth={1.6} /></span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Live comments */}
-        <div className="absolute left-[15px] bottom-[194px] z-30 w-[168px] space-y-2">
+        <div className="absolute left-[15px] bottom-[194px] z-30 w-[142px] space-y-2">
           {[
             { name: "Riya", text: "This stream is awesome!" },
             { name: "Aman", text: "Keep going bro!" },
             { name: "Neha", text: "Hello from Nepal!" },
-          ].map((comment) => (
-            <div
-              key={comment.name}
-              className="flex items-center gap-1.5 rounded-[15px] border border-white/10 bg-black/35 px-1.5 py-1 backdrop-blur-xl"
-            >
-              <div className="h-[22px] w-[22px] shrink-0 overflow-hidden rounded-full bg-white/15 ring-1 ring-white/10">
+          ].map((comment, index) => (
+            <div key={comment.name} className="flex items-center gap-1.5 rounded-[15px] border border-white/10 bg-black/35 px-1.5 py-1 backdrop-blur-xl">
+              <div className="h-[21px] w-[21px] shrink-0 overflow-hidden rounded-full bg-white/15 ring-1 ring-white/10">
                 <div className="h-full w-full bg-gradient-to-br from-white/50 to-white/5" />
               </div>
               <div className="min-w-0">
-                <p className="text-[14px] font-bold leading-none">
-                  {comment.name}
-                </p>
-                <p className="mt-1 text-[13px] leading-none text-white/85">
-                  {comment.text}
-                </p>
+                <p className="text-[13px] font-semibold leading-none">{comment.name}</p>
+                <p className="mt-1 text-[11px] leading-none text-white/85">{comment.text}</p>
               </div>
             </div>
           ))}
         </div>
 
         {/* Community guidelines */}
-        <div className="absolute left-[15px] bottom-[153px] z-30 w-[218px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[10px] backdrop-blur-2xl">
+        <div className="absolute left-[15px] bottom-[153px] z-30 w-[181px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[10px] backdrop-blur-2xl">
           <div className="flex items-start gap-1">
             <ShieldCheck className="mt-1 h-[13px] w-[13px] shrink-0" strokeWidth={1.6} />
             <div>
-              <p className="text-[13px] font-semibold leading-tight">
-                Community Guidelines
-              </p>
-              <p className="mt-2 text-[12px] leading-[1.45] text-white/80">
-                Please do not livestream any vulgar, pornographic (including
-                child pornography), child sexual abuse and sexual
-                exploitation, content that violates laws and habits,
-                infringing or illegal content, otherwise your account will be
-                banned by the app.
+              <p className="text-[13px] font-semibold leading-tight">Community Guidelines</p>
+              <p className="mt-3 text-[11px] leading-[1.45] text-white/80">
+                Please do not livestream any vulgar, pornographic (including child pornography), child sexual abuse and sexual exploitation, content that violates laws and habits, infringing or illegal content, otherwise your account will be banned by the app.
               </p>
             </div>
           </div>
         </div>
 
         {/* Room boost */}
-        <div className="absolute left-[15px] bottom-[95px] z-30 w-[218px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[9px] backdrop-blur-2xl">
+        <div className="absolute left-[15px] bottom-[95px] z-30 w-[181px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[9px] backdrop-blur-2xl">
           <div className="flex items-start gap-1">
             <Bell className="mt-1 h-[13px] w-[13px] shrink-0" strokeWidth={1.6} />
             <div className="min-w-0 flex-1">
@@ -1567,36 +2145,24 @@ export default function RoomStagePage({
                 <p className="text-[13px] font-semibold">Room Boost</p>
                 <ChevronRight className="h-3 w-3" strokeWidth={1.6} />
               </div>
-              <p className="mt-1 text-[12px] leading-[1.45] text-white/75">
-                Notify friends to start livestreaming, increasing room Hot
-                Boost.
-              </p>
+              <p className="mt-2 text-[11px] leading-[1.45] text-white/75">Notify friends to start livestreaming, increasing room Hot Boost.</p>
             </div>
           </div>
         </div>
 
-        {/* Ranking / share shortcuts */}
-        <div className="absolute right-[15px] bottom-[153px] z-30 flex w-[125px] flex-col gap-1.5">
-          <button
-            type="button"
-            className="flex h-[28px] items-center justify-between rounded-full border border-white/15 bg-black/45 px-3.5 backdrop-blur-xl"
-          >
-            <span className="flex items-center gap-2 text-[12px]">
-              <BarChart3 className="h-[13px] w-[13px]" strokeWidth={1.7} />
-              Game Ranking
-            </span>
+        {/* Right-side utility buttons */}
+        <div className="absolute right-[15px] bottom-[153px] z-30 flex w-[111px] flex-col gap-1.5">
+          <button type="button" className="flex h-[28px] items-center justify-between rounded-full border border-white/15 bg-black/45 px-3.5 backdrop-blur-xl">
+            <span className="flex items-center gap-2 text-[11px]"><BarChart3 className="h-[13px] w-[13px]" strokeWidth={1.7} />Game Ranking</span>
             <ChevronRight className="h-3 w-3" strokeWidth={1.7} />
           </button>
-          <button
-            type="button"
-            className="flex h-[28px] items-center gap-1 rounded-full border border-white/15 bg-black/45 px-3.5 text-[12px] backdrop-blur-xl"
-          >
+          <button type="button" className="flex h-[28px] items-center gap-1 rounded-full border border-white/15 bg-black/45 px-3.5 backdrop-blur-xl text-[11px]">
             <Share2 className="h-[14px] w-[14px]" strokeWidth={1.7} />
             Share
           </button>
         </div>
 
-        {/* Audio stage toggle */}
+        {/* Vertical audio-stage button */}
         <button
           type="button"
           onClick={() => setSpeakerPanelOpen(true)}
@@ -1605,55 +2171,33 @@ export default function RoomStagePage({
         >
           <Headphones className="h-[13px] w-[13px]" strokeWidth={1.6} />
           {occupiedSeats > 0 && (
-            <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[9px] font-bold text-black">
-              {occupiedSeats}
-            </span>
+            <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[9px] font-bold text-black">{occupiedSeats}</span>
           )}
         </button>
 
-        {/* Bottom action bar */}
+        {/* Bottom interaction bar */}
         <div className="absolute inset-x-0 bottom-[10px] z-40 flex items-center gap-[5px] px-[14px]">
           <div className="flex h-[29px] min-w-0 flex-1 items-center rounded-full border border-white/10 bg-black/45 px-[10px] text-[13px] text-white/45 backdrop-blur-xl">
             Say something...
           </div>
 
           {[
-            {
-              label: "Share link",
-              icon: <Link2 className="h-[13px] w-[13px]" strokeWidth={1.7} />,
-            },
-            {
-              label: "Messages",
-              icon: <Mail className="h-[13px] w-[13px]" strokeWidth={1.7} />,
-            },
-            {
-              label: "Menu",
-              icon: <Menu className="h-[14px] w-[14px]" strokeWidth={1.7} />,
-            },
-            {
-              label: "Gift",
-              icon: <Gift className="h-[13px] w-[13px]" strokeWidth={1.7} />,
-            },
+            { label: "Share link", icon: <Link2 className="h-[13px] w-[13px]" strokeWidth={1.7} /> },
+            { label: "Messages", icon: <Mail className="h-[13px] w-[13px]" strokeWidth={1.7} /> },
+            { label: "Menu", icon: <Menu className="h-[14px] w-[14px]" strokeWidth={1.7} /> },
+            { label: "Gift", icon: <Gift className="h-[13px] w-[13px]" strokeWidth={1.7} /> },
           ].map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              aria-label={item.label}
-              className="flex h-[29px] w-[29px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/45 backdrop-blur-xl"
-            >
+            <button key={item.label} type="button" aria-label={item.label} className="flex h-[29px] w-[29px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/45 backdrop-blur-xl">
               {item.icon}
             </button>
           ))}
 
-          <button
-            type="button"
-            aria-label="Like"
-            className="flex h-[29px] w-[29px] shrink-0 items-center justify-center rounded-full bg-white text-black"
-          >
+          <button type="button" aria-label="Like" className="flex h-[29px] w-[29px] shrink-0 items-center justify-center rounded-full bg-white text-black">
             <ThumbsUp className="h-[12px] w-[12px]" strokeWidth={1.6} />
           </button>
         </div>
 
+        {/* Host preview/live controls stay functional, but are visually integrated into the bottom UI */}
         {isHost && isWaiting && (
           <div className="absolute left-1/2 bottom-[43px] z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/10 bg-black/55 p-1 backdrop-blur-2xl">
             <button
@@ -1662,11 +2206,7 @@ export default function RoomStagePage({
               className="flex h-[24px] w-[24px] items-center justify-center rounded-full"
               aria-label="Toggle camera"
             >
-              {cameraEnabled ? (
-                <Video className="h-3 w-3" />
-              ) : (
-                <VideoOff className="h-3 w-3 text-red-300" />
-              )}
+              {cameraEnabled ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3 text-red-300" />}
             </button>
             <button
               type="button"
@@ -1674,11 +2214,7 @@ export default function RoomStagePage({
               className="flex h-[24px] w-[24px] items-center justify-center rounded-full"
               aria-label="Toggle microphone"
             >
-              {micEnabled ? (
-                <Mic className="h-3 w-3" />
-              ) : (
-                <MicOff className="h-3 w-3 text-red-300" />
-              )}
+              {micEnabled ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3 text-red-300" />}
             </button>
             <button
               type="button"
@@ -1686,11 +2222,7 @@ export default function RoomStagePage({
               disabled={actionLoading || !localStreamRef.current}
               className="flex h-[28px] items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-black disabled:opacity-50"
             >
-              {actionLoading ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Play className="h-3 w-3 fill-current" />
-              )}
+              {actionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
               <span>Start Live</span>
             </button>
           </div>
@@ -1698,13 +2230,7 @@ export default function RoomStagePage({
 
         {isHost && isLive && (
           <div className="absolute left-1/2 top-[46px] z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/40 px-2 py-1 text-[8px] font-semibold backdrop-blur-xl">
-            <span
-              className={`mr-2 inline-block h-2 w-2 rounded-full ${
-                hostMediaReady
-                  ? "animate-pulse bg-red-400"
-                  : "animate-pulse bg-amber-300"
-              }`}
-            />
+            <span className={`mr-2 inline-block h-2 w-2 rounded-full ${hostMediaReady ? "animate-pulse bg-red-400" : "animate-pulse bg-amber-300"}`} />
             {hostMediaReady ? "LIVE" : "CONNECTING"}
           </div>
         )}
@@ -1731,6 +2257,7 @@ export default function RoomStagePage({
           </div>
         )}
 
+        {/* Audio stage modal */}
         {speakerPanelOpen && (
           <div
             className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 px-4 pb-5"
@@ -1798,13 +2325,15 @@ function AudioSeatPanel({
 }) {
   return (
     <div className="flex max-h-[75dvh] flex-col">
+      {/* Header */}
       <div className="flex items-center justify-between px-5 pb-3 pt-5">
-        <p className="text-[15px] font-semibold text-white">Audio stage</p>
-        <p className="text-[13px] text-white/35">
+        <p className="text-[8px] font-semibold text-white">Audio stage</p>
+        <p className="text-[8px] text-white/35">
           {speakers.length}/{seatCount}
         </p>
       </div>
 
+      {/* Seats — flat row, no glow rings, minimal state changes */}
       <div className="flex items-center gap-1.5 px-5 pb-5">
         {Array.from({ length: seatCount }).map((_, index) => {
           const speaker = speakers[index];
@@ -1822,10 +2351,7 @@ function AudioSeatPanel({
                 }`}
               >
                 {speaker ? (
-                  <UserRound
-                    className="h-4.5 w-4.5 text-white/60"
-                    strokeWidth={1.75}
-                  />
+                  <UserRound className="h-4.5 w-4.5 text-white/60" strokeWidth={1.75} />
                 ) : (
                   <div className="h-1.5 w-1.5 rounded-full bg-white/15" />
                 )}
@@ -1841,12 +2367,11 @@ function AudioSeatPanel({
 
       <div className="h-px bg-white/[0.06]" />
 
+      {/* Host: request list */}
       {isHost ? (
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {requests.length === 0 ? (
-            <p className="py-6 text-center text-[13px] text-white/25">
-              No pending requests
-            </p>
+            <p className="py-6 text-center text-[8px] text-white/25">No pending requests</p>
           ) : (
             <div className="space-y-1">
               {requests.map((request) => (
@@ -1895,9 +2420,7 @@ function AudioSeatPanel({
               Waiting for the host
             </div>
           ) : speakers.length >= seatCount ? (
-            <p className="py-3 text-center text-[12px] text-white/25">
-              Stage is full
-            </p>
+            <p className="py-3 text-center text-[12px] text-white/25">Stage is full</p>
           ) : (
             <button
               type="button"
