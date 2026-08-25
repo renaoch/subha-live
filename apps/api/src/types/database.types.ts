@@ -1173,6 +1173,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          requested_by: string | null
           responded_at: string | null
           room_id: string
           status: Database["public"]["Enums"]["room_request_status"]
@@ -1182,6 +1183,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          requested_by?: string | null
           responded_at?: string | null
           room_id: string
           status?: Database["public"]["Enums"]["room_request_status"]
@@ -1191,6 +1193,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          requested_by?: string | null
           responded_at?: string | null
           room_id?: string
           status?: Database["public"]["Enums"]["room_request_status"]
@@ -1198,6 +1201,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "room_join_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "room_join_requests_room_id_fkey"
             columns: ["room_id"]
@@ -2018,7 +2028,7 @@ export type Database = {
     Enums: {
       room_participant_role: "host" | "moderator" | "speaker" | "audience"
       room_request_status: "pending" | "accepted" | "rejected" | "cancelled"
-      room_request_type: "audio"
+      room_request_type: "audio" | "video"
       room_status: "created" | "live" | "ending" | "ended"
       user_role:
         | "user"
@@ -2156,7 +2166,7 @@ export const Constants = {
     Enums: {
       room_participant_role: ["host", "moderator", "speaker", "audience"],
       room_request_status: ["pending", "accepted", "rejected", "cancelled"],
-      room_request_type: ["audio"],
+      room_request_type: ["audio", "video"],
       room_status: ["created", "live", "ending", "ended"],
       user_role: [
         "user",

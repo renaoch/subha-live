@@ -6,6 +6,8 @@ export type MediaEventType =
   | "host_reconnected"
   | "speaker_joined"
   | "speaker_left"
+  | "speaker_video_enabled"
+  | "speaker_video_disabled"
   | "viewer_joined"
   | "viewer_left"
   | "media_degraded"

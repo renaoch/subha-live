@@ -1,8 +1,16 @@
 import { Router } from "express";
 import { authMiddleware } from "../auth/auth.middleware";
 import { createRoom, getRoom, startRoom, endRoom } from "./room.controller";
-import { joinRoom, leaveRoom, } from "./room-participant.controller";
-import { createAudioRequest, cancelAudioRequest, } from "./room-request.controller";
+import { joinRoom, leaveRoom } from "./room-participant.controller";
+import {
+  createSpeakerRequest,
+  cancelSpeakerRequest,
+  listSpeakerRequests,
+  approveSpeakerRequest,
+  rejectSpeakerRequest,
+  acceptHostInvitation,
+  removeSpeaker,
+} from "./room-request.controller";
 
 const router = Router();
 
@@ -14,7 +22,32 @@ router.post("/:id/end", authMiddleware, endRoom);
 router.post("/:id/join", authMiddleware, joinRoom);
 router.post("/:id/leave", authMiddleware, leaveRoom);
 
-router.post("/:id/audio-request", authMiddleware, createAudioRequest);
-router.delete("/:id/audio-request", authMiddleware, cancelAudioRequest);
+router.post("/:id/speaker-request", authMiddleware, createSpeakerRequest);
+router.delete("/:id/speaker-request", authMiddleware, cancelSpeakerRequest);
+router.get("/:id/speaker-requests", authMiddleware, listSpeakerRequests);
+router.post(
+  "/:id/speaker-requests/:requestId/approve",
+  authMiddleware,
+  approveSpeakerRequest,
+);
+router.post(
+  "/:id/speaker-requests/:requestId/reject",
+  authMiddleware,
+  rejectSpeakerRequest,
+);
+router.post(
+  "/:id/speaker-requests/:requestId/accept",
+  authMiddleware,
+  acceptHostInvitation,
+);
+router.delete(
+  "/:id/speakers/:userId",
+  authMiddleware,
+  removeSpeaker,
+);
+
+// Backward-compatible endpoints.
+router.post("/:id/audio-request", authMiddleware, createSpeakerRequest);
+router.delete("/:id/audio-request", authMiddleware, cancelSpeakerRequest);
 
 export default router;

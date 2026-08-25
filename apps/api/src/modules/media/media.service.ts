@@ -51,6 +51,8 @@ function createEmptyRoomState(
 
     speakers: {},
 
+    viewers: {},
+
     viewerCount: 0,
 
     updatedAt: now(),
@@ -130,6 +132,15 @@ export function createMediaService(
           );
       }
 
+      const viewers: RoomMediaState["viewers"] = {};
+      const viewerEntries = await redis.hGetAll(
+        mediaKeys.viewers(roomId),
+      );
+
+      for (const [userId, value] of Object.entries(viewerEntries)) {
+        viewers[userId] = parseRedisJson(value);
+      }
+
       const viewerCount =
         await redis.sCard(
           mediaKeys.viewers(
@@ -160,6 +171,8 @@ export function createMediaService(
         host,
 
         speakers,
+
+        viewers,
 
         viewerCount,
 
@@ -369,9 +382,45 @@ export function createMediaService(
       );
     },
 
+    async saveHostSession(
+      session: MediaSession,
+      videoTrackName: string,
+      audioTrackName: string,
+    ): Promise<void> {
+      if (session.role !== "host") {
+        throw new MediaStateConflictError(
+          "Only host sessions can be stored as host media state",
+        );
+      }
+
+      const key = mediaKeys.media(session.roomId);
+
+      await redis.hSet(key, {
+        status: session.status,
+        generation: String(session.generation),
+        host: JSON.stringify({
+          userId: session.userId,
+          sessionId: session.sessionId,
+          videoTrackName,
+          audioTrackName,
+          generation: session.generation,
+          status: session.status,
+          connectedAt: session.createdAt,
+          lastHeartbeatAt: session.lastHeartbeatAt,
+        }),
+        updatedAt: String(now()),
+      });
+
+      await redis.expire(
+        key,
+        mediaConfig.redis.roomStateTtlSeconds,
+      );
+    },
+
     async saveSpeakerSession(
       session: MediaSession,
       audioTrackName: string,
+      videoTrackName?: string,
     ): Promise<void> {
       if (
         session.role !==
@@ -395,6 +444,10 @@ export function createMediaService(
             session.sessionId,
 
           audioTrackName,
+
+          videoTrackName,
+
+          hasVideo: Boolean(videoTrackName),
 
           generation:
             session.generation,
@@ -443,6 +496,13 @@ export function createMediaService(
         );
       }
 
+      await redis.sAdd(
+        mediaKeys.viewers(
+          session.roomId,
+        ),
+        session.userId,
+      );
+
       await redis.hSet(
         mediaKeys.viewers(
           session.roomId,
@@ -480,11 +540,30 @@ export function createMediaService(
       );
     },
 
+    async clearParticipants(
+      roomId: string,
+    ): Promise<void> {
+      await redis.hDel(
+        mediaKeys.media(roomId),
+        "host",
+      );
+      await redis.del([
+        mediaKeys.speakers(roomId),
+        mediaKeys.viewers(roomId),
+      ]);
+    },
+
     async removeViewerSession(
       roomId: string,
       userId: string,
     ): Promise<void> {
       await redis.hDel(
+        mediaKeys.viewers(
+          roomId,
+        ),
+        userId,
+      );
+      await redis.sRem(
         mediaKeys.viewers(
           roomId,
         ),

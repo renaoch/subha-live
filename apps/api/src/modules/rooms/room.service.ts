@@ -1,6 +1,8 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import type { Tables, TablesInsert } from "../../types/database.types";
+import { mediaService } from "../media";
+import { roomMediaService } from "./room-media.service";
 
 type Room = Tables<"rooms">;
 type CreateRoomInput = Pick<
@@ -123,6 +125,10 @@ export const roomService = {
       );
     }
 
+    await mediaService.initializeRoom(roomId);
+    await mediaService.incrementGeneration(roomId);
+    await mediaService.setRoomStatus(roomId, "starting");
+
     return data;
   },
 
@@ -173,6 +179,8 @@ export const roomService = {
         },
       );
     }
+
+    await roomMediaService.shutdownRoom(roomId);
 
     return data;
   },

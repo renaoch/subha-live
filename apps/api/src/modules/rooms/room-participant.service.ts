@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { roomState } from "./room-state.service";
+import { roomMediaService } from "./room-media.service";
 import type {
   Tables,
   TablesInsert,
@@ -149,7 +150,7 @@ export const roomParticipantService = {
     const { data: participant, error: fetchError } =
       await supabase
         .from("room_participants")
-        .select("room_id, user_id, left_at")
+        .select("room_id, user_id, left_at, role")
         .eq("room_id", roomId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -201,5 +202,9 @@ export const roomParticipantService = {
     }
 
     await roomState.removeViewer(roomId, userId);
+
+    if (participant.role === "speaker") {
+      await roomMediaService.unpublishGuest(roomId, userId).catch(() => {});
+    }
   },
 };

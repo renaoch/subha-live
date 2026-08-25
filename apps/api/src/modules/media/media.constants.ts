@@ -58,3 +58,7 @@ export const MEDIA_NEGOTIATION_STATES = [
   "completed",
   "failed",
 ] as const;
+export const MEDIA_SLOT_LIMITS = {
+  guestAudio: 3,
+  guestVideo: 1,
+} as const;

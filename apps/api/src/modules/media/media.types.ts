@@ -134,6 +134,10 @@ export interface SpeakerMediaState {
 
   audioTrackName: string;
 
+  videoTrackName?: string;
+
+  hasVideo: boolean;
+
   generation: number;
 
   status: MediaSessionStatus;
@@ -181,6 +185,11 @@ export interface RoomMediaState {
   speakers: Record<
     string,
     SpeakerMediaState
+  >;
+
+  viewers: Record<
+    string,
+    ViewerMediaState
   >;
 
   viewerCount: number;
