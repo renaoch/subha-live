@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   BellRing,
-  ChevronLeft,
   ChevronRight,
   Headphones,
   Loader2,
   Mic,
   MicOff,
   PhoneOff,
+  X,
   Play,
   Radio,
   ShieldCheck,
@@ -338,7 +338,7 @@ export default function RoomStagePage({
     useState<RoomMediaState | null>(null);
 
   const [speakerPanelOpen, setSpeakerPanelOpen] =
-    useState(true);
+    useState(false);
 
   const [speakerRequests, setSpeakerRequests] =
     useState<SpeakerRequest[]>([]);
@@ -393,6 +393,9 @@ export default function RoomStagePage({
 
   const hostSpeakerIdsRef =
     useRef<Set<string>>(new Set());
+
+  const speakerApprovalSeenRef =
+    useRef(false);
 
   const isHost = Boolean(
     room &&
@@ -558,7 +561,7 @@ async function syncHostGuestAudio(state: RoomMediaState) {
     const localDescription = peer.localDescription;
     if (!localDescription?.sdp) throw new Error("Host guest-audio SDP was not created.");
 
-    const result = await roomsApi.subscribeHostToGuests(room.id, { offerSdp: localDescription.sdp });
+    const result = await roomsApi.subscribeHostToGuests(currentRoom.id, { offerSdp: localDescription.sdp });
 
     if (result.answerSdp) {
       await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
@@ -572,7 +575,7 @@ async function syncHostGuestAudio(state: RoomMediaState) {
       await waitForIceGatheringComplete(peer);
       const localAnswer = peer.localDescription;
       if (!localAnswer?.sdp) throw new Error("Host guest-audio answer was not created.");
-      await roomsApi.subscribeHostToGuests(room.id, { answerSdp: localAnswer.sdp });
+      await roomsApi.subscribeHostToGuests(currentRoom.id, { answerSdp: localAnswer.sdp });
       return;
     }
 
@@ -580,7 +583,16 @@ async function syncHostGuestAudio(state: RoomMediaState) {
   }
 
   async function syncViewerSpeakerAudio(state: RoomMediaState) {
-    if (isHost || !viewerPeerRef.current || !viewerSessionRef.current) return;
+    const currentRoom = room;
+
+    if (
+      !currentRoom ||
+      isHost ||
+      !viewerPeerRef.current ||
+      !viewerSessionRef.current
+    ) {
+      return;
+    }
 
     const newSpeakers = Object.keys(state.speakers).filter(
       (speakerId) => !viewerSpeakerIdsRef.current.has(speakerId),
@@ -601,13 +613,7 @@ async function syncHostGuestAudio(state: RoomMediaState) {
     const localDescription = peer.localDescription;
     if (!localDescription?.sdp) throw new Error("Viewer speaker-audio offer was not created.");
 
-   const currentRoom = room;
-
-if (!currentRoom || isHost || !viewerPeerRef.current || !viewerSessionRef.current) {
-  return;
-}
-
-const result = await roomsApi.createViewerSession(
+    const result = await roomsApi.createViewerSession(
   currentRoom.id,
   localDescription.sdp,
 );
@@ -1372,6 +1378,10 @@ if (result.offerSdp) {
 
         if (!isHost && state.speakers[userId ?? ""]) {
           setRequestPending(false);
+          if (!speakerApprovalSeenRef.current) {
+            speakerApprovalSeenRef.current = true;
+            toast.success("Your audio seat was accepted");
+          }
         }
 
         if (isHost) {
@@ -1949,15 +1959,6 @@ if (result.offerSdp) {
               {room.viewerCount ?? mediaState?.viewerCount ?? 0} watching
             </div>
             <button
-              onClick={() => setSpeakerPanelOpen((value) => !value)}
-              className="flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.08] px-3 text-xs font-bold text-white/80 backdrop-blur-xl"
-              aria-label="Toggle audio seats"
-            >
-              <Headphones className="h-4 w-4" />
-              <span className="hidden sm:inline">Seats</span>
-              <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{occupiedSeats}/{seatCount}</span>
-            </button>
-            <button
               onClick={handleLeave}
               className="flex h-10 items-center gap-2 rounded-full bg-red-500 px-4 text-xs font-bold text-white shadow-lg shadow-red-500/20 transition hover:bg-red-400"
             >
@@ -2049,8 +2050,36 @@ if (result.offerSdp) {
             )}
           </section>
 
-          {speakerPanelOpen && (
-            <aside className="hidden w-[300px] shrink-0 flex-col overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.045] shadow-2xl backdrop-blur-2xl lg:flex">
+        <button
+          type="button"
+          onClick={() => setSpeakerPanelOpen(true)}
+          className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/35 px-4 py-3 text-xs font-bold text-white shadow-2xl shadow-black/40 backdrop-blur-2xl transition hover:scale-[1.03] hover:bg-black/45"
+          aria-label="Open audio stage"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.09]">
+            <Headphones className="h-4 w-4" />
+          </span>
+          <span>Audio stage</span>
+          <span className="rounded-full bg-white/10 px-2 py-1 text-[10px]">{occupiedSeats}/{seatCount}</span>
+        </button>
+
+        {speakerPanelOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md"
+            onClick={() => setSpeakerPanelOpen(false)}
+          >
+            <div
+              className="relative max-h-[86dvh] w-full max-w-md overflow-hidden rounded-[30px] border border-white/15 bg-[#101017]/75 shadow-[0_30px_120px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setSpeakerPanelOpen(false)}
+                className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] text-white/70 transition hover:bg-white/[0.12] hover:text-white"
+                aria-label="Close audio stage"
+              >
+                <X className="h-4 w-4" />
+              </button>
               <AudioSeatPanel
                 isHost={isHost}
                 requests={speakerRequests}
@@ -2063,18 +2092,9 @@ if (result.offerSdp) {
                 onReject={rejectRequest}
                 hostName={hostName}
               />
-            </aside>
-          )}
-        </div>
-
-        <div className="pb-4 lg:hidden">
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-1 backdrop-blur-2xl">
-            <button onClick={() => setSpeakerPanelOpen((value) => !value)} className="flex w-full items-center justify-between rounded-[20px] px-4 py-3 text-left">
-              <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20"><Headphones className="h-4 w-4" /></div><div><p className="text-sm font-bold">Audio seats</p><p className="text-[11px] text-white/45">{occupiedSeats}/{seatCount} occupied</p></div></div>
-              {speakerPanelOpen ? <ChevronLeft className="h-4 w-4 rotate-[-90deg] text-white/45" /> : <ChevronRight className="h-4 w-4 text-white/45" />}
-            </button>
-            {speakerPanelOpen && <div className="border-t border-white/10 pt-1"><AudioSeatPanel isHost={isHost} requests={speakerRequests} speakers={activeSpeakers} seatCount={seatCount} pending={requestPending} requestLoading={actionLoading} onRequest={requestAudioSeat} onApprove={approveRequest} onReject={rejectRequest} hostName={hostName} /></div>}
+            </div>
           </div>
+        )}
         </div>
       </div>
     </main>

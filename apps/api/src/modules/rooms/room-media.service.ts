@@ -372,143 +372,148 @@ const connectedSession: MediaSession = {
     offerSdp: string,
     tracks: MediaTrack[],
   ) {
-    const room =
-      await getRoom(roomId);
+    const room = await getRoom(roomId);
 
-    if (
-      room.host_id === userId
-    ) {
-      throw new AppError(
-        409,
-        "Host cannot join as a guest",
-        {
-          code:
-            "HOST_CANNOT_BE_GUEST",
-        },
-      );
+    if (room.host_id === userId) {
+      throw new AppError(409, "Host cannot join as a guest", {
+        code: "HOST_CANNOT_BE_GUEST",
+      });
     }
 
-    if (
-      !stringValue(offerSdp)
-    ) {
-      throw new AppError(
-        400,
-        "offerSdp is required",
-        {
-          code:
-            "MEDIA_SDP_OFFER_REQUIRED",
-        },
-      );
+    if (!stringValue(offerSdp)) {
+      throw new AppError(400, "offerSdp is required", {
+        code: "MEDIA_SDP_OFFER_REQUIRED",
+      });
     }
 
-    const audioTrack =
-      requireTrack(
-        tracks,
-        "audio",
-      );
+    const audioTrack = requireTrack(tracks, "audio");
+    const videoTrack = tracks.find((track) => track.kind === "video");
+
+    const state = await mediaService.getRoomState(roomId);
+    const existingSpeaker = state.speakers[userId];
 
     /*
-     * Guest video is optional.
+     * The viewer is only allowed to publish after the host has
+     * accepted the audio-seat request. Approval creates the Redis
+     * speaker reservation before this method is called.
      *
-     * This is what allows the single guest video
-     * slot to coexist with the three audio slots.
+     * Most importantly, the first and second browser negotiations
+     * MUST use the same Cloudflare session. Creating a new session
+     * for the second offer breaks the browser's ICE/DTLS state and
+     * leaves the accepted speaker apparently stuck in the room UI.
      */
-    const videoTrack =
-      tracks.find(
-        (track) =>
-          track.kind ===
-          "video",
-      );
+    if (!existingSpeaker) {
+      const currentGuestCount = Object.keys(state.speakers).length;
 
-    const state =
-      await mediaService.getRoomState(
-        roomId,
-      );
-
-    const currentGuestCount =
-      Object.keys(
-        state.speakers,
-      ).length;
-
-    if (
-      currentGuestCount >=
-      room.max_guest_slots
-    ) {
-      throw new AppError(
-        409,
-        "All guest slots are full",
-        {
-          code:
-            "MEDIA_GUEST_SLOTS_FULL",
-        },
-      );
+      if (currentGuestCount >= Math.min(room.max_guest_slots ?? 3, 3)) {
+        throw new AppError(409, "All guest slots are full", {
+          code: "MEDIA_GUEST_SLOTS_FULL",
+        });
+      }
     }
 
-    const generation =
-      state.generation;
+    const generation = state.generation;
+    const provider = await mediaService.getProvider();
 
-    const provider =
-      await mediaService.getProvider();
-
-    const sessionResult =
-      await provider.createSession({
-        roomId,
-        userId,
-        role: "speaker",
-        generation,
-        offerSdp,
-      });
+    let session: MediaSession | null = null;
 
     try {
-      const publishTracks =
-        videoTrack
-          ? [
-              audioTrack,
-              videoTrack,
-            ]
-          : [audioTrack];
-
-      const negotiation =
-        await provider.publishTracks({
-          sessionId:
-            sessionResult.session
-              .sessionId,
+      if (!existingSpeaker) {
+        const sessionResult = await provider.createSession({
+          roomId,
+          userId,
+          role: "speaker",
+          generation,
           offerSdp,
-          tracks:
-            publishTracks,
         });
 
-      /*
-       * Speaker always has audio.
-       *
-       * Video is optional. An empty videoTrackName
-       * means this speaker occupies an audio slot only.
-       */
+        session = sessionResult.session;
+
+        /*
+         * Phase 1 only creates the Cloudflare session. Persist it as
+         * connecting so the next negotiation reuses this exact
+         * session ID.
+         */
+        await mediaService.saveSpeakerSession(
+          session,
+          audioTrack.trackName,
+          videoTrack?.trackName ?? "",
+        );
+
+        return {
+          session,
+          answerSdp: sessionResult.sessionDescription?.sdp,
+          offerSdp: undefined,
+          tracks: [],
+          requiresRenegotiation: false,
+        };
+      }
+
+      if (
+        existingSpeaker.status !== "connecting" &&
+        existingSpeaker.status !== "connected" &&
+        existingSpeaker.status !== "reconnecting"
+      ) {
+        throw new AppError(409, "Speaker media session is not available", {
+          code: "MEDIA_SPEAKER_SESSION_UNAVAILABLE",
+        });
+      }
+
+      session = {
+        sessionId: existingSpeaker.sessionId,
+        roomId,
+        userId: existingSpeaker.userId,
+        role: "speaker",
+        generation: existingSpeaker.generation,
+        status: existingSpeaker.status,
+        createdAt: existingSpeaker.joinedAt,
+        lastHeartbeatAt: existingSpeaker.lastHeartbeatAt,
+      };
+
+      const publishTracks = videoTrack
+        ? [audioTrack, videoTrack]
+        : [audioTrack];
+
+      const negotiation = await provider.publishTracks({
+        sessionId: existingSpeaker.sessionId,
+        offerSdp,
+        tracks: publishTracks,
+      });
+
+      if (!negotiation.answerSdp && !negotiation.offerSdp) {
+        throw new AppError(
+          502,
+          "Cloudflare did not return a speaker track negotiation SDP",
+          { code: "MEDIA_TRACK_SDP_MISSING" },
+        );
+      }
+
+      const connectedSession: MediaSession = {
+        ...session,
+        status: "connected",
+        lastHeartbeatAt: Date.now(),
+      };
+
       await mediaService.saveSpeakerSession(
-        sessionResult.session,
+        connectedSession,
         audioTrack.trackName,
-        videoTrack?.trackName ?? "",
+        videoTrack?.trackName ?? existingSpeaker.videoTrackName ?? "",
       );
 
       return {
-        session:
-          sessionResult.session,
-        answerSdp:
-          negotiation.answerSdp,
-        offerSdp:
-          negotiation.offerSdp,
-        tracks:
-          negotiation.tracks,
-        requiresRenegotiation:
-          negotiation.requiresRenegotiation,
+        session: connectedSession,
+        answerSdp: negotiation.answerSdp,
+        offerSdp: negotiation.offerSdp,
+        tracks: negotiation.tracks,
+        requiresRenegotiation: negotiation.requiresRenegotiation,
       };
     } catch (error) {
-      await provider
-        .closeSession(
-          sessionResult.session
-            .sessionId,
-        )
-        .catch(() => {});
+      /* Only destroy a newly-created session on failure. An existing
+       * approved speaker session may still be needed for a retry. */
+      if (session && !existingSpeaker) {
+        await provider.closeSession(session.sessionId).catch(() => {});
+        await mediaService.removeSpeakerSession(roomId, userId).catch(() => {});
+      }
 
       throw error;
     }
