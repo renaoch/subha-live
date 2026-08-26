@@ -83,7 +83,7 @@ export function HostsPanel({ agencyId }: HostsPanelProps) {
       {loading ? (
         <div className="h-32 animate-pulse rounded-2xl border border-white/[0.05] bg-white/[0.02]" />
       ) : hosts.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.015] px-6 py-10 text-center text-xs text-white/30">
+        <div className="rounded-2xl border border-dashed border-white/8 bg-white/1.5 px-6 py-10 text-center text-xs text-white/30">
           <Users className="mx-auto h-5 w-5 text-white/15" />
           <p className="mt-2">No hosts yet. Approve applications to onboard creators.</p>
         </div>
