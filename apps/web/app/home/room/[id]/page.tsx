@@ -1820,50 +1820,36 @@ async function syncHostGuestAudio(state: RoomMediaState) {
   /*
    * Viewer heartbeat.
    */
-  useEffect(() => {
-    if (
-      !viewerSessionRef.current ||
-      isHost
-    ) {
-      return;
-    }
+useEffect(() => {
+  if (!viewerSessionRef.current || isHost) return;
 
-    const timer =
-      window.setInterval(
-        () => {
-          const session =
-            viewerSessionRef.current;
+  const timer = window.setInterval(() => {
+    const session = viewerSessionRef.current;
+    if (!session) return;
 
-          if (!session) {
-            return;
-          }
+    roomsApi
+      .heartbeat(id, {
+        role: "viewer",
+        sessionId: session.sessionId,
+        generation: session.generation,
+      })
+      .catch((error) => {
+        // If the session is invalid, stop heartbeats and attempt to rejoin.
+        if (error?.status === 403 || error?.code === "MEDIA_VIEWER_SESSION_INVALID") {
+          console.warn("Viewer session invalid – stopping heartbeats");
+          window.clearInterval(timer);
+          // Optionally trigger a rejoin or show a message.
+          // For example:
+          // setViewerConnected(false);
+          // void handleJoin(); // but avoid infinite loops
+        } else {
+          console.error("Heartbeat error", error);
+        }
+      });
+  }, 15000);
 
-          roomsApi
-            .heartbeat(
-              id,
-              {
-                role: "viewer",
-                sessionId:
-                  session.sessionId,
-                generation:
-                  session.generation,
-              },
-            )
-            .catch(() => { });
-        },
-        15000,
-      );
-
-    return () =>
-      window.clearInterval(
-        timer,
-      );
-  }, [
-    id,
-    isHost,
-    viewerConnected,
-  ]);
-
+  return () => window.clearInterval(timer);
+}, [id, isHost, viewerConnected]);
   useEffect(() => {
     if (!speakerPublishing || isHost) return;
 
