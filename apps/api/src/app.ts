@@ -30,14 +30,17 @@ import charismaRoutes from "./modules/charisma/charisma.routes";
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-    app.use(
-    cors({
-        origin: allowedOrigins,
+    const corsOptions = {
+        origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+            callback(null, !origin || allowedOrigins.includes(origin));
+        },
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
-    })
-    );
+    };
+
+    app.use(cors(corsOptions));
+    app.options("/{*splat}", cors(corsOptions));
     app.use(express.json({ limit: "256kb" }));
 
     app.use("/health", healthRoutes);
