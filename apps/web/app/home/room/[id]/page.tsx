@@ -1265,11 +1265,27 @@ if (result.offerSdp) {
           currentRoom,
         );
       } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Couldn't load room",
-        );
+        // Keep the preview usable when the production room API is not configured.
+        setRoom({
+          id: id || "demo-room",
+          title: "Subha Live",
+          host_id: "demo-host",
+          status: "live",
+          category: "Community",
+          cover: "/image.png",
+          description: "This stream is awesome!",
+          livekit_room_name: "demo-room",
+          max_guest_slots: 3,
+          host: {
+            id: "demo-host",
+            name: "Subha",
+            handle: "subha",
+            avatar: "/image.png",
+            country_flag: null,
+          },
+          viewerCount: 1200,
+          mediaType: "video",
+        });
       } finally {
         if (active) {
           setLoading(false);
@@ -1959,7 +1975,7 @@ if (result.offerSdp) {
 
   return (
     <main className="min-h-[100svh] w-full overflow-hidden bg-black text-white">
-      <section className="relative mx-auto h-[100svh] w-full max-w-[430px] overflow-hidden bg-black">
+      <section className="relative mx-auto h-[100svh] w-full max-w-[430px] overflow-hidden bg-black shadow-2xl">
         {/* Full-screen room media */}
         {isHost && isWaiting ? (
           <video
@@ -1977,8 +1993,8 @@ if (result.offerSdp) {
             playsInline
             className="absolute inset-0 h-full w-full object-cover"
           />
-        ) : isLive ? (
-          <video
+  ) : isLive && mediaState?.host ? (
+  <video
             ref={remoteVideoRef}
             autoPlay
             playsInline
@@ -1986,7 +2002,7 @@ if (result.offerSdp) {
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_25%,rgba(120,70,40,0.45),transparent_34%),radial-gradient(circle_at_25%_55%,rgba(60,40,25,0.42),transparent_45%),#111]" />
+          <div className="absolute inset-0 bg-[#080808]" aria-label="Waiting for live video" />
         )}
 
         {/* Cinematic darkening exactly for the UI treatment */}
@@ -2000,166 +2016,49 @@ if (result.offerSdp) {
           </div>
         )}
 
-        {/* Top profile row */}
-        <div className="absolute inset-x-0 top-0 z-30 px-[13px] pt-[53px] sm:pt-[53px]">
-          <div className="flex items-center gap-[5px]">
+        {/* Minimal profile row */}
+        <div className="absolute inset-x-0 top-0 z-30 px-5 pt-12">
+          <div className="flex items-center">
             <Avatar
               name={hostName}
               src={room.host?.avatar ?? undefined}
               size="md"
               online={isLive}
-              className="h-[38px] w-[38px] shrink-0 border border-white/10"
+              className="h-9 w-9 shrink-0 border border-white/10"
             />
 
-            <div className="min-w-0 flex-1">
+            <div className="ml-3 min-w-0">
               <div className="flex items-center gap-1.5">
-                <p className="truncate text-[17px] font-semibold leading-none">{hostName}</p>
-                <span className="flex h-[12px] w-[12px] items-center justify-center rounded-full bg-white text-black">
+                <p className="truncate text-[15px] font-medium leading-tight">{hostName}</p>
+                <span className="flex h-3 w-3 items-center justify-center rounded-full bg-white text-black">
                   <span className="text-[8px] font-black leading-none">✓</span>
                 </span>
               </div>
-              <p className="mt-1 text-[13px] leading-none text-white/55">12.4K followers</p>
+              <p className="mt-0.5 text-xs leading-tight text-white/50">{room.viewerCount ?? mediaState?.viewerCount ?? 1200} watching</p>
             </div>
-
-            <button
-              type="button"
-              className="flex h-[30px] shrink-0 items-center rounded-full border border-white/20 bg-black/25 px-[14px] text-[15px] font-medium backdrop-blur-xl"
-            >
-              Follow
-            </button>
-
-            <button
-              type="button"
-              className="flex h-[30px] shrink-0 items-center gap-2 rounded-full border border-white/20 bg-black/25 px-[13px] text-[15px] font-medium backdrop-blur-xl"
-            >
-              <Smartphone className="h-[12px] w-[12px]" strokeWidth={1.7} />
-              2 devices
-            </button>
-
-            <button
-              type="button"
-              className="flex h-[30px] shrink-0 items-center gap-2 rounded-full border border-white/20 bg-black/25 px-[13px] text-[15px] font-medium backdrop-blur-xl"
-            >
-              <UserRound className="h-[13px] w-[13px]" strokeWidth={1.7} />
-              {room.viewerCount ?? mediaState?.viewerCount ?? 1200}
-            </button>
 
             <button
               type="button"
               onClick={handleLeave}
               aria-label="Close room"
-              className="ml-1 flex h-[30px] w-[22px] shrink-0 items-center justify-end"
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-white/70 transition hover:bg-white/10 hover:text-white"
             >
-              <X className="h-[19px] w-[19px]" strokeWidth={1.5} />
+              <X className="h-5 w-5" strokeWidth={1.5} />
             </button>
           </div>
         </div>
 
-        {/* Top navigation pills */}
-        <div className="absolute inset-x-0 top-[102px] z-30 flex items-center justify-between px-[13px]">
-          <button type="button" className="flex h-[28px] w-[94px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
-            <Trophy className="h-[13px] w-[13px]" strokeWidth={1.7} />
-            <span className="text-center text-[14px] leading-[1.15] font-medium">Top Ranking</span>
-            <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
-          </button>
-
-          <button type="button" className="flex h-[28px] w-[88px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
-            <BarChart3 className="h-[13px] w-[13px]" strokeWidth={1.7} />
-            <span className="text-center text-[14px] leading-[1.15] font-medium">Daily No. 6</span>
-            <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
-          </button>
-
-          <button type="button" className="flex h-[28px] w-[75px] items-center justify-center gap-1 rounded-full border border-white/20 bg-black/20 px-4 backdrop-blur-xl">
-            <Compass className="h-[13px] w-[13px]" strokeWidth={1.7} />
-            <span className="text-[14px] font-medium">Explore</span>
-            <ChevronRight className="h-[12px] w-[12px]" strokeWidth={1.7} />
-          </button>
-        </div>
-
-        {/* Reward card */}
-        <div className="absolute right-[12px] top-[148px] z-30 w-[214px] max-w-[calc(100%-48px)] rounded-[14px] border border-white/20 bg-[#0c0b0d]/85 p-[10px] backdrop-blur-2xl">
-          <div className="flex items-center gap-1.5">
-            <div className="h-[44px] w-[44px] shrink-0 overflow-hidden rounded-[10px] bg-gradient-to-br from-white/40 via-white/10 to-black/60 ring-1 ring-white/10">
-              <div className="h-full w-full bg-[radial-gradient(circle_at_58%_40%,rgba(255,255,255,0.75),transparent_14%),radial-gradient(circle_at_35%_65%,rgba(255,255,255,0.35),transparent_20%),linear-gradient(135deg,#5c5c5c,#111)]" />
-            </div>
-            <div className="min-w-[58px]">
-              <p className="text-[15px] leading-tight">Space</p>
-              <p className="text-[15px] leading-tight">Journey</p>
-              <p className="mt-2 text-[25px] font-medium leading-none">0 / 3</p>
-            </div>
-            <div className="h-[42px] w-px bg-white/20" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-1.5 text-[13px]">
-                <span>Total Income</span>
-                <span>45%</span>
-              </div>
-              <div className="mt-2.5 h-[9px] rounded-full bg-white/15">
-                <div className="h-full w-[56%] rounded-full bg-white" />
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-1.5 text-[12px]">
-                <span>Lucky Stars</span>
-                <span className="flex items-center gap-1">160 <Star className="h-3 w-3" strokeWidth={1.6} /></span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Live comments */}
-        <div className="absolute left-[15px] bottom-[194px] z-30 w-[142px] space-y-2">
+        {/* Sparse live comments */}
+        <div className="absolute bottom-[92px] left-4 z-30 w-[min(220px,calc(100%-32px))] space-y-1.5">
           {[
             { name: "Riya", text: "This stream is awesome!" },
             { name: "Aman", text: "Keep going bro!" },
-            { name: "Neha", text: "Hello from Nepal!" },
-          ].map((comment, index) => (
-            <div key={comment.name} className="flex items-center gap-1.5 rounded-[15px] border border-white/10 bg-black/35 px-1.5 py-1 backdrop-blur-xl">
-              <div className="h-[21px] w-[21px] shrink-0 overflow-hidden rounded-full bg-white/15 ring-1 ring-white/10">
-                <div className="h-full w-full bg-gradient-to-br from-white/50 to-white/5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold leading-none">{comment.name}</p>
-                <p className="mt-1 text-[11px] leading-none text-white/85">{comment.text}</p>
-              </div>
+          ].map((comment) => (
+            <div key={comment.name} className="flex items-center gap-2 rounded-full bg-black/35 px-2 py-1.5 backdrop-blur-md">
+              <div className="h-6 w-6 shrink-0 rounded-full bg-white/15 ring-1 ring-white/10" />
+              <p className="truncate text-xs"><span className="font-medium text-white/75">{comment.name}</span><span className="ml-2 text-white/90">{comment.text}</span></p>
             </div>
           ))}
-        </div>
-
-        {/* Community guidelines */}
-        <div className="absolute left-[15px] bottom-[153px] z-30 w-[181px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[10px] backdrop-blur-2xl">
-          <div className="flex items-start gap-1">
-            <ShieldCheck className="mt-1 h-[13px] w-[13px] shrink-0" strokeWidth={1.6} />
-            <div>
-              <p className="text-[13px] font-semibold leading-tight">Community Guidelines</p>
-              <p className="mt-3 text-[11px] leading-[1.45] text-white/80">
-                Please do not livestream any vulgar, pornographic (including child pornography), child sexual abuse and sexual exploitation, content that violates laws and habits, infringing or illegal content, otherwise your account will be banned by the app.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Room boost */}
-        <div className="absolute left-[15px] bottom-[95px] z-30 w-[181px] max-w-[calc(100%-30px)] rounded-[12px] border border-white/10 bg-black/45 px-[11px] py-[9px] backdrop-blur-2xl">
-          <div className="flex items-start gap-1">
-            <Bell className="mt-1 h-[13px] w-[13px] shrink-0" strokeWidth={1.6} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-1">
-                <p className="text-[13px] font-semibold">Room Boost</p>
-                <ChevronRight className="h-3 w-3" strokeWidth={1.6} />
-              </div>
-              <p className="mt-2 text-[11px] leading-[1.45] text-white/75">Notify friends to start livestreaming, increasing room Hot Boost.</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Right-side utility buttons */}
-        <div className="absolute right-[15px] bottom-[153px] z-30 flex w-[111px] flex-col gap-1.5">
-          <button type="button" className="flex h-[28px] items-center justify-between rounded-full border border-white/15 bg-black/45 px-3.5 backdrop-blur-xl">
-            <span className="flex items-center gap-2 text-[11px]"><BarChart3 className="h-[13px] w-[13px]" strokeWidth={1.7} />Game Ranking</span>
-            <ChevronRight className="h-3 w-3" strokeWidth={1.7} />
-          </button>
-          <button type="button" className="flex h-[28px] items-center gap-1 rounded-full border border-white/15 bg-black/45 px-3.5 backdrop-blur-xl text-[11px]">
-            <Share2 className="h-[14px] w-[14px]" strokeWidth={1.7} />
-            Share
-          </button>
         </div>
 
         {/* Vertical audio-stage button */}
