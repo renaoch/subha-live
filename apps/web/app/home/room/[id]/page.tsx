@@ -476,6 +476,22 @@ export default function RoomStagePage({
   const speakerApprovalSeenRef =
     useRef(false);
 
+  // Persistent lock for the host<->guest negotiation poll, shared across
+  // every re-run of the polling effect below. If this lived as a local
+  // `let` inside the effect, a re-run (e.g. triggered by the `room` object
+  // getting a new reference from an unrelated 3s refetch) would spin up a
+  // brand-new closure with the lock reset to false, while the *previous*
+  // closure's in-flight negotiation (createOffer/setLocalDescription/await
+  // network round trip/setRemoteDescription) was still running against the
+  // same hostPeerRef.current. Two overlapping negotiations on one
+  // RTCPeerConnection is exactly what produces "no SDP returned", the
+  // m-line order mismatch, and "wrong state: stable" errors.
+  const mediaSyncBusyRef =
+    useRef(false);
+
+  const requestSyncBusyRef =
+    useRef(false);
+
   const isHost = Boolean(
     room &&
     userId &&
@@ -1519,8 +1535,6 @@ export default function RoomStagePage({
     if (!room || !isLive) return;
 
     let active = true;
-    let mediaBusy = false;
-    let requestBusy = false;
 
     const poll = async () => {
       try {
@@ -1571,32 +1585,32 @@ export default function RoomStagePage({
         }
 
         if (isHost) {
-          if (!requestBusy) {
-            requestBusy = true;
+          if (!requestSyncBusyRef.current) {
+            requestSyncBusyRef.current = true;
             try {
               setSpeakerRequests(await roomsApi.listSpeakerRequests(id));
             } finally {
-              requestBusy = false;
+              requestSyncBusyRef.current = false;
             }
           }
 
-          if (!mediaBusy) {
-            mediaBusy = true;
+          if (!mediaSyncBusyRef.current) {
+            mediaSyncBusyRef.current = true;
             try {
               await syncHostGuestAudio(state);
             } catch (error) {
               console.error("Host guest audio sync failed", error);
             } finally {
-              mediaBusy = false;
+              mediaSyncBusyRef.current = false;
             }
           }
         } else {
           if (
             (state.speakers[userId ?? ""] || myRequestAccepted) &&
             !speakerPublishing &&
-            !mediaBusy
+            !mediaSyncBusyRef.current
           ) {
-            mediaBusy = true;
+            mediaSyncBusyRef.current = true;
             try {
               await publishGuestAudio();
             } catch (error) {
@@ -1605,18 +1619,18 @@ export default function RoomStagePage({
               );
               closeGuestPeer();
             } finally {
-              mediaBusy = false;
+              mediaSyncBusyRef.current = false;
             }
           }
 
-          if (!mediaBusy && viewerConnected) {
-            mediaBusy = true;
+          if (!mediaSyncBusyRef.current && viewerConnected) {
+            mediaSyncBusyRef.current = true;
             try {
               await syncViewerSpeakerAudio(state);
             } catch (error) {
               console.error("Viewer speaker sync failed", error);
             } finally {
-              mediaBusy = false;
+              mediaSyncBusyRef.current = false;
             }
           }
         }
@@ -1631,7 +1645,14 @@ export default function RoomStagePage({
       active = false;
       window.clearInterval(timer);
     };
-  }, [id, room, isLive, isHost, userId, viewerConnected, speakerPublishing, hostMediaReady]);
+    // NOTE: depend on `room?.id` rather than `room` itself. A separate 3s
+    // polling effect calls setRoom() with a freshly-parsed object on every
+    // tick even when nothing changed, so `room` gets a new reference
+    // constantly. Depending on the object here tore this interval down and
+    // rebuilt it roughly every 3s, racing a fresh poll() against whatever
+    // negotiation the previous, torn-down poll() had in flight on the same
+    // RTCPeerConnection (see mediaSyncBusyRef above for the fallout).
+  }, [id, room?.id, isLive, isHost, userId, viewerConnected, speakerPublishing, hostMediaReady]);
 
   useEffect(() => {
     if (!room || isHost || room.status !== "live" || joined) return;
