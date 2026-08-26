@@ -25,3 +25,4 @@ router.delete("/:id/media/viewer", authMiddleware, leaveViewer);
 router.post("/:id/media/heartbeat", authMiddleware, mediaHeartbeat);
 
 export default router;
+ 

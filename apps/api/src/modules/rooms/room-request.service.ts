@@ -13,7 +13,7 @@ type CreateSpeakerRequestInput = {
   roomId: string;
   requesterId: string;
   targetUserId: string;
-  type: RequestType;
+  type: RequestType; 
 };
 
 async function getRoom(roomId: string) {

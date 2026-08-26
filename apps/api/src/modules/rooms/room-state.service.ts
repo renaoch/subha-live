@@ -3,7 +3,7 @@ import { redis } from "../../lib/redis";
 const ROOM_STATE_TTL_SECONDS = 60 * 60 * 24;
 const DEFAULT_AUDIO_REQUEST_LIMIT = 50;
 const DEFAULT_GUEST_VIDEO_LIMIT = 1;
-
+ 
 const ADD_SPEAKER_SCRIPT = `
   local speakersKey = KEYS[1]
   local userId = ARGV[1]

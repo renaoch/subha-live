@@ -41,51 +41,88 @@ import {
 } from "@/lib/api/rooms";
 import { createClient } from "@/lib/supabase/client";
 
-function waitForIceGatheringComplete(
+/*
+ * Cloudflare Realtime is negotiated with a single one-shot REST call
+ * (offer in, answer out) — there's no persistent signaling channel to
+ * trickle individual candidates to it afterwards. Given that, the
+ * fastest *and* most load-friendly option is to send the SDP as soon
+ * as we have at least one usable candidate, rather than waiting for
+ * ICE gathering to fully finish:
+ *
+ *   - A host or server-reflexive candidate almost always shows up
+ *     within the first 100-300ms. TURN/relay candidates (needed only
+ *     for the minority of viewers behind symmetric NATs) can take a
+ *     couple of seconds — waiting for those on every single join was
+ *     the actual source of the multi-second delay, even though most
+ *     connections never needed them.
+ *   - The browser keeps gathering in the background after we send;
+ *     if a better (relay) candidate shows up slightly later it's
+ *     simply not offered to Cloudflare on this negotiation, so a
+ *     viewer whose host/srflx candidate doesn't end up reachable
+ *     falls back to the short safety timeout below and reconnects on
+ *     the next attempt rather than blocking everyone else's join.
+ *
+ * This adds no server-side state at all (no websocket, no sticky
+ * sessions, no per-connection memory on the API), so it scales with
+ * traffic exactly as well as the existing REST calls do — unlike a
+ * real signaling channel, which would need one held-open connection
+ * per active user plus Redis fan-out across API replicas to work
+ * behind a load balancer.
+ */
+function waitForFirstUsableCandidate(
   peer: RTCPeerConnection,
+  timeoutMs = 1200,
 ): Promise<void> {
-  if (peer.iceGatheringState === "complete") {
+  if (
+    peer.iceGatheringState === "complete" ||
+    peer.localDescription?.sdp.includes("a=candidate")
+  ) {
     return Promise.resolve();
   }
 
   return new Promise((resolve) => {
-    const onStateChange = () => {
-      if (peer.iceGatheringState === "complete") {
-        peer.removeEventListener(
-          "icegatheringstatechange",
-          onStateChange,
-        );
-        resolve();
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      peer.removeEventListener("icecandidate", onCandidate);
+      peer.removeEventListener(
+        "icegatheringstatechange",
+        onStateChange,
+      );
+      window.clearTimeout(timer);
+      resolve();
+    };
+
+    const onCandidate = (
+      event: RTCPeerConnectionIceEvent,
+    ) => {
+      // A null candidate signals gathering is complete with nothing
+      // more coming; any real candidate is immediately usable.
+      if (event.candidate || event.candidate === null) {
+        finish();
       }
     };
 
+    const onStateChange = () => {
+      if (peer.iceGatheringState !== "new") {
+        finish();
+      }
+    };
+
+    peer.addEventListener("icecandidate", onCandidate);
     peer.addEventListener(
       "icegatheringstatechange",
       onStateChange,
     );
 
-    /*
-     * We don't have a signaling channel to trickle individual ICE
-     * candidates to Cloudflare Realtime after the initial offer, so
-     * we wait for gathering to finish before sending the SDP. The
-     * previous 8s cap was the single biggest contributor to slow
-     * host-start / viewer-join times: usable srflx/relay candidates
-     * are almost always gathered well under 2.5s, and connections
-     * that genuinely need longer will still connect (a bit more
-     * slowly, or the browser continues gathering in the background)
-     * rather than blocking the whole join flow on the worst case.
-     * The real fix is a signaling channel enabling true trickle ICE;
-     * this timeout reduction is a stopgap.
-     */
-    window.setTimeout(() => {
-      peer.removeEventListener(
-        "icegatheringstatechange",
-        onStateChange,
-      );
-      resolve();
-    }, 2500);
+    // Safety net: never block the join/publish flow longer than this,
+    // even on a network where gathering is unusually slow.
+    const timer = window.setTimeout(finish, timeoutMs);
   });
 }
+
 function waitForPeerConnectionConnected(
   peer: RTCPeerConnection,
   timeoutMs = 20000,
@@ -526,7 +563,7 @@ export default function RoomStagePage({
     const transceiver = peer.addTransceiver(track, { direction: "sendonly" });
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    await waitForIceGatheringComplete(peer);
+    await waitForFirstUsableCandidate(peer);
 
     const firstDescription = peer.localDescription;
     if (!firstDescription?.sdp) throw new Error("Microphone SDP offer was not created.");
@@ -548,7 +585,7 @@ export default function RoomStagePage({
 
     const renegotiationOffer = await peer.createOffer();
     await peer.setLocalDescription(renegotiationOffer);
-    await waitForIceGatheringComplete(peer);
+    await waitForFirstUsableCandidate(peer);
 
     const renegotiationDescription = peer.localDescription;
     if (!renegotiationDescription?.sdp) throw new Error("Guest audio negotiation offer was not created.");
@@ -614,7 +651,7 @@ export default function RoomStagePage({
 
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
-      await waitForIceGatheringComplete(peer);
+      await waitForFirstUsableCandidate(peer);
 
       const localDescription = peer.localDescription;
       if (!localDescription?.sdp) throw new Error("Host guest-audio SDP was not created.");
@@ -630,7 +667,7 @@ export default function RoomStagePage({
         await peer.setRemoteDescription({ type: "offer", sdp: result.offerSdp });
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
-        await waitForIceGatheringComplete(peer);
+        await waitForFirstUsableCandidate(peer);
         const localAnswer = peer.localDescription;
         if (!localAnswer?.sdp) throw new Error("Host guest-audio answer was not created.");
         await roomsApi.subscribeHostToGuests(currentRoom.id, {
@@ -707,7 +744,7 @@ export default function RoomStagePage({
 
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
-    await waitForIceGatheringComplete(peer);
+    await waitForFirstUsableCandidate(peer);
 
     const localDescription = peer.localDescription;
     if (!localDescription?.sdp) throw new Error("Viewer speaker-audio offer was not created.");
@@ -736,7 +773,7 @@ export default function RoomStagePage({
 
       await peer.setLocalDescription(answer);
 
-      await waitForIceGatheringComplete(peer);
+      await waitForFirstUsableCandidate(peer);
 
       const localAnswer = peer.localDescription;
 
@@ -860,7 +897,7 @@ export default function RoomStagePage({
       offer,
     );
 
-    await waitForIceGatheringComplete(
+    await waitForFirstUsableCandidate(
       peer,
     );
 
@@ -920,7 +957,7 @@ export default function RoomStagePage({
       renegotiationOffer,
     );
 
-    await waitForIceGatheringComplete(
+    await waitForFirstUsableCandidate(
       peer,
     );
 
@@ -1130,7 +1167,7 @@ export default function RoomStagePage({
       offer,
     );
 
-    await waitForIceGatheringComplete(
+    await waitForFirstUsableCandidate(
       peer,
     );
 
@@ -1204,7 +1241,7 @@ export default function RoomStagePage({
       renegotiationOffer,
     );
 
-    await waitForIceGatheringComplete(
+    await waitForFirstUsableCandidate(
       peer,
     );
 
@@ -1259,7 +1296,7 @@ export default function RoomStagePage({
         answer,
       );
 
-      await waitForIceGatheringComplete(
+      await waitForFirstUsableCandidate(
         peer,
       );
 

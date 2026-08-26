@@ -14,7 +14,7 @@ type JoinRoomInput = Pick<
   "room_id" | "user_id" | "role"
 >;
 
-export const roomParticipantService = {
+export const roomParticipantService = { 
   async joinRoom(
     input: JoinRoomInput,
   ): Promise<RoomParticipant> {

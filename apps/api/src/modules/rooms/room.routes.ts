@@ -13,7 +13,7 @@ import {
   acceptHostInvitation,
   removeSpeaker,
 } from "./room-request.controller";
-
+ 
 const router = Router();
 
 router.get("/", authMiddleware, listRooms);

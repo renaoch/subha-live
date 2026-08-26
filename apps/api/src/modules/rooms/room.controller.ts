@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../../errors/app-error";
 import { roomService } from "./room.service";
 
-
+ 
 export async function listRooms(
   _req: Request,
   res: Response,

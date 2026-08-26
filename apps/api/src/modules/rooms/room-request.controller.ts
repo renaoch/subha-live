@@ -15,7 +15,7 @@ export async function createSpeakerRequest(
 ) {
   try {
     if (!req.user) {
-      throw new AppError(401, "Authentication required", {
+      throw new AppError(401, "Authentication required", { 
         code: "AUTHENTICATION_REQUIRED",
       });
     }
