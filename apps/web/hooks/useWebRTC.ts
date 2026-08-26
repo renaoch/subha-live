@@ -9,7 +9,12 @@ import {
   createViewerTransceivers,
 } from '@/lib/webrtc-utils';
 
-export function useWebRTC(room: RoomRecord | null, userId: string | null) {
+export function useWebRTC(
+  room: RoomRecord | null,
+  userId: string | null,
+  cameraEnabled: boolean = true,
+  micEnabled: boolean = true,
+) {
   const isHost = !!room && userId === room.host_id;
 
   // ---- State ----
@@ -464,6 +469,31 @@ export function useWebRTC(room: RoomRecord | null, userId: string | null) {
     },
     [room, isHost],
   );
+
+  // ---- Host camera/mic preview while waiting to go live ----
+  // Without this, getUserMedia() is only ever called from inside
+  // publishHostMedia() (i.e. after clicking "Start Live"), so the camera
+  // light never turns on and there's nothing to preview beforehand.
+  useEffect(() => {
+    if (!isHost || room?.status !== 'created') return;
+
+    ensureLocalPreview().catch((e) => {
+      setMediaError(e instanceof Error ? e.message : 'Camera or microphone permission was denied.');
+    });
+  }, [isHost, room?.status, ensureLocalPreview]);
+
+  // ---- Reflect camera/mic toggle state onto the live local tracks ----
+  useEffect(() => {
+    localStreamRef.current?.getVideoTracks().forEach((track) => {
+      track.enabled = cameraEnabled;
+    });
+  }, [cameraEnabled]);
+
+  useEffect(() => {
+    localStreamRef.current?.getAudioTracks().forEach((track) => {
+      track.enabled = micEnabled;
+    });
+  }, [micEnabled]);
 
   // ---- Heartbeats ----
   useEffect(() => {
