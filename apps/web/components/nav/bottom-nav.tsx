@@ -17,8 +17,8 @@ export function BottomNav() {
   const router = useRouter();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-surface-raised/85 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[560px] items-center justify-between px-4 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+    <nav aria-label="Primary navigation" className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex max-w-md items-center justify-between rounded-2xl border border-border/80 bg-background/95 px-3 py-2 shadow-2xl shadow-black/30 backdrop-blur-xl">
         {TABS.slice(0, 2).map((tab) => (
           <NavItem key={tab.href} {...tab} active={pathname === tab.href} />
         ))}
@@ -26,7 +26,7 @@ export function BottomNav() {
         <button
           onClick={() => router.push("/home/party?create=1")}
           aria-label="Go live"
-          className="relative -mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-hot text-white shadow-lg shadow-accent-hot/30 ring-4 ring-surface-raised transition-transform active:scale-95"
+          className="relative -mt-7 flex h-12 w-12 items-center justify-center rounded-xl border border-foreground/20 bg-foreground text-background shadow-lg shadow-black/30 transition-transform active:scale-95"
         >
           <Video className="h-6 w-6" />
         </button>
@@ -62,7 +62,7 @@ function NavItem({
       <Icon
         className={cn(
           "h-6 w-6 transition-colors",
-          active ? "text-accent-hot" : "text-ink-muted",
+          active ? "text-foreground" : "text-muted-foreground",
         )}
         strokeWidth={active ? 2.4 : 1.9}
       />
