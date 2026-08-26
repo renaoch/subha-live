@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Compass,
   Gift,
+  SlidersHorizontal,
   Headphones,
   Link2,
   Loader2,
@@ -28,7 +29,6 @@ import {
   UserRound,
   Users,
   Video,
-  VideoOff,
   X,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
@@ -132,13 +132,13 @@ function waitForPeerConnectionConnected(
       () => {
         if (
           peer.connectionState ===
-            "failed" ||
+          "failed" ||
           peer.connectionState ===
-            "closed" ||
+          "closed" ||
           peer.iceConnectionState ===
-            "failed" ||
+          "failed" ||
           peer.iceConnectionState ===
-            "closed"
+          "closed"
         ) {
           fail(
             `Viewer PeerConnection failed. connectionState=${peer.connectionState}, iceConnectionState=${peer.iceConnectionState}`,
@@ -342,6 +342,12 @@ export default function RoomStagePage({
   const [micEnabled, setMicEnabled] =
     useState(true);
 
+  const [filterOpen, setFilterOpen] =
+    useState(false);
+
+  const [selectedFilter, setSelectedFilter] =
+    useState("Natural");
+
   const [mediaError, setMediaError] =
     useState("");
 
@@ -410,8 +416,8 @@ export default function RoomStagePage({
 
   const isHost = Boolean(
     room &&
-      userId &&
-      room.host_id === userId,
+    userId &&
+    room.host_id === userId,
   );
 
   const isLive =
@@ -541,17 +547,17 @@ export default function RoomStagePage({
     return speakerSession;
   }
 
-async function syncHostGuestAudio(state: RoomMediaState) {
-  const currentRoom = room;
+  async function syncHostGuestAudio(state: RoomMediaState) {
+    const currentRoom = room;
 
-  if (
-    !currentRoom ||
-    !isHost ||
-    !hostPeerRef.current ||
-    !hostMediaReady
-  ) {
-    return;
-  }
+    if (
+      !currentRoom ||
+      !isHost ||
+      !hostPeerRef.current ||
+      !hostMediaReady
+    ) {
+      return;
+    }
 
     const speakerIds = Object.keys(state.speakers).filter(
       (speakerId) => !hostSpeakerIdsRef.current.has(speakerId),
@@ -640,44 +646,44 @@ async function syncHostGuestAudio(state: RoomMediaState) {
     if (!localDescription?.sdp) throw new Error("Viewer speaker-audio offer was not created.");
 
     const result = await roomsApi.createViewerSession(
-  currentRoom.id,
-  localDescription.sdp,
-);
+      currentRoom.id,
+      localDescription.sdp,
+    );
 
-if (result.answerSdp) {
-  await peer.setRemoteDescription({
-    type: "answer",
-    sdp: result.answerSdp,
-  });
+    if (result.answerSdp) {
+      await peer.setRemoteDescription({
+        type: "answer",
+        sdp: result.answerSdp,
+      });
 
-  return;
-}
+      return;
+    }
 
-if (result.offerSdp) {
-  await peer.setRemoteDescription({
-    type: "offer",
-    sdp: result.offerSdp,
-  });
+    if (result.offerSdp) {
+      await peer.setRemoteDescription({
+        type: "offer",
+        sdp: result.offerSdp,
+      });
 
-  const answer = await peer.createAnswer();
+      const answer = await peer.createAnswer();
 
-  await peer.setLocalDescription(answer);
+      await peer.setLocalDescription(answer);
 
-  await waitForIceGatheringComplete(peer);
+      await waitForIceGatheringComplete(peer);
 
-  const localAnswer = peer.localDescription;
+      const localAnswer = peer.localDescription;
 
-  if (!localAnswer?.sdp) {
-    throw new Error("Viewer speaker-audio answer was not created.");
-  }
+      if (!localAnswer?.sdp) {
+        throw new Error("Viewer speaker-audio answer was not created.");
+      }
 
-  await roomsApi.completeRenegotiation(
-    currentRoom.id,
-    localAnswer.sdp,
-  );
+      await roomsApi.completeRenegotiation(
+        currentRoom.id,
+        localAnswer.sdp,
+      );
 
-  return;
-}
+      return;
+    }
 
     throw new Error("Viewer speaker-audio negotiation returned no SDP.");
   }
@@ -771,11 +777,11 @@ if (result.offerSdp) {
         trackName:
           createTrackName(
             track.kind ===
-            "video"
+              "video"
               ? "video"
               : "audio",
             userId ??
-              "host",
+            "host",
           ),
       });
     }
@@ -907,7 +913,7 @@ if (result.offerSdp) {
     if (
       !mediaState.host ||
       mediaState.host.sessionId !==
-        result.session.sessionId
+      result.session.sessionId
     ) {
       throw new Error(
         "Host media was published, but the room has not registered the host media state yet.",
@@ -921,9 +927,9 @@ if (result.offerSdp) {
       () => {
         if (
           peer.connectionState ===
-            "failed" ||
+          "failed" ||
           peer.connectionState ===
-            "closed"
+          "closed"
         ) {
           setHostPublishing(false);
           setHostMediaReady(false);
@@ -951,7 +957,7 @@ if (result.offerSdp) {
     if (
       !state.host ||
       state.host.status !==
-        "connected"
+      "connected"
     ) {
       throw new Error(
         "The host is still connecting. Please try joining again in a moment.",
@@ -983,9 +989,9 @@ if (result.offerSdp) {
     ) => {
       for (
         const track of
-          event.streams[0]
-            ?.getTracks() ??
-          [event.track]
+        event.streams[0]
+          ?.getTracks() ??
+        [event.track]
       ) {
         if (
           !remoteStream
@@ -1010,7 +1016,7 @@ if (result.offerSdp) {
 
         void remoteVideoRef.current
           .play()
-          .catch(() => {});
+          .catch(() => { });
       }
     };
 
@@ -1026,9 +1032,9 @@ if (result.offerSdp) {
 
         if (
           peer.connectionState ===
-            "failed" ||
+          "failed" ||
           peer.connectionState ===
-            "closed"
+          "closed"
         ) {
           setViewerConnected(
             false,
@@ -1258,7 +1264,7 @@ if (result.offerSdp) {
 
         setUserId(
           data.user?.id ??
-            null,
+          null,
         );
 
         setRoom(
@@ -1497,7 +1503,7 @@ if (result.offerSdp) {
     if (
       !isHost ||
       room?.status !==
-        "created"
+      "created"
     ) {
       return;
     }
@@ -1580,7 +1586,7 @@ if (result.offerSdp) {
                   session.generation,
               },
             )
-            .catch(() => {});
+            .catch(() => { });
         },
         15000,
       );
@@ -1627,7 +1633,7 @@ if (result.offerSdp) {
                   session.generation,
               },
             )
-            .catch(() => {});
+            .catch(() => { });
         },
         15000,
       );
@@ -1652,7 +1658,7 @@ if (result.offerSdp) {
         role: "speaker",
         sessionId: session.sessionId,
         generation: mediaState?.generation ?? 0,
-      }).catch(() => {});
+      }).catch(() => { });
     }, 15000);
 
     return () => window.clearInterval(timer);
@@ -1822,27 +1828,27 @@ if (result.offerSdp) {
   async function handleLeave() {
     try {
       if (viewerSessionRef.current) {
-        await roomsApi.leaveViewer(id).catch(() => {});
+        await roomsApi.leaveViewer(id).catch(() => { });
       }
 
       if (speakerPublishing) {
-        await roomsApi.unpublishGuest(id).catch(() => {});
+        await roomsApi.unpublishGuest(id).catch(() => { });
       }
 
       if (joined) {
         await roomsApi
           .leave(id)
-          .catch(() => {});
+          .catch(() => { });
       }
 
       if (
         isHost &&
         room?.status ===
-          "live"
+        "live"
       ) {
         await roomsApi
           .end(id)
-          .catch(() => {});
+          .catch(() => { });
       }
     } finally {
       closeViewerPeer();
@@ -1993,8 +1999,8 @@ if (result.offerSdp) {
             playsInline
             className="absolute inset-0 h-full w-full object-cover"
           />
-  ) : isLive && mediaState?.host ? (
-  <video
+        ) : isLive && mediaState?.host ? (
+          <video
             ref={remoteVideoRef}
             autoPlay
             playsInline
@@ -2017,8 +2023,8 @@ if (result.offerSdp) {
         )}
 
         {/* Minimal profile row */}
-        <div className="absolute inset-x-0 top-0 z-30 px-5 pt-12">
-          <div className="flex items-center">
+        <div className="absolute inset-x-0 top-0 z-30 px-5 pt-10">
+          <div className="flex min-h-10 items-center gap-3">
             <Avatar
               name={hostName}
               src={room.host?.avatar ?? undefined}
@@ -2081,56 +2087,82 @@ if (result.offerSdp) {
           </div>
 
           {[
-            { label: "Share link", icon: <Link2 className="h-[13px] w-[13px]" strokeWidth={1.7} /> },
-            { label: "Messages", icon: <Mail className="h-[13px] w-[13px]" strokeWidth={1.7} /> },
-            { label: "Menu", icon: <Menu className="h-[14px] w-[14px]" strokeWidth={1.7} /> },
-            { label: "Gift", icon: <Gift className="h-[13px] w-[13px]" strokeWidth={1.7} /> },
+            { label: "Share link", icon: <Link2 className="h-[15px] w-[15px]" strokeWidth={1.7} /> },
+            { label: "Messages", icon: <Mail className="h-[15px] w-[15px]" strokeWidth={1.7} /> },
+            { label: "Menu", icon: <Menu className="h-[16px] w-[16px]" strokeWidth={1.7} /> },
+            ...(!isHost ? [{ label: "Gift", icon: <Gift className="h-[15px] w-[15px]" strokeWidth={1.7} /> }] : []),
           ].map((item) => (
-            <button key={item.label} type="button" aria-label={item.label} className="flex h-[29px] w-[29px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/45 backdrop-blur-xl">
+            <button key={item.label} type="button" aria-label={item.label} className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/45 backdrop-blur-xl">
               {item.icon}
             </button>
           ))}
 
-          <button type="button" aria-label="Like" className="flex h-[29px] w-[29px] shrink-0 items-center justify-center rounded-full bg-white text-black">
-            <ThumbsUp className="h-[12px] w-[12px]" strokeWidth={1.6} />
+          <button type="button" aria-label="Like" className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full bg-white text-black">
+            <ThumbsUp className="h-[14px] w-[14px]" strokeWidth={1.6} />
           </button>
         </div>
 
-        {/* Host preview/live controls stay functional, but are visually integrated into the bottom UI */}
-        {isHost && isWaiting && (
-          <div className="absolute left-1/2 bottom-[43px] z-50 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/10 bg-black/55 p-1 backdrop-blur-2xl">
-            <button
-              type="button"
-              onClick={() => setCameraEnabled((value) => !value)}
-              className="flex h-[24px] w-[24px] items-center justify-center rounded-full"
-              aria-label="Toggle camera"
-            >
-              {cameraEnabled ? <Video className="h-3 w-3" /> : <VideoOff className="h-3 w-3 text-red-300" />}
-            </button>
+        {/* Host controls: camera stays on, while mic and a subtle beauty filter remain available. */}
+        {isHost && (isWaiting || isLive) && (
+          <div className="absolute left-1/2 bottom-[43px] z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/60 p-1.5 shadow-2xl backdrop-blur-2xl">
             <button
               type="button"
               onClick={() => setMicEnabled((value) => !value)}
-              className="flex h-[24px] w-[24px] items-center justify-center rounded-full"
-              aria-label="Toggle microphone"
+              className={`flex h-[34px] w-[34px] items-center justify-center rounded-full transition ${micEnabled ? "text-white hover:bg-white/10" : "bg-white text-black"}`}
+              aria-label={micEnabled ? "Mute microphone" : "Unmute microphone"}
+              title={micEnabled ? "Mute microphone" : "Unmute microphone"}
             >
-              {micEnabled ? <Mic className="h-3 w-3" /> : <MicOff className="h-3 w-3 text-red-300" />}
+              {micEnabled ? <Mic className="h-[18px] w-[18px]" /> : <MicOff className="h-[18px] w-[18px]" />}
             </button>
             <button
               type="button"
-              onClick={handleStart}
-              disabled={actionLoading || !localStreamRef.current}
-              className="flex h-[28px] items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-black disabled:opacity-50"
+              onClick={() => setFilterOpen((value) => !value)}
+              className={`flex h-[34px] w-[34px] items-center justify-center rounded-full transition ${filterOpen ? "bg-white text-black" : "text-white hover:bg-white/10"}`}
+              aria-label="Open streamer filters"
+              aria-expanded={filterOpen}
+              title="Streamer filters"
             >
-              {actionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
-              <span>Start Live</span>
+              <SlidersHorizontal className="h-[18px] w-[18px]" />
             </button>
+            {isWaiting && (
+              <button
+                type="button"
+                onClick={handleStart}
+                disabled={actionLoading || !localStreamRef.current}
+                className="flex h-[34px] items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-black transition hover:bg-white/90 disabled:opacity-50"
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+                <span>Start Live</span>
+              </button>
+            )}
           </div>
         )}
 
         {isHost && isLive && (
-          <div className="absolute left-1/2 top-[46px] z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/40 px-2 py-1 text-[8px] font-semibold backdrop-blur-xl">
+          <div className="absolute left-1/2 top-[46px] z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/40 px-2 py-1 text-[9px] font-semibold tracking-wide backdrop-blur-xl">
             <span className={`mr-2 inline-block h-2 w-2 rounded-full ${hostMediaReady ? "animate-pulse bg-red-400" : "animate-pulse bg-amber-300"}`} />
             {hostMediaReady ? "LIVE" : "CONNECTING"}
+          </div>
+        )}
+
+        {isHost && filterOpen && (
+          <div className="absolute bottom-[92px] left-1/2 z-50 w-[min(280px,calc(100%-32px))] -translate-x-1/2 rounded-2xl border border-white/15 bg-black/75 p-3 shadow-2xl backdrop-blur-2xl">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <p className="text-xs font-semibold text-white">Streamer filter</p>
+              <span className="text-[10px] text-white/45">Live preview</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {["Natural", "Soft", "Bright"].map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setSelectedFilter(filter)}
+                  className={`rounded-xl border px-2 py-2 text-[11px] transition ${selectedFilter === filter ? "border-white bg-white text-black" : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"}`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -2243,11 +2275,10 @@ function AudioSeatPanel({
               className="flex flex-1 flex-col items-center gap-1.5"
             >
               <div
-                className={`flex h-11 w-11 items-center justify-center rounded-full ${
-                  speaker
+                className={`flex h-11 w-11 items-center justify-center rounded-full ${speaker
                     ? "bg-white/[0.08] ring-1 ring-white/15"
                     : "border border-dashed border-white/10"
-                }`}
+                  }`}
               >
                 {speaker ? (
                   <UserRound className="h-4.5 w-4.5 text-white/60" strokeWidth={1.75} />
