@@ -1,5 +1,4 @@
 import { apiFetch } from "@/lib/api/client";
-
 import type {
   PrivateProfile,
   PublicProfile,
@@ -32,31 +31,35 @@ interface PrivateProfileResponse {
 
 interface PublicProfileResponse {
   status: string;
-  user: PublicProfile;
+  user?: PublicProfile;
 }
 
 interface FollowListResponse {
   status: string;
-  users: FollowListEntry[];
+  users?: FollowListEntry[];
+}
+
+interface FollowStatusResponse {
+  following?: boolean;
 }
 
 export const usersApi = {
   async me(): Promise<PrivateProfile> {
-    const response =
-      await apiFetch<PrivateProfileResponse>(
-        "/api/v1/users/me",
-      );
+    const response = await apiFetch<PrivateProfileResponse>(
+      "/api/v1/users/me",
+    );
 
     return response.user;
   },
 
-  async getById(
-    id: string,
-  ): Promise<PublicProfile> {
-    const response =
-      await apiFetch<PublicProfileResponse>(
-        `/api/v1/users/${id}`,
-      );
+  async getById(id: string): Promise<PublicProfile> {
+    const response = await apiFetch<PublicProfileResponse>(
+      `/api/v1/users/${encodeURIComponent(id)}`,
+    );
+
+    if (!response.user) {
+      throw new Error("Profile not found");
+    }
 
     return response.user;
   },
@@ -64,14 +67,13 @@ export const usersApi = {
   async updateMe(
     input: UpdateProfileInput,
   ): Promise<PrivateProfile> {
-    const response =
-      await apiFetch<PrivateProfileResponse>(
-        "/api/v1/users/me",
-        {
-          method: "PATCH",
-          body: JSON.stringify(input),
-        },
-      );
+    const response = await apiFetch<PrivateProfileResponse>(
+      "/api/v1/users/me",
+      {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      },
+    );
 
     return response.user;
   },
@@ -79,22 +81,63 @@ export const usersApi = {
   async getFollowers(
     id: string,
   ): Promise<FollowListEntry[]> {
-    const response =
-      await apiFetch<FollowListResponse>(
-        `/api/v1/users/${id}/followers`,
-      );
+    const response = await apiFetch<FollowListResponse>(
+      `/api/v1/users/${encodeURIComponent(id)}/followers`,
+    );
 
-    return response.users ?? [];
+    return Array.isArray(response.users)
+      ? response.users
+      : [];
   },
 
   async getFollowing(
     id: string,
   ): Promise<FollowListEntry[]> {
-    const response =
-      await apiFetch<FollowListResponse>(
-        `/api/v1/users/${id}/following`,
-      );
+    const response = await apiFetch<FollowListResponse>(
+      `/api/v1/users/${encodeURIComponent(id)}/following`,
+    );
 
-    return response.users ?? [];
+    return Array.isArray(response.users)
+      ? response.users
+      : [];
+  },
+
+  async getFollowStatus(
+    id: string,
+  ): Promise<FollowStatusResponse> {
+    return apiFetch<FollowStatusResponse>(
+      `/api/v1/users/${encodeURIComponent(id)}/follow-status`,
+    );
+  },
+
+  async follow(id: string) {
+    return apiFetch(
+      `/api/v1/users/${encodeURIComponent(id)}/follow`,
+      {
+        method: "POST",
+      },
+    );
+  },
+
+  async unfollow(id: string) {
+    return apiFetch(
+      `/api/v1/users/${encodeURIComponent(id)}/follow`,
+      {
+        method: "DELETE",
+      },
+    );
   },
 };
+
+export function mutualFriends(
+  followers: FollowListEntry[],
+  following: FollowListEntry[],
+): FollowListEntry[] {
+  const followingIds = new Set(
+    following.map((user) => user.id),
+  );
+
+  return followers.filter((user) =>
+    followingIds.has(user.id),
+  );
+}
