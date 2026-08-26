@@ -643,113 +643,113 @@ export default function RoomStagePage({
     return speakerSession;
   }
 
-  async function syncHostGuestAudio(state: RoomMediaState) {
-    const currentRoom = room;
+async function syncHostGuestAudio(state: RoomMediaState) {
+  const currentRoom = room;
 
-    if (
-      !currentRoom ||
-      !isHost ||
-      !hostPeerRef.current ||
-      !hostMediaReady
-    ) {
-      return;
+  if (
+    !currentRoom ||
+    !isHost ||
+    !hostPeerRef.current ||
+    !hostMediaReady
+  ) {
+    return;
+  }
+
+  const speakerIds = Object.keys(state.speakers).filter(
+    (speakerId) => !hostSpeakerIdsRef.current.has(speakerId),
+  );
+
+  if (speakerIds.length === 0) return;
+
+  const peer = hostPeerRef.current;
+  const attemptedIds: string[] = [];
+  const addedTransceivers: RTCRtpTransceiver[] = [];
+
+  try {
+    for (const speakerId of speakerIds) {
+      const transceiver = peer.addTransceiver("audio", { direction: "recvonly" });
+      addedTransceivers.push(transceiver);
+      attemptedIds.push(speakerId);
     }
 
-    const speakerIds = Object.keys(state.speakers).filter(
-      (speakerId) => !hostSpeakerIdsRef.current.has(speakerId),
-    );
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    await waitForFirstUsableCandidate(peer);
 
-    if (speakerIds.length === 0) return;
+    const localDescription = peer.localDescription;
+    if (!localDescription?.sdp) throw new Error("Host guest-audio SDP was not created.");
 
-    const peer = hostPeerRef.current;
+    const result = await roomsApi.subscribeHostToGuests(currentRoom.id, {
+      offerSdp: localDescription.sdp,
+      speakerIds: attemptedIds,
+    });
 
-    // Track which ids we attempted this round so we can roll back on
-    // failure instead of leaving them permanently marked as "handled".
-    const attemptedIds: string[] = [];
-
-    // Track the transceivers we add this round so a failed negotiation
-    // can be cleanly undone instead of leaving orphaned m-lines behind.
-    // Without this, a failed sync would retry every poll cycle and pile
-    // up a new recvonly transceiver each time for the same speaker,
-    // since transceivers can't be removed from an RTCPeerConnection —
-    // only stopped.
-    const addedTransceivers: RTCRtpTransceiver[] = [];
-
-    try {
-      for (const speakerId of speakerIds) {
-        const transceiver = peer.addTransceiver("audio", { direction: "recvonly" });
-        addedTransceivers.push(transceiver);
-        attemptedIds.push(speakerId);
-      }
-
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      await waitForFirstUsableCandidate(peer);
-
-      const localDescription = peer.localDescription;
-      if (!localDescription?.sdp) throw new Error("Host guest-audio SDP was not created.");
-
-      const result = await roomsApi.subscribeHostToGuests(currentRoom.id, {
-        offerSdp: localDescription.sdp,
-        speakerIds: attemptedIds,
-      });
-
-      if (result.answerSdp) {
-        await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
-      } else if (result.offerSdp) {
-        await peer.setRemoteDescription({ type: "offer", sdp: result.offerSdp });
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-        await waitForFirstUsableCandidate(peer);
-        const localAnswer = peer.localDescription;
-        if (!localAnswer?.sdp) throw new Error("Host guest-audio answer was not created.");
-        await roomsApi.subscribeHostToGuests(currentRoom.id, {
-          answerSdp: localAnswer.sdp,
-          speakerIds: attemptedIds,
-        });
-      } else {
-        throw new Error("Host guest-audio negotiation returned no SDP.");
-      }
-
-      // Only now that negotiation fully succeeded do we mark these ids done.
+    // --- NEW: Handle explicit 'alreadySubscribed' flag ---
+    if (result.alreadySubscribed) {
+      // Tracks are already active; mark them done.
       for (const speakerId of attemptedIds) {
         hostSpeakerIdsRef.current.add(speakerId);
       }
-    } catch (error) {
-      // If any step fails, we roll back the attempted ids so the next
-      // poll cycle will try these speakers again.
-      for (const speakerId of attemptedIds) {
-        hostSpeakerIdsRef.current.delete(speakerId);
-      }
-
-      // Undo the transceivers we just added so retries don't pile up
-      // duplicate recvonly m-lines for the same speaker.
-      for (const transceiver of addedTransceivers) {
-        try {
-          transceiver.stop();
-        } catch {
-          // Older browsers may not support stop() on a transceiver
-          // that never reached "sendrecv" — safe to ignore.
-        }
-      }
-
-      // Return the peer's signaling state to "stable" so the next
-      // createOffer()/setLocalDescription() call isn't left dangling
-      // on a half-finished "have-local-offer" negotiation.
+      // Rollback local offer and stop duplicate transceivers.
       if (peer.signalingState !== "stable") {
-        try {
-          await peer.setLocalDescription({ type: "rollback" });
-        } catch {
-          // If rollback itself fails the connection is in a bad
-          // state; closeHostPeer()/reconnect logic upstream will
-          // recover it on the next full sync pass.
-        }
+        await peer.setLocalDescription({ type: "rollback" });
       }
-
-      throw error;
+      for (const transceiver of addedTransceivers) {
+        try { transceiver.stop(); } catch {}
+      }
+      return;
     }
 
+    // Fallback: if both SDPs are missing (without flag), treat as already subscribed.
+    if (!result.answerSdp && !result.offerSdp) {
+      for (const speakerId of attemptedIds) {
+        hostSpeakerIdsRef.current.add(speakerId);
+      }
+      if (peer.signalingState !== "stable") {
+        await peer.setLocalDescription({ type: "rollback" });
+      }
+      for (const transceiver of addedTransceivers) {
+        try { transceiver.stop(); } catch {}
+      }
+      return;
+    }
+
+    if (result.answerSdp) {
+      await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
+    } else if (result.offerSdp) {
+      await peer.setRemoteDescription({ type: "offer", sdp: result.offerSdp });
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      await waitForFirstUsableCandidate(peer);
+      const localAnswer = peer.localDescription;
+      if (!localAnswer?.sdp) throw new Error("Host guest-audio answer was not created.");
+      await roomsApi.subscribeHostToGuests(currentRoom.id, {
+        answerSdp: localAnswer.sdp,
+        speakerIds: attemptedIds,
+      });
+    } else {
+      throw new Error("Host guest-audio negotiation returned no SDP.");
+    }
+
+    for (const speakerId of attemptedIds) {
+      hostSpeakerIdsRef.current.add(speakerId);
+    }
+  } catch (error) {
+    // Rollback on any failure.
+    for (const speakerId of attemptedIds) {
+      hostSpeakerIdsRef.current.delete(speakerId);
+    }
+    for (const transceiver of addedTransceivers) {
+      try { transceiver.stop(); } catch {}
+    }
+    if (peer.signalingState !== "stable") {
+      try {
+        await peer.setLocalDescription({ type: "rollback" });
+      } catch {}
+    }
+    throw error;
   }
+}
 
   async function syncViewerSpeakerAudio(state: RoomMediaState) {
     const currentRoom = room;
@@ -2328,7 +2328,7 @@ export default function RoomStagePage({
               onClick={() => setMicEnabled((value) => !value)}
               className={`flex h-[34px] w-[34px] items-center justify-center rounded-full transition ${micEnabled ? "text-white hover:bg-white/10" : "bg-white text-black"}`}
               aria-label={micEnabled ? "Mute microphone" : "Unmute microphone"}
-              title={micEnabled ? "Mute microphone" : "Unmute microphone"}
+              title={micEnabled ? " " : "Unmute microphone"}
             >
               {micEnabled ? <Mic className="h-[18px] w-[18px]" /> : <MicOff className="h-[18px] w-[18px]" />}
             </button>

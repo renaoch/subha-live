@@ -114,7 +114,6 @@ export interface SpeakerRequest {
     public_id: string | null;
   } | null;
 }
-
 export interface MediaViewerResult {
   session: {
     sessionId: string;
@@ -130,8 +129,8 @@ export interface MediaViewerResult {
     mid?: string;
   }>;
   requiresRenegotiation: boolean;
+  alreadySubscribed?: boolean; // ✅ Add this
 }
-
 export const roomsApi = {
   list() {
     return apiFetch<RoomEnvelope<RoomRecord[]>>("/api/v1/rooms").then(
@@ -338,3 +337,5 @@ export const roomsApi = {
 export function mediaBadgeLabel(type: RoomMediaType) {
   return type === "video" ? "Video" : "Audio";
 }
+
+// Inside rooms.ts, update the MediaViewerResult interface (or create a new one)

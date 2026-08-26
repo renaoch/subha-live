@@ -288,86 +288,57 @@ const connectedSession: MediaSession = {
 }
   },
 
-  async subscribeHostToGuests(
-    roomId: string,
-    userId: string,
-    offerSdp: string,
-    answerSdp?: string,
-    speakerIds?: string[],
-  ) {
-    const room = await getRoom(roomId);
+async subscribeHostToGuests(
+  roomId: string,
+  userId: string,
+  offerSdp: string,
+  answerSdp?: string,
+  speakerIds?: string[],
+) {
+  const room = await getRoom(roomId);
 
-    if (room.host_id !== userId) {
-      throw new AppError(403, "Only the room host can subscribe to guests", {
-        code: "ROOM_HOST_REQUIRED",
-      });
-    }
+  if (room.host_id !== userId) {
+    throw new AppError(403, "Only the room host can subscribe to guests", {
+      code: "ROOM_HOST_REQUIRED",
+    });
+  }
 
-    if (!answerSdp && !stringValue(offerSdp)) {
-      throw new AppError(400, "offerSdp or answerSdp is required", {
-        code: "MEDIA_SDP_REQUIRED",
-      });
-    }
+  if (!answerSdp && !stringValue(offerSdp)) {
+    throw new AppError(400, "offerSdp or answerSdp is required", {
+      code: "MEDIA_SDP_REQUIRED",
+    });
+  }
 
-    const state = await mediaService.getRoomState(roomId);
-    if (!state.host || state.host.userId !== userId || state.host.status !== "connected") {
-      throw new AppError(409, "Host media is not connected", {
-        code: "MEDIA_HOST_NOT_CONNECTED",
-      });
-    }
+  const state = await mediaService.getRoomState(roomId);
+  if (!state.host || state.host.userId !== userId || state.host.status !== "connected") {
+    throw new AppError(409, "Host media is not connected", {
+      code: "MEDIA_HOST_NOT_CONNECTED",
+    });
+  }
 
-    /*
-     * When the caller tells us exactly which speakers this offer's new
-     * transceivers are for (the normal case — the host only adds a new
-     * recvonly transceiver per NEW speaker), request only those tracks.
-     * Re-requesting tracks that were already subscribed in a prior call
-     * can make the SFU treat the call as a no-op and return neither an
-     * answer nor a renegotiation offer, even though the local offer has
-     * a new, unanswered m-line — which is what was causing "negotiation
-     * returned no SDP" on the host side.
-     */
-    const speakerEntries = speakerIds && speakerIds.length > 0
-      ? speakerIds
+  const speakerEntries = speakerIds && speakerIds.length > 0
+    ? speakerIds
         .filter((id) => state.speakers[id])
         .map((id) => [id, state.speakers[id]] as const)
-      : Object.entries(state.speakers);
+    : Object.entries(state.speakers);
 
-    const tracks: RemoteMediaTrack[] = speakerEntries.map(([, speaker]) => ({
-      sessionId: speaker.sessionId,
-      trackName: speaker.audioTrackName,
-    }));
+  const tracks: RemoteMediaTrack[] = speakerEntries.map(([, speaker]) => ({
+    sessionId: speaker.sessionId,
+    trackName: speaker.audioTrackName,
+  }));
 
-    if (tracks.length === 0) {
-      throw new AppError(409, "No guest audio is active", {
-        code: "NO_GUEST_AUDIO",
-      });
-    }
+  if (tracks.length === 0) {
+    throw new AppError(409, "No guest audio is active", {
+      code: "NO_GUEST_AUDIO",
+    });
+  }
 
-    const provider = await mediaService.getProvider();
+  const provider = await mediaService.getProvider();
 
-    if (answerSdp) {
-      await provider.renegotiate({
-        sessionId: state.host.sessionId,
-        answerSdp,
-      });
-
-      return {
-        session: {
-          sessionId: state.host.sessionId,
-          generation: state.host.generation,
-          status: state.host.status,
-        },
-        answerSdp: undefined,
-        offerSdp: undefined,
-        tracks: [],
-        requiresRenegotiation: false,
-      };
-    }
-
-    const negotiation = await provider.subscribeTracks({
+  if (answerSdp) {
+    await provider.renegotiate({
       sessionId: state.host.sessionId,
-      offerSdp,
-      tracks,
+      answerSdp,
     });
 
     return {
@@ -376,12 +347,50 @@ const connectedSession: MediaSession = {
         generation: state.host.generation,
         status: state.host.status,
       },
-      answerSdp: negotiation.answerSdp,
-      offerSdp: negotiation.offerSdp,
-      tracks: negotiation.tracks,
-      requiresRenegotiation: negotiation.requiresRenegotiation,
+      answerSdp: undefined,
+      offerSdp: undefined,
+      tracks: [],
+      requiresRenegotiation: false,
+      alreadySubscribed: false, // not needed here
     };
-  },
+  }
+
+  const negotiation = await provider.subscribeTracks({
+    sessionId: state.host.sessionId,
+    offerSdp,
+    tracks,
+  });
+
+  // --- NEW: Detect empty SDP and return a flag ---
+  if (!negotiation.answerSdp && !negotiation.offerSdp) {
+    // All requested tracks are already subscribed.
+    return {
+      session: {
+        sessionId: state.host.sessionId,
+        generation: state.host.generation,
+        status: state.host.status,
+      },
+      answerSdp: undefined,
+      offerSdp: undefined,
+      tracks: [],
+      requiresRenegotiation: false,
+      alreadySubscribed: true, // ✅ New flag
+    };
+  }
+
+  return {
+    session: {
+      sessionId: state.host.sessionId,
+      generation: state.host.generation,
+      status: state.host.status,
+    },
+    answerSdp: negotiation.answerSdp,
+    offerSdp: negotiation.offerSdp,
+    tracks: negotiation.tracks,
+    requiresRenegotiation: negotiation.requiresRenegotiation,
+    alreadySubscribed: false,
+  };
+},
 
   async publishGuest(
     roomId: string,
