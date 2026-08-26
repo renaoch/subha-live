@@ -40,43 +40,6 @@ export function useWebRTC(
   // ---- Locks to prevent overlapping negotiations ----
   const mediaSyncBusyRef = useRef(false);
 
-  // ---- "Live" mirrors of props/state that change identity/value often.
-  // `room` comes from useRoom() (React Query, refetchInterval: 10_000),
-  // which hands back a brand-new object on every refetch even when
-  // nothing changed. If the callbacks below closed over `room` directly
-  // (via a useCallback dependency), they'd get a new identity every
-  // ~10s, which would cascade into the polling effect further down
-  // tearing itself down and rebuilding — restarting poll() while a
-  // previous negotiation on hostPeerRef/viewerPeerRef could still be
-  // in flight. That's the exact "no SDP returned" / "wrong state:
-  // stable" race this hook exists to avoid. Keep these as refs instead
-  // of useCallback deps so the negotiation functions never change
-  // identity just because the parent refetched room data.
-  const roomRef = useRef(room);
-  useEffect(() => {
-    roomRef.current = room;
-  }, [room]);
-
-  const isHostRef = useRef(isHost);
-  useEffect(() => {
-    isHostRef.current = isHost;
-  }, [isHost]);
-
-  const hostMediaReadyRef = useRef(hostMediaReady);
-  useEffect(() => {
-    hostMediaReadyRef.current = hostMediaReady;
-  }, [hostMediaReady]);
-
-  const speakerPublishingRef = useRef(speakerPublishing);
-  useEffect(() => {
-    speakerPublishingRef.current = speakerPublishing;
-  }, [speakerPublishing]);
-
-  const userIdRef = useRef(userId);
-  useEffect(() => {
-    userIdRef.current = userId;
-  }, [userId]);
-
   // ---- Helper: stop local media ----
   const stopLocalMedia = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -149,7 +112,7 @@ export function useWebRTC(
         transceivers.push({
           transceiver,
           track,
-          trackName: createTrackName(track.kind === 'video' ? 'video' : 'audio', userIdRef.current ?? 'host'),
+          trackName: createTrackName(track.kind === 'video' ? 'video' : 'audio', userId ?? 'host'),
         });
       }
 
@@ -208,98 +171,96 @@ export function useWebRTC(
         }
       };
     },
-    [ensureLocalPreview],
+    [userId, ensureLocalPreview],
   );
 
   // ---- Viewer connect ----
-  const connectViewer = useCallback(async (currentRoom: RoomRecord) => {
-    const state = await waitForHostMediaState(currentRoom.id, 20000, 500);
-    if (!state.host || state.host.status !== 'connected') {
-      throw new Error('Host is still connecting. Try again.');
-    }
+  const connectViewer = useCallback(
+    async (currentRoom: RoomRecord) => {
+      const state = await waitForHostMediaState(currentRoom.id, 20000, 500);
+      if (!state.host || state.host.status !== 'connected') {
+        throw new Error('Host is still connecting. Try again.');
+      }
 
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
-      bundlePolicy: 'max-bundle',
-    });
-    viewerPeerRef.current = peer;
+      const peer = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+        bundlePolicy: 'max-bundle',
+      });
+      viewerPeerRef.current = peer;
 
-    const remoteStream = new MediaStream();
-    remoteStreamRef.current = remoteStream;
+      const remoteStream = new MediaStream();
+      remoteStreamRef.current = remoteStream;
 
-    peer.ontrack = (event) => {
-      for (const track of event.streams[0]?.getTracks() ?? [event.track]) {
-        if (!remoteStream.getTracks().some((t) => t.id === track.id)) {
-          remoteStream.addTrack(track);
+      peer.ontrack = (event) => {
+        for (const track of event.streams[0]?.getTracks() ?? [event.track]) {
+          if (!remoteStream.getTracks().some((t) => t.id === track.id)) {
+            remoteStream.addTrack(track);
+          }
         }
-      }
-    };
+      };
 
-    peer.onconnectionstatechange = () => {
-      const ready = peer.connectionState === 'connected';
-      setViewerConnected(ready);
-      if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-        setViewerConnected(false);
-      }
-    };
+      peer.onconnectionstatechange = () => {
+        const ready = peer.connectionState === 'connected';
+        setViewerConnected(ready);
+        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+          setViewerConnected(false);
+        }
+      };
 
-    createViewerTransceivers(peer, state);
-    viewerSpeakerIdsRef.current = new Set(Object.keys(state.speakers));
+      createViewerTransceivers(peer, state);
+      viewerSpeakerIdsRef.current = new Set(Object.keys(state.speakers));
 
-    // Phase 1: create session
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    await waitForFirstUsableCandidate(peer);
-
-    const localDescription = peer.localDescription;
-    if (!localDescription?.sdp) throw new Error('No valid viewer SDP.');
-
-    const initialResult = await roomsApi.createViewerSession(currentRoom.id, localDescription.sdp);
-    if (!initialResult.answerSdp) throw new Error('No initial viewer SDP answer.');
-    await peer.setRemoteDescription({ type: 'answer', sdp: initialResult.answerSdp });
-    await waitForPeerConnectionConnected(peer, 20000, 500);
-
-    viewerSessionRef.current = {
-      sessionId: initialResult.session.sessionId,
-      generation: initialResult.session.generation,
-    };
-
-    // Phase 2: add tracks
-    const renegotiationOffer = await peer.createOffer();
-    await peer.setLocalDescription(renegotiationOffer);
-    await waitForFirstUsableCandidate(peer);
-
-    const renegotiationDescription = peer.localDescription;
-    if (!renegotiationDescription?.sdp) throw new Error('No valid track negotiation offer.');
-
-    const result = await roomsApi.createViewerSession(currentRoom.id, renegotiationDescription.sdp);
-
-    if (result.answerSdp) {
-      await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
-    } else if (result.offerSdp) {
-      await peer.setRemoteDescription({ type: 'offer', sdp: result.offerSdp });
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
+      // Phase 1: create session
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
       await waitForFirstUsableCandidate(peer);
-      const localAnswer = peer.localDescription;
-      if (!localAnswer?.sdp) throw new Error('No viewer renegotiation answer.');
-      await roomsApi.completeRenegotiation(currentRoom.id, localAnswer.sdp);
-    } else {
-      throw new Error('No SDP returned for track negotiation.');
-    }
 
-    await waitForPeerConnectionConnected(peer, 20000, 500);
-    setViewerConnected(true);
-  }, []);
+      const localDescription = peer.localDescription;
+      if (!localDescription?.sdp) throw new Error('No valid viewer SDP.');
+
+      const initialResult = await roomsApi.createViewerSession(currentRoom.id, localDescription.sdp);
+      if (!initialResult.answerSdp) throw new Error('No initial viewer SDP answer.');
+      await peer.setRemoteDescription({ type: 'answer', sdp: initialResult.answerSdp });
+      await waitForPeerConnectionConnected(peer, 20000, 500);
+
+      viewerSessionRef.current = {
+        sessionId: initialResult.session.sessionId,
+        generation: initialResult.session.generation,
+      };
+
+      // Phase 2: add tracks
+      const renegotiationOffer = await peer.createOffer();
+      await peer.setLocalDescription(renegotiationOffer);
+      await waitForFirstUsableCandidate(peer);
+
+      const renegotiationDescription = peer.localDescription;
+      if (!renegotiationDescription?.sdp) throw new Error('No valid track negotiation offer.');
+
+      const result = await roomsApi.createViewerSession(currentRoom.id, renegotiationDescription.sdp);
+
+      if (result.answerSdp) {
+        await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
+      } else if (result.offerSdp) {
+        await peer.setRemoteDescription({ type: 'offer', sdp: result.offerSdp });
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        await waitForFirstUsableCandidate(peer);
+        const localAnswer = peer.localDescription;
+        if (!localAnswer?.sdp) throw new Error('No viewer renegotiation answer.');
+        await roomsApi.completeRenegotiation(currentRoom.id, localAnswer.sdp);
+      } else {
+        throw new Error('No SDP returned for track negotiation.');
+      }
+
+      await waitForPeerConnectionConnected(peer, 20000, 500);
+      setViewerConnected(true);
+    },
+    [],
+  );
 
   // ---- Guest publish audio ----
-  // NOTE: reads room/isHost/speakerPublishing from refs, not closure
-  // deps, so this callback's identity never changes just because the
-  // parent's `room` object was refetched. See the comment on roomRef
-  // above for why that matters.
   const publishGuestAudio = useCallback(async () => {
-    const room = roomRef.current;
-    if (!room || isHostRef.current || speakerPublishingRef.current) return;
+    if (!room || isHost || speakerPublishing) return;
 
     setMediaError('');
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -327,7 +288,7 @@ export function useWebRTC(
     if (!firstDescription?.sdp) throw new Error('Microphone SDP offer not created.');
 
     const tracks = createPublishTracks([
-      { transceiver, track, trackName: createTrackName('audio', userIdRef.current ?? 'speaker') },
+      { transceiver, track, trackName: createTrackName('audio', userId ?? 'speaker') },
     ]);
 
     const initial = await roomsApi.publishGuest(room.id, {
@@ -362,27 +323,121 @@ export function useWebRTC(
     };
 
     setSpeakerPublishing(true);
-  }, []);
+  }, [room, isHost, userId, speakerPublishing]);
 
   // ---- Sync host guest audio ----
-  const syncHostGuestAudio = useCallback(async (state: RoomMediaState) => {
-    const room = roomRef.current;
-    if (!room || !isHostRef.current || !hostPeerRef.current || !hostMediaReadyRef.current) return;
+  const syncHostGuestAudio = useCallback(
+    async (state: RoomMediaState) => {
+      if (!room || !isHost || !hostPeerRef.current || !hostMediaReady) return;
 
-    const speakerIds = Object.keys(state.speakers).filter(
-      (speakerId) => !hostSpeakerIdsRef.current.has(speakerId),
-    );
-    if (speakerIds.length === 0) return;
+      const speakerIds = Object.keys(state.speakers).filter(
+        (speakerId) => !hostSpeakerIdsRef.current.has(speakerId),
+      );
+      if (speakerIds.length === 0) return;
 
-    const peer = hostPeerRef.current;
-    const attemptedIds: string[] = [];
-    const addedTransceivers: RTCRtpTransceiver[] = [];
+      const peer = hostPeerRef.current;
+      const attemptedIds: string[] = [];
+      const addedTransceivers: RTCRtpTransceiver[] = [];
 
-    try {
-      for (const speakerId of speakerIds) {
-        const transceiver = peer.addTransceiver('audio', { direction: 'recvonly' });
-        addedTransceivers.push(transceiver);
-        attemptedIds.push(speakerId);
+      try {
+        for (const speakerId of speakerIds) {
+          const transceiver = peer.addTransceiver('audio', { direction: 'recvonly' });
+          addedTransceivers.push(transceiver);
+          attemptedIds.push(speakerId);
+        }
+
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+        await waitForFirstUsableCandidate(peer);
+
+        const localDescription = peer.localDescription;
+        if (!localDescription?.sdp) throw new Error('Host guest-audio SDP not created.');
+
+        const result = await roomsApi.subscribeHostToGuests(room.id, {
+          offerSdp: localDescription.sdp,
+          speakerIds: attemptedIds,
+        });
+
+        if (result.alreadySubscribed) {
+          for (const speakerId of attemptedIds) hostSpeakerIdsRef.current.add(speakerId);
+          if (peer.signalingState !== 'stable') {
+            await peer.setLocalDescription({ type: 'rollback' });
+          }
+          for (const transceiver of addedTransceivers) {
+            try {
+              transceiver.stop();
+            } catch {}
+          }
+          return;
+        }
+
+        if (!result.answerSdp && !result.offerSdp) {
+          for (const speakerId of attemptedIds) hostSpeakerIdsRef.current.add(speakerId);
+          if (peer.signalingState !== 'stable') {
+            await peer.setLocalDescription({ type: 'rollback' });
+          }
+          for (const transceiver of addedTransceivers) {
+            try {
+              transceiver.stop();
+            } catch {}
+          }
+          return;
+        }
+
+        if (result.answerSdp) {
+          await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
+        } else if (result.offerSdp) {
+          await peer.setRemoteDescription({ type: 'offer', sdp: result.offerSdp });
+          const answer = await peer.createAnswer();
+          await peer.setLocalDescription(answer);
+          await waitForFirstUsableCandidate(peer);
+          const localAnswer = peer.localDescription;
+          if (!localAnswer?.sdp) throw new Error('Host guest-audio answer not created.');
+          await roomsApi.subscribeHostToGuests(room.id, {
+            answerSdp: localAnswer.sdp,
+            speakerIds: attemptedIds,
+          });
+        } else {
+          throw new Error('Host guest-audio negotiation returned no SDP.');
+        }
+
+        for (const speakerId of attemptedIds) {
+          hostSpeakerIdsRef.current.add(speakerId);
+        }
+      } catch (error) {
+        for (const speakerId of attemptedIds) {
+          hostSpeakerIdsRef.current.delete(speakerId);
+        }
+        for (const transceiver of addedTransceivers) {
+          try {
+            transceiver.stop();
+          } catch {}
+        }
+        if (peer.signalingState !== 'stable') {
+          try {
+            await peer.setLocalDescription({ type: 'rollback' });
+          } catch {}
+        }
+        throw error;
+      }
+    },
+    [room, isHost, hostMediaReady],
+  );
+
+  // ---- Sync viewer speaker audio ----
+  const syncViewerSpeakerAudio = useCallback(
+    async (state: RoomMediaState) => {
+      if (!room || isHost || !viewerPeerRef.current || !viewerSessionRef.current) return;
+
+      const newSpeakers = Object.keys(state.speakers).filter(
+        (speakerId) => !viewerSpeakerIdsRef.current.has(speakerId),
+      );
+      if (newSpeakers.length === 0) return;
+
+      const peer = viewerPeerRef.current;
+      for (const speakerId of newSpeakers) {
+        peer.addTransceiver('audio', { direction: 'recvonly' });
+        viewerSpeakerIdsRef.current.add(speakerId);
       }
 
       const offer = await peer.createOffer();
@@ -390,120 +445,30 @@ export function useWebRTC(
       await waitForFirstUsableCandidate(peer);
 
       const localDescription = peer.localDescription;
-      if (!localDescription?.sdp) throw new Error('Host guest-audio SDP not created.');
+      if (!localDescription?.sdp) throw new Error('Viewer speaker-audio offer not created.');
 
-      const result = await roomsApi.subscribeHostToGuests(room.id, {
-        offerSdp: localDescription.sdp,
-        speakerIds: attemptedIds,
-      });
-
-      if (result.alreadySubscribed) {
-        for (const speakerId of attemptedIds) hostSpeakerIdsRef.current.add(speakerId);
-        if (peer.signalingState !== 'stable') {
-          await peer.setLocalDescription({ type: 'rollback' });
-        }
-        for (const transceiver of addedTransceivers) {
-          try {
-            transceiver.stop();
-          } catch {}
-        }
-        return;
-      }
-
-      if (!result.answerSdp && !result.offerSdp) {
-        for (const speakerId of attemptedIds) hostSpeakerIdsRef.current.add(speakerId);
-        if (peer.signalingState !== 'stable') {
-          await peer.setLocalDescription({ type: 'rollback' });
-        }
-        for (const transceiver of addedTransceivers) {
-          try {
-            transceiver.stop();
-          } catch {}
-        }
-        return;
-      }
+      const result = await roomsApi.createViewerSession(room.id, localDescription.sdp);
 
       if (result.answerSdp) {
         await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
-      } else if (result.offerSdp) {
+        return;
+      }
+
+      if (result.offerSdp) {
         await peer.setRemoteDescription({ type: 'offer', sdp: result.offerSdp });
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
         await waitForFirstUsableCandidate(peer);
         const localAnswer = peer.localDescription;
-        if (!localAnswer?.sdp) throw new Error('Host guest-audio answer not created.');
-        await roomsApi.subscribeHostToGuests(room.id, {
-          answerSdp: localAnswer.sdp,
-          speakerIds: attemptedIds,
-        });
-      } else {
-        throw new Error('Host guest-audio negotiation returned no SDP.');
+        if (!localAnswer?.sdp) throw new Error('Viewer speaker-audio answer not created.');
+        await roomsApi.completeRenegotiation(room.id, localAnswer.sdp);
+        return;
       }
 
-      for (const speakerId of attemptedIds) {
-        hostSpeakerIdsRef.current.add(speakerId);
-      }
-    } catch (error) {
-      for (const speakerId of attemptedIds) {
-        hostSpeakerIdsRef.current.delete(speakerId);
-      }
-      for (const transceiver of addedTransceivers) {
-        try {
-          transceiver.stop();
-        } catch {}
-      }
-      if (peer.signalingState !== 'stable') {
-        try {
-          await peer.setLocalDescription({ type: 'rollback' });
-        } catch {}
-      }
-      throw error;
-    }
-  }, []);
-
-  // ---- Sync viewer speaker audio ----
-  const syncViewerSpeakerAudio = useCallback(async (state: RoomMediaState) => {
-    const room = roomRef.current;
-    if (!room || isHostRef.current || !viewerPeerRef.current || !viewerSessionRef.current) return;
-
-    const newSpeakers = Object.keys(state.speakers).filter(
-      (speakerId) => !viewerSpeakerIdsRef.current.has(speakerId),
-    );
-    if (newSpeakers.length === 0) return;
-
-    const peer = viewerPeerRef.current;
-    for (const speakerId of newSpeakers) {
-      peer.addTransceiver('audio', { direction: 'recvonly' });
-      viewerSpeakerIdsRef.current.add(speakerId);
-    }
-
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    await waitForFirstUsableCandidate(peer);
-
-    const localDescription = peer.localDescription;
-    if (!localDescription?.sdp) throw new Error('Viewer speaker-audio offer not created.');
-
-    const result = await roomsApi.createViewerSession(room.id, localDescription.sdp);
-
-    if (result.answerSdp) {
-      await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
-      return;
-    }
-
-    if (result.offerSdp) {
-      await peer.setRemoteDescription({ type: 'offer', sdp: result.offerSdp });
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      await waitForFirstUsableCandidate(peer);
-      const localAnswer = peer.localDescription;
-      if (!localAnswer?.sdp) throw new Error('Viewer speaker-audio answer not created.');
-      await roomsApi.completeRenegotiation(room.id, localAnswer.sdp);
-      return;
-    }
-
-    throw new Error('Viewer speaker-audio negotiation returned no SDP.');
-  }, []);
+      throw new Error('Viewer speaker-audio negotiation returned no SDP.');
+    },
+    [room, isHost],
+  );
 
   // ---- Host camera/mic preview while waiting to go live ----
   // Without this, getUserMedia() is only ever called from inside
@@ -580,12 +545,6 @@ export function useWebRTC(
   }, [speakerPublishing, isHost, mediaState, userId, room?.id]);
 
   // ---- Media state polling ----
-  // Depends only on primitives (room?.id, room?.status, isHost, userId)
-  // plus state that's meant to retrigger a sync attempt right away
-  // (viewerConnected, speakerPublishing), and on the negotiation
-  // callbacks above — which are now stable ([]) so they no longer
-  // cause this effect to tear down and rebuild every time the parent
-  // `room` object gets a new reference from a routine refetch.
   useEffect(() => {
     if (!room || room.status !== 'live') return;
     let active = true;
@@ -611,7 +570,7 @@ export function useWebRTC(
 
         // Guest auto-publish if accepted
         if (!isHost && state.speakers[userId ?? '']) {
-          if (!speakerPublishingRef.current && !mediaSyncBusyRef.current) {
+          if (!speakerPublishing && !mediaSyncBusyRef.current) {
             mediaSyncBusyRef.current = true;
             try {
               await publishGuestAudio();
@@ -715,14 +674,46 @@ export function useWebRTC(
       setMediaError('');
       setHostMediaReady(false);
       setHostPublishing(false);
+
+      let roomStartedByThisCall = false;
+
       try {
-        await publishHostMedia(currentRoom);
+        // The host preview may already have acquired the camera/mic while
+        // the room is still in the `created` state. Reuse that stream.
+        await ensureLocalPreview();
+
+        // IMPORTANT: publishing media is not what makes the room live.
+        // The database room lifecycle must be advanced first so the media
+        // endpoints (and speaker-request polling) are allowed to proceed.
+        const liveRoom =
+          currentRoom.status === 'created'
+            ? await roomsApi.start(currentRoom.id)
+            : currentRoom;
+
+        roomStartedByThisCall = currentRoom.status === 'created';
+
+        await publishHostMedia(liveRoom);
       } catch (e) {
+        // If we successfully transitioned the room to live but media setup
+        // failed, don't leave a ghost live room behind.
+        if (roomStartedByThisCall) {
+          await roomsApi.end(currentRoom.id).catch(() => {});
+        }
+
+        closeHostPeer();
+        stopLocalMedia();
+        setHostMediaReady(false);
+        setHostPublishing(false);
         setMediaError(e instanceof Error ? e.message : 'Start failed');
         throw e;
       }
     },
-    [publishHostMedia],
+    [
+      ensureLocalPreview,
+      publishHostMedia,
+      closeHostPeer,
+      stopLocalMedia,
+    ],
   );
 
   const joinViewer = useCallback(

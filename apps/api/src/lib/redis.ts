@@ -53,13 +53,40 @@ const LOCK_MAX_WAIT_MS = 3000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function cacheGet<T>(key: string): Promise<T | null> {
-  try { return (await (client as any).get(key)) as T | null; }
-  catch (error) { console.error(`[redis] GET failed for ${key}:`, error); return null; }
+  try {
+    const raw = await (client as any).get(key);
+
+    if (raw === null || raw === undefined) return null;
+
+    // node-redis returns strings; Upstash REST can return already-parsed
+    // values. Support both backends without double-parsing objects.
+    if (typeof raw === "string") {
+      try {
+        return JSON.parse(raw) as T;
+      } catch {
+        return raw as T;
+      }
+    }
+
+    return raw as T;
+  } catch (error) {
+    console.error(`[redis] GET failed for ${key}:`, error);
+    return null;
+  }
 }
 
 export async function cacheSet(key: string, value: unknown, ttlSeconds: number): Promise<void> {
-  try { await (client as any).set(key, value, { EX: ttlSeconds, ex: ttlSeconds }); }
-  catch (error) { console.error(`[redis] SET failed for ${key}:`, error); }
+  try {
+    const serialized = JSON.stringify(value);
+
+    if (redisUrl) {
+      await (client as any).set(key, serialized, { EX: ttlSeconds });
+    } else {
+      await (client as any).set(key, serialized, { ex: ttlSeconds });
+    }
+  } catch (error) {
+    console.error(`[redis] SET failed for ${key}:`, error);
+  }
 }
 
 export async function cacheDel(key: string | string[]): Promise<void> {
