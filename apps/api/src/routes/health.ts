@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { supabase } from "../lib/supabase";
+import { redisHealth } from "../lib/redis";
 
 const router = Router();
 
@@ -104,4 +105,13 @@ router.get("/db", async (_req, res) => {
     });
   }
 });
+router.get("/ready", async (_req, res) => {
+  try {
+    await redisHealth();
+    return res.status(200).json({ status: "ready", timestamp: new Date().toISOString() });
+  } catch {
+    return res.status(503).json({ status: "not_ready", timestamp: new Date().toISOString() });
+  }
+});
+
 export default router;

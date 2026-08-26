@@ -19,13 +19,12 @@ export async function middleware(
     request,
   });
 
-  const supabaseUrl = getRequiredEnv(
-    "NEXT_PUBLIC_SUPABASE_URL",
-  );
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const supabaseAnonKey = getRequiredEnv(
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  );
+  // Keep the public preview renderable when project vars are unavailable;
+  // deployed environments still receive both values from Vercel.
+  if (!supabaseUrl || !supabaseAnonKey) return response;
 
   const supabase = createServerClient(
     supabaseUrl,

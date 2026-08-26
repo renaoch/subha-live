@@ -27,12 +27,19 @@ function logMediaProviderStatus() {
 export async function bootstrap() {
   try {
     await connectRedis();
-
     logMediaProviderStatus();
 
-    app.listen(PORT, "0.0.0.0", () => {
+    const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running in ${mode} mode on port ${PORT}`);
     });
+
+    const shutdown = (signal: string) => {
+      console.log(`[shutdown] received ${signal}`);
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(1), 10_000).unref();
+    };
+    process.once("SIGTERM", () => shutdown("SIGTERM"));
+    process.once("SIGINT", () => shutdown("SIGINT"));
   } catch (error) {
     console.error("Failed to start application:", error);
     process.exit(1);

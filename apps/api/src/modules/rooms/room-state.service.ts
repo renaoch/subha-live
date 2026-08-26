@@ -65,14 +65,14 @@ export const roomState = {
     const key = roomKey(roomId, "state");
 
     // Keep the state update and TTL together.
-    const multi = redis.multi();
-    multi.hSet(key, state);
+    const multi = redis.pipeline();
+    multi.hset(key, state);
     multi.expire(key, ROOM_STATE_TTL_SECONDS);
     await multi.exec();
   },
 
   async getState(roomId: string): Promise<Record<string, string>> {
-    return redis.hGetAll(roomKey(roomId, "state"));
+    return redis.hgetall(roomKey(roomId, "state"));
   },
 
   async deleteState(roomId: string): Promise<void> {
@@ -83,18 +83,18 @@ export const roomState = {
   async addViewer(roomId: string, userId: string): Promise<void> {
     const key = roomKey(roomId, "viewers");
 
-    const multi = redis.multi();
-    multi.sAdd(key, userId);
+    const multi = redis.pipeline();
+    multi.sadd(key, userId);
     multi.expire(key, ROOM_STATE_TTL_SECONDS);
     await multi.exec();
   },
 
   async removeViewer(roomId: string, userId: string): Promise<void> {
-    await redis.sRem(roomKey(roomId, "viewers"), userId);
+    await redis.srem(roomKey(roomId, "viewers"), userId);
   },
 
   async isViewer(roomId: string, userId: string): Promise<boolean> {
-    const result = await redis.sIsMember(
+    const result = await redis.sismember(
       roomKey(roomId, "viewers"),
       userId,
     );
@@ -103,7 +103,7 @@ export const roomState = {
   },
 
   async getViewerCount(roomId: string): Promise<number> {
-    return redis.sCard(roomKey(roomId, "viewers"));
+    return redis.scard(roomKey(roomId, "viewers"));
   },
 
   // Speaker slots are limited, so capacity is checked atomically in Redis.
@@ -152,30 +152,30 @@ export const roomState = {
   },
 
   async removeVideoSpeaker(roomId: string, userId: string): Promise<void> {
-    await redis.sRem(roomKey(roomId, "video-speakers"), userId);
+    await redis.srem(roomKey(roomId, "video-speakers"), userId);
   },
 
   async isVideoSpeaker(roomId: string, userId: string): Promise<boolean> {
-    return (await redis.sIsMember(
+    return (await redis.sismember(
       roomKey(roomId, "video-speakers"),
       userId,
     )) === 1;
   },
 
   async getVideoSpeaker(roomId: string): Promise<string | null> {
-    const users = await redis.sMembers(roomKey(roomId, "video-speakers"));
+    const users = await redis.smembers(roomKey(roomId, "video-speakers"));
     return users[0] ?? null;
   },
 
   async removeSpeaker(roomId: string, userId: string): Promise<void> {
-    await redis.sRem(
+    await redis.srem(
       roomKey(roomId, "speakers"),
       userId,
     );
   },
 
   async isSpeaker(roomId: string, userId: string): Promise<boolean> {
-    const result = await redis.sIsMember(
+    const result = await redis.sismember(
       roomKey(roomId, "speakers"),
       userId,
     );
@@ -184,13 +184,13 @@ export const roomState = {
   },
 
   async getSpeakers(roomId: string): Promise<string[]> {
-    return redis.sMembers(
+    return redis.smembers(
       roomKey(roomId, "speakers"),
     );
   },
 
   async getSpeakerCount(roomId: string): Promise<number> {
-    return redis.sCard(
+    return redis.scard(
       roomKey(roomId, "speakers"),
     );
   },
@@ -202,8 +202,8 @@ export const roomState = {
   ): Promise<void> {
     const key = roomKey(roomId, "requests");
 
-    const multi = redis.multi();
-    multi.zAdd(key, {
+    const multi = redis.pipeline();
+    multi.zadd(key, {
       score: Date.now(),
       value: userId,
     });
@@ -215,7 +215,7 @@ export const roomState = {
     roomId: string,
     userId: string,
   ): Promise<void> {
-    await redis.zRem(
+    await redis.zrem(
       roomKey(roomId, "requests"),
       userId,
     );
@@ -225,7 +225,7 @@ export const roomState = {
     roomId: string,
     userId: string,
   ): Promise<boolean> {
-    const score = await redis.zScore(
+    const score = await redis.zscore(
       roomKey(roomId, "requests"),
       userId,
     );
@@ -237,7 +237,7 @@ export const roomState = {
     roomId: string,
     limit: number = DEFAULT_AUDIO_REQUEST_LIMIT,
   ): Promise<string[]> {
-    return redis.zRange(
+    return redis.zrange(
       roomKey(roomId, "requests"),
       0,
       limit - 1,
