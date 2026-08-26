@@ -64,13 +64,26 @@ function waitForIceGatheringComplete(
       onStateChange,
     );
 
+    /*
+     * We don't have a signaling channel to trickle individual ICE
+     * candidates to Cloudflare Realtime after the initial offer, so
+     * we wait for gathering to finish before sending the SDP. The
+     * previous 8s cap was the single biggest contributor to slow
+     * host-start / viewer-join times: usable srflx/relay candidates
+     * are almost always gathered well under 2.5s, and connections
+     * that genuinely need longer will still connect (a bit more
+     * slowly, or the browser continues gathering in the background)
+     * rather than blocking the whole join flow on the worst case.
+     * The real fix is a signaling channel enabling true trickle ICE;
+     * this timeout reduction is a stopgap.
+     */
     window.setTimeout(() => {
       peer.removeEventListener(
         "icegatheringstatechange",
         onStateChange,
       );
       resolve();
-    }, 8000);
+    }, 2500);
   });
 }
 function waitForPeerConnectionConnected(
@@ -372,6 +385,9 @@ export default function RoomStagePage({
   const [requestPending, setRequestPending] =
     useState(false);
 
+  const [guestMicEnabled, setGuestMicEnabled] =
+    useState(true);
+
   const [speakerPublishing, setSpeakerPublishing] =
     useState(false);
 
@@ -484,6 +500,7 @@ export default function RoomStagePage({
     if (!room || isHost || speakerPublishing) return;
 
     setSpeakerMediaError("");
+    setGuestMicEnabled(true);
 
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -1441,6 +1458,40 @@ export default function RoomStagePage({
           }
         }
 
+        /*
+         * `state.speakers` (above) reflects the SFU publish state,
+         * which only becomes true AFTER the viewer has published a
+         * track — it can never be used to detect that the host has
+         * approved the request in the first place. Poll the request
+         * status directly (backed by room_join_requests) so
+         * "requestPending" clears the moment the host accepts, even
+         * before the guest's microphone track has been published.
+         */
+        let myRequestAccepted = false;
+        if (!isHost && !state.speakers[userId ?? ""] && requestPending) {
+          try {
+            const myStatus = await roomsApi.getMyRequestStatus(id);
+            if (!active) return;
+
+            if (myStatus.status === "accepted") {
+              myRequestAccepted = true;
+              setRequestPending(false);
+              if (!speakerApprovalSeenRef.current) {
+                speakerApprovalSeenRef.current = true;
+                toast.success("Your audio seat was accepted");
+              }
+            } else if (
+              myStatus.status === "rejected" ||
+              myStatus.status === "cancelled" ||
+              myStatus.status === "none"
+            ) {
+              setRequestPending(false);
+            }
+          } catch (error) {
+            console.error("Failed to fetch speak request status", error);
+          }
+        }
+
         if (isHost) {
           if (!requestBusy) {
             requestBusy = true;
@@ -1462,7 +1513,11 @@ export default function RoomStagePage({
             }
           }
         } else {
-          if (state.speakers[userId ?? ""] && !speakerPublishing && !mediaBusy) {
+          if (
+            (state.speakers[userId ?? ""] || myRequestAccepted) &&
+            !speakerPublishing &&
+            !mediaBusy
+          ) {
             mediaBusy = true;
             try {
               await publishGuestAudio();
@@ -1504,6 +1559,29 @@ export default function RoomStagePage({
     if (!room || isHost || room.status !== "live" || joined) return;
     void handleJoin();
   }, [room?.id, room?.status, isHost]);
+
+  /*
+   * The 3s room-status poll (above, in the room-load effect) does
+   * pick up "ended", but nothing previously acted on that value for
+   * non-host participants: their peer connections stayed open and
+   * they were never navigated out. Tear the viewer down and send
+   * them home as soon as the host ends the room.
+   */
+  const roomEndHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (!room || isHost) return;
+
+    if (room.status === "ended") {
+      if (roomEndHandledRef.current) return;
+      roomEndHandledRef.current = true;
+
+      toast.info("The host ended this live");
+      void handleLeave();
+    } else {
+      roomEndHandledRef.current = false;
+    }
+  }, [room?.status, isHost]);
 
   /*
    * Host camera/microphone preview.
@@ -1562,6 +1640,19 @@ export default function RoomStagePage({
   }, [
     micEnabled,
   ]);
+
+  /*
+   * Guest speaker's own mic mute/unmute. Mirrors the host mic
+   * effect above but drives the guest publish stream instead of
+   * the host's local stream.
+   */
+  useEffect(() => {
+    guestStreamRef.current
+      ?.getAudioTracks()
+      .forEach((track) => {
+        track.enabled = guestMicEnabled;
+      });
+  }, [guestMicEnabled]);
 
   /*
    * Host heartbeat.
@@ -2187,9 +2278,27 @@ export default function RoomStagePage({
         )}
 
         {speakerPublishing && !isHost && (
-          <div className="absolute left-[15px] bottom-[154px] z-40 rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[8px] font-semibold backdrop-blur-xl">
-            <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-            You are speaking
+          <div className="absolute left-[15px] bottom-[154px] z-40 flex items-center gap-2">
+            <div className="flex items-center rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[8px] font-semibold backdrop-blur-xl">
+              <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              You are speaking
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setGuestMicEnabled((value) => !value)}
+              className={`flex h-[26px] w-[26px] items-center justify-center rounded-full border border-white/10 backdrop-blur-xl transition ${
+                guestMicEnabled ? "bg-black/45 text-white hover:bg-white/10" : "bg-white text-black"
+              }`}
+              aria-label={guestMicEnabled ? "Mute microphone" : "Unmute microphone"}
+              title={guestMicEnabled ? "Mute microphone" : "Unmute microphone"}
+            >
+              {guestMicEnabled ? (
+                <Mic className="h-[13px] w-[13px]" />
+              ) : (
+                <MicOff className="h-[13px] w-[13px]" />
+              )}
+            </button>
           </div>
         )}
 

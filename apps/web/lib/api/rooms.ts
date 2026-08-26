@@ -305,6 +305,16 @@ export const roomsApi = {
     );
   },
 
+  getMyRequestStatus(id: string) {
+    return apiFetch<
+      RoomEnvelope<{
+        status: "pending" | "accepted" | "rejected" | "cancelled" | "none";
+        type: "audio" | "video" | null;
+        requestId: string | null;
+      }>
+    >(`/api/v1/rooms/${id}/speaker-requests/mine`).then((r) => r.data);
+  },
+
   requestAudio(id: string) {
     return apiFetch<RoomEnvelope<SpeakerRequest>>(
       `/api/v1/rooms/${id}/audio-request`,

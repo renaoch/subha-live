@@ -66,6 +66,32 @@ export async function cancelSpeakerRequest(
   }
 }
 
+export async function getMyRequestStatus(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.user) {
+      throw new AppError(401, "Authentication required", {
+        code: "AUTHENTICATION_REQUIRED",
+      });
+    }
+
+    const status = await roomRequestService.getMyRequestStatus(
+      req.params.id,
+      req.user.id,
+    );
+
+    res.status(200).json({
+      success: true,
+      data: status,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function listSpeakerRequests(
   req: Request<{ id: string }>,
   res: Response,

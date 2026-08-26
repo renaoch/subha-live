@@ -6,6 +6,7 @@ import { joinRoom, leaveRoom } from "./room-participant.controller";
 import {
   createSpeakerRequest,
   cancelSpeakerRequest,
+  getMyRequestStatus,
   listSpeakerRequests,
   approveSpeakerRequest,
   rejectSpeakerRequest,
@@ -27,6 +28,7 @@ router.post("/:id/leave", authMiddleware, leaveRoom);
 router.post("/:id/speaker-request", authMiddleware, createSpeakerRequest);
 router.delete("/:id/speaker-request", authMiddleware, cancelSpeakerRequest);
 router.get("/:id/speaker-requests", authMiddleware, listSpeakerRequests);
+router.get("/:id/speaker-requests/mine", authMiddleware, getMyRequestStatus);
 router.post(
   "/:id/speaker-requests/:requestId/approve",
   authMiddleware,

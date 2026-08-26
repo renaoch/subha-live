@@ -181,6 +181,49 @@ export const roomRequestService = {
     await roomState.removeAudioRequest(roomId, userId);
   },
 
+  /*
+   * Lets the requesting viewer poll the status of their own
+   * most recent speak request without needing host privileges.
+   * This is the source of truth the frontend should use to clear
+   * "waiting for host" state — it reflects room_join_requests
+   * directly instead of the SFU publish state, which is only
+   * populated after the viewer has already started publishing.
+   */
+  async getMyRequestStatus(
+    roomId: string,
+    userId: string,
+  ): Promise<{
+    status: "pending" | "accepted" | "rejected" | "cancelled" | "none";
+    type: RequestType | null;
+    requestId: string | null;
+  }> {
+    const { data, error } = await supabase
+      .from("room_join_requests")
+      .select("id, status, type")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new AppError(500, "Failed to fetch request status", {
+        code: "ROOM_REQUEST_STATUS_FAILED",
+        details: error.message,
+      });
+    }
+
+    if (!data) {
+      return { status: "none", type: null, requestId: null };
+    }
+
+    return {
+      status: data.status as "pending" | "accepted" | "rejected" | "cancelled",
+      type: data.type as RequestType,
+      requestId: data.id,
+    };
+  },
+
   async listPendingRequests(
     roomId: string,
     hostId: string,
