@@ -14,13 +14,17 @@ function getRequiredEnv(name: string): string {
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const supabaseUrl = getRequiredEnv(
-    "NEXT_PUBLIC_SUPABASE_URL",
-  );
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    "https://vxcrfpgicvmclnjyszmu.supabase.co";
 
-  const supabaseAnonKey = getRequiredEnv(
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  );
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.JWT;
+
+  if (!supabaseAnonKey) {
+    throw new Error("Supabase anon key is not configured");
+  }
 
   return createServerClient(
     supabaseUrl,

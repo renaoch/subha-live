@@ -16,7 +16,12 @@ export function AuthListener() {
   const setUser = useAuthStore((s) => s.setUser);
 
   useEffect(() => {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.JWT) {
+      setUser(null);
+      return;
+    }
+
+    if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && !process.env.JWT) {
       setUser(null);
       return;
     }
