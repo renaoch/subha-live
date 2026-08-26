@@ -1,52 +1,50 @@
 import { Redis } from "@upstash/redis";
+import { createClient, type RedisClientType } from "redis";
 
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+type RedisBackend = Redis | RedisClientType;
 
-if (!redisUrl || !redisToken) {
-  throw new Error("Redis REST credentials are not configured");
-}
+const redisUrl = process.env.REDIS_URL || process.env.REDIS_TLS_URL;
+const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 
-const client = new Redis({ url: redisUrl, token: redisToken });
+// Azure uses REDIS_URL. Upstash REST remains supported for serverless/local deployments.
+const client: RedisBackend = redisUrl
+  ? createClient({ url: redisUrl })
+  : restUrl && restToken
+    ? new Redis({ url: restUrl, token: restToken })
+    : (() => { throw new Error("Redis is not configured: set REDIS_URL or Upstash REST variables"); })();
 
 const commandAliases: Record<string, string> = {
-  multi: "pipeline",
-  hGetAll: "hgetall",
-  hSet: "hset",
-  hGet: "hget",
-  hDel: "hdel",
-  hKeys: "hkeys",
-  hIncrBy: "hincrby",
-  sAdd: "sadd",
-  sRem: "srem",
-  sMembers: "smembers",
-  sCard: "scard",
-  sIsMember: "sismember",
-  zAdd: "zadd",
-  zRem: "zrem",
-  zRange: "zrange",
-  zScore: "zscore",
+  multi: "multi", hGetAll: "hGetAll", hSet: "hSet", hGet: "hGet", hDel: "hDel", hKeys: "hKeys", hIncrBy: "hIncrBy",
+  sAdd: "sAdd", sRem: "sRem", sMembers: "sMembers", sCard: "sCard", sIsMember: "sIsMember",
+  zAdd: "zAdd", zRem: "zRem", zRange: "zRange", zScore: "zScore",
 };
 
-/** Compatibility facade so existing services can use node-redis command names
- * while the deployed API uses stateless Upstash REST requests. */
 export const redis: any = new Proxy(client as any, {
   get(target, property: string) {
-    const command = commandAliases[property] ?? property;
+    const command = property === "pipeline" && redisUrl ? "multi" : commandAliases[property] ?? property;
     const value = target[command];
     if (typeof value !== "function") return value;
-    return (...args: any[]) => {
-      if (command === "del" && Array.isArray(args[0])) args = args[0];
-      return value.apply(target, args);
-    };
+    return (...args: any[]) => value.apply(target, args);
   },
 });
 
 export async function connectRedis(): Promise<void> {
-  await client.ping();
+  if (redisUrl) {
+    const tcp = client as RedisClientType;
+    if (!tcp.isOpen) await tcp.connect();
+    await tcp.ping();
+  } else {
+    await (client as Redis).ping();
+  }
 }
 
-export async function closeRedis(): Promise<void> {}
+export async function closeRedis(): Promise<void> {
+  if (redisUrl) {
+    const tcp = client as RedisClientType;
+    if (tcp.isOpen) await tcp.quit();
+  }
+}
 
 const LOCK_TTL_SECONDS = 5;
 const LOCK_RETRY_DELAY_MS = 50;
@@ -55,12 +53,12 @@ const LOCK_MAX_WAIT_MS = 3000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function cacheGet<T>(key: string): Promise<T | null> {
-  try { return await client.get<T>(key); }
+  try { return (await (client as any).get(key)) as T | null; }
   catch (error) { console.error(`[redis] GET failed for ${key}:`, error); return null; }
 }
 
 export async function cacheSet(key: string, value: unknown, ttlSeconds: number): Promise<void> {
-  try { await client.set(key, value, { ex: ttlSeconds }); }
+  try { await (client as any).set(key, value, { EX: ttlSeconds, ex: ttlSeconds }); }
   catch (error) { console.error(`[redis] SET failed for ${key}:`, error); }
 }
 
