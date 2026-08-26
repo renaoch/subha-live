@@ -348,6 +348,15 @@ export default function RoomStagePage({
   const [selectedFilter, setSelectedFilter] =
     useState("Natural");
 
+  const filterPresets = {
+    Natural: "none",
+    Glow: "brightness(1.08) saturate(1.08) contrast(0.96)",
+    Warm: "sepia(0.16) saturate(1.18) brightness(1.04)",
+    Cool: "hue-rotate(10deg) saturate(0.88) brightness(1.04)",
+    Noir: "grayscale(1) contrast(1.18) brightness(0.94)",
+    Vintage: "sepia(0.28) saturate(0.82) contrast(0.94) brightness(1.04)",
+  } as const;
+
   const [mediaError, setMediaError] =
     useState("");
 
@@ -1989,16 +1998,18 @@ export default function RoomStagePage({
             autoPlay
             muted
             playsInline
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : isHost && isLive ? (
-          <video
-            ref={localVideoRef}
-            autoPlay
-            muted
-            playsInline
-            className="absolute inset-0 h-full w-full object-cover"
-          />
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ filter: filterPresets[selectedFilter as keyof typeof filterPresets] }}
+            />
+          ) : isHost && isLive ? (
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              playsInline
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ filter: filterPresets[selectedFilter as keyof typeof filterPresets] }}
+            />
         ) : isLive && mediaState?.host ? (
           <video
             ref={remoteVideoRef}
@@ -2152,7 +2163,7 @@ export default function RoomStagePage({
               <span className="text-[10px] text-white/45">Live preview</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {["Natural", "Soft", "Bright"].map((filter) => (
+              {Object.keys(filterPresets).map((filter) => (
                 <button
                   key={filter}
                   type="button"
