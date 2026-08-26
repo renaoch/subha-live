@@ -597,9 +597,18 @@ export default function RoomStagePage({
     // failure instead of leaving them permanently marked as "handled".
     const attemptedIds: string[] = [];
 
+    // Track the transceivers we add this round so a failed negotiation
+    // can be cleanly undone instead of leaving orphaned m-lines behind.
+    // Without this, a failed sync would retry every poll cycle and pile
+    // up a new recvonly transceiver each time for the same speaker,
+    // since transceivers can't be removed from an RTCPeerConnection —
+    // only stopped.
+    const addedTransceivers: RTCRtpTransceiver[] = [];
+
     try {
       for (const speakerId of speakerIds) {
-        peer.addTransceiver("audio", { direction: "recvonly" });
+        const transceiver = peer.addTransceiver("audio", { direction: "recvonly" });
+        addedTransceivers.push(transceiver);
         attemptedIds.push(speakerId);
       }
 
@@ -610,7 +619,10 @@ export default function RoomStagePage({
       const localDescription = peer.localDescription;
       if (!localDescription?.sdp) throw new Error("Host guest-audio SDP was not created.");
 
-      const result = await roomsApi.subscribeHostToGuests(currentRoom.id, { offerSdp: localDescription.sdp });
+      const result = await roomsApi.subscribeHostToGuests(currentRoom.id, {
+        offerSdp: localDescription.sdp,
+        speakerIds: attemptedIds,
+      });
 
       if (result.answerSdp) {
         await peer.setRemoteDescription({ type: "answer", sdp: result.answerSdp });
@@ -621,7 +633,10 @@ export default function RoomStagePage({
         await waitForIceGatheringComplete(peer);
         const localAnswer = peer.localDescription;
         if (!localAnswer?.sdp) throw new Error("Host guest-audio answer was not created.");
-        await roomsApi.subscribeHostToGuests(currentRoom.id, { answerSdp: localAnswer.sdp });
+        await roomsApi.subscribeHostToGuests(currentRoom.id, {
+          answerSdp: localAnswer.sdp,
+          speakerIds: attemptedIds,
+        });
       } else {
         throw new Error("Host guest-audio negotiation returned no SDP.");
       }
@@ -631,10 +646,36 @@ export default function RoomStagePage({
         hostSpeakerIdsRef.current.add(speakerId);
       }
     } catch (error) {
-      // If any step fails, we roll back the attempted ids.
+      // If any step fails, we roll back the attempted ids so the next
+      // poll cycle will try these speakers again.
       for (const speakerId of attemptedIds) {
         hostSpeakerIdsRef.current.delete(speakerId);
       }
+
+      // Undo the transceivers we just added so retries don't pile up
+      // duplicate recvonly m-lines for the same speaker.
+      for (const transceiver of addedTransceivers) {
+        try {
+          transceiver.stop();
+        } catch {
+          // Older browsers may not support stop() on a transceiver
+          // that never reached "sendrecv" — safe to ignore.
+        }
+      }
+
+      // Return the peer's signaling state to "stable" so the next
+      // createOffer()/setLocalDescription() call isn't left dangling
+      // on a half-finished "have-local-offer" negotiation.
+      if (peer.signalingState !== "stable") {
+        try {
+          await peer.setLocalDescription({ type: "rollback" });
+        } catch {
+          // If rollback itself fails the connection is in a bad
+          // state; closeHostPeer()/reconnect logic upstream will
+          // recover it on the next full sync pass.
+        }
+      }
+
       throw error;
     }
 

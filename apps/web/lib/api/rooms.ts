@@ -242,7 +242,7 @@ export const roomsApi = {
 
   subscribeHostToGuests(
     id: string,
-    input: { offerSdp?: string; answerSdp?: string },
+    input: { offerSdp?: string; answerSdp?: string; speakerIds?: string[] },
   ) {
     return apiFetch<RoomEnvelope<MediaViewerResult>>(
       `/api/v1/rooms/${id}/media/host/subscribe`,
