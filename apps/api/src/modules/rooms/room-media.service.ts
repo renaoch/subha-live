@@ -293,6 +293,7 @@ const connectedSession: MediaSession = {
     userId: string,
     offerSdp: string,
     answerSdp?: string,
+    speakerIds?: string[],
   ) {
     const room = await getRoom(roomId);
 
@@ -315,7 +316,23 @@ const connectedSession: MediaSession = {
       });
     }
 
-    const tracks: RemoteMediaTrack[] = Object.values(state.speakers).map((speaker) => ({
+    /*
+     * When the caller tells us exactly which speakers this offer's new
+     * transceivers are for (the normal case — the host only adds a new
+     * recvonly transceiver per NEW speaker), request only those tracks.
+     * Re-requesting tracks that were already subscribed in a prior call
+     * can make the SFU treat the call as a no-op and return neither an
+     * answer nor a renegotiation offer, even though the local offer has
+     * a new, unanswered m-line — which is what was causing "negotiation
+     * returned no SDP" on the host side.
+     */
+    const speakerEntries = speakerIds && speakerIds.length > 0
+      ? speakerIds
+        .filter((id) => state.speakers[id])
+        .map((id) => [id, state.speakers[id]] as const)
+      : Object.entries(state.speakers);
+
+    const tracks: RemoteMediaTrack[] = speakerEntries.map(([, speaker]) => ({
       sessionId: speaker.sessionId,
       trackName: speaker.audioTrackName,
     }));
