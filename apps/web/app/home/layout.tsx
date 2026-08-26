@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { Sparkles } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { BottomNav } from "@/components/nav/bottom-nav";
+import { useAuthStore } from "@/store/auth-store";
 
 export default function HomeLayout({
   children,
@@ -13,41 +12,25 @@ export default function HomeLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
-const pathname = usePathname();
-const isFullScreenRoute = pathname?.includes("/room/");
+  const pathname = usePathname();
+  const isFullScreenRoute = pathname?.includes("/room/");
+
+  const isAuthed = useAuthStore((s) => s.isAuthed);
+  const hydrated = useAuthStore((s) => s.hydrated);
+
   useEffect(() => {
-    const supabase = createClient();
-    let active = true;
-
-    async function guard() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!active) return;
-
-      if (!user) {
-        router.replace("/auth");
-        return;
-      }
-
-      setReady(true);
+    // Only redirect once we've actually heard back from Supabase -- the
+    // persisted store may briefly say isAuthed:false on a hard reload
+    // before AuthListener confirms the real session.
+    if (hydrated && !isAuthed) {
+      router.replace("/auth");
     }
+  }, [hydrated, isAuthed, router]);
 
-    guard();
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) router.replace("/auth");
-    });
-
-    return () => {
-      active = false;
-      sub.subscription.unsubscribe();
-    };
-  }, [router]);
-
-  if (!ready) {
+  // Persisted state from a previous session lets us skip the spinner
+  // entirely on repeat visits -- we only block render before *any* signal
+  // has arrived (neither persisted state nor a live Supabase response).
+  if (!isAuthed && !hydrated) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-playhouses-gradient">
         <div className="flex flex-col items-center gap-3">
@@ -60,11 +43,12 @@ const isFullScreenRoute = pathname?.includes("/room/");
     );
   }
 
+  if (!isAuthed) return null;
+
   return (
     <div className={isFullScreenRoute ? "min-h-dvh bg-surface" : "min-h-dvh bg-surface pb-24"}>
-  
-         {children}
-    {!isFullScreenRoute && <BottomNav />}
+      {children}
+      {!isFullScreenRoute && <BottomNav />}
     </div>
   );
 }

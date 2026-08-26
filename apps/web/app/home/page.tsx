@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Camera,
@@ -15,8 +15,10 @@ import {
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
-import { roomsApi, type RoomRecord } from "@/lib/api/rooms";
+import { type RoomRecord } from "@/lib/api/rooms";
 import { cn } from "@/lib/utils";
+import { useRooms, useCreateRoom } from "@/hooks/queries/use-rooms";
+import { useUIStore } from "@/store/ui-store";
 
 const TABS = [
   { key: "all", label: "All" },
@@ -46,36 +48,21 @@ function initials(name: string) {
 
 export default function LivePage() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("all");
+  // `tab` lives in zustand so it survives navigating away and back (e.g.
+  // opening a room and returning), without lifting state or using context.
+  const tab = useUIStore((s) => s.liveTab);
+  const setTab = useUIStore((s) => s.setLiveTab);
+  const createOpen = useUIStore((s) => s.createRoomOpen);
+  const setCreateOpen = useUIStore((s) => s.setCreateRoomOpen);
+
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [rooms, setRooms] = useState<RoomRecord[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  async function loadRooms(showLoader = false) {
-    try {
-      if (showLoader) setLoading(true);
-      const data = await roomsApi.list();
-      setRooms(data);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Couldn't load live rooms",
-      );
-    } finally {
-      if (showLoader) setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadRooms(true);
-
-    const interval = window.setInterval(() => {
-      loadRooms(false);
-    }, 5000);
-
-    return () => window.clearInterval(interval);
-  }, []);
+  // Background-fetched + cached. `isLoading` is only true on the very first
+  // load ever (per session) since data is served from cache afterward;
+  // the 5s refresh happens silently without flipping `isLoading`.
+  const { data: rooms = [], isLoading: loading } = useRooms();
+  const createRoomMutation = useCreateRoom();
 
   const filteredRooms = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -103,7 +90,7 @@ export default function LivePage() {
     category: string;
   }) {
     try {
-      const room = await roomsApi.create({
+      const room = await createRoomMutation.mutateAsync({
         title: input.title,
         description: input.description || null,
         category: input.category,
@@ -113,7 +100,6 @@ export default function LivePage() {
       });
 
       setCreateOpen(false);
-      await loadRooms(false);
       router.push(`/home/room/${room.id}`);
     } catch (error) {
       toast.error(
