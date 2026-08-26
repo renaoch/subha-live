@@ -16,6 +16,11 @@ export function AuthListener() {
   const setUser = useAuthStore((s) => s.setUser);
 
   useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      setUser(null);
+      return;
+    }
+
     const supabase = createClient();
     let active = true;
 
