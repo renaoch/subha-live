@@ -22,19 +22,23 @@ import charismaRoutes from "./modules/charisma/charisma.routes";
 
 
     const app = express();
+    app.set("trust proxy", 1);
+    app.disable("x-powered-by");
+
+    const allowedOrigins = (process.env.CORS_ORIGINS || "https://www.subha.fun,https://subha.fun")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
     app.use(
     cors({
-        origin: [
-        "https://www.subha.fun",
-        "https://subha.fun",
-        ],
+        origin: allowedOrigins,
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
     })
     );
-    app.use(express.json());
+    app.use(express.json({ limit: "256kb" }));
 
     app.use("/health", healthRoutes);
     app.use("/api/v1/auth", authRoutes);

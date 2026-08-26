@@ -12,9 +12,9 @@ export async function reapExpiredMediaLeases(
     mediaKeys.leases(roomId);
 
   const leases =
-    await redis.hGetAll(
-      leasesKey,
-    );
+(await redis.hGetAll(
+    leasesKey,
+  )) as Record<string, string>;
 
   const currentTime =
     Date.now();

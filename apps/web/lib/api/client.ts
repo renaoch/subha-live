@@ -2,14 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL;
-
-if (!API_URL) {
-  throw new Error(
-    "Missing NEXT_PUBLIC_API_URL",
-  );
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 /* ==========================================================================
  * FETCH
@@ -52,6 +45,10 @@ export async function apiFetch<T>(
       "Authorization",
       `Bearer ${session.access_token}`,
     );
+  }
+
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
   }
 
   const response =

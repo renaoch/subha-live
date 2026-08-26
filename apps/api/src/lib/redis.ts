@@ -1,133 +1,86 @@
-import { createClient } from "redis";
+import { Redis } from "@upstash/redis";
 
-const redis = createClient({
-  url: process.env.REDIS_URL,
+const client = Redis.fromEnv();
+
+const commandAliases: Record<string, string> = {
+  multi: "pipeline",
+  hGetAll: "hgetall",
+  hSet: "hset",
+  hGet: "hget",
+  hDel: "hdel",
+  hKeys: "hkeys",
+  hIncrBy: "hincrby",
+  sAdd: "sadd",
+  sRem: "srem",
+  sMembers: "smembers",
+  sCard: "scard",
+  sIsMember: "sismember",
+  zAdd: "zadd",
+  zRem: "zrem",
+  zRange: "zrange",
+  zScore: "zscore",
+};
+
+/** Compatibility facade so existing services can use node-redis command names
+ * while the deployed API uses stateless Upstash REST requests. */
+export const redis: any = new Proxy(client as any, {
+  get(target, property: string) {
+    const command = commandAliases[property] ?? property;
+    const value = target[command];
+    if (typeof value !== "function") return value;
+    return (...args: any[]) => {
+      if (command === "del" && Array.isArray(args[0])) args = args[0];
+      return value.apply(target, args);
+    };
+  },
 });
 
-redis.on("error", (error: Error) => {
-  console.error("Redis Client Error:", error);
-});
-
-export async function connectRedis() {
-  if (!redis.isOpen) {
-    await redis.connect();
-  }
+export async function connectRedis(): Promise<void> {
+  await client.ping();
 }
 
-export { redis };
+export async function closeRedis(): Promise<void> {}
 
-/* ============================================================ */
-/* CACHE-ASIDE HELPERS (concurrency-safe)                        */
-/* ============================================================ */
-
-const LOCK_TTL_MS = 5000;
+const LOCK_TTL_SECONDS = 5;
 const LOCK_RETRY_DELAY_MS = 50;
 const LOCK_MAX_WAIT_MS = 3000;
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function cacheGet<T>(key: string): Promise<T | null> {
-  try {
-    const raw = await redis.get(key);
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
-  } catch (error) {
-    console.error(`Redis GET failed for key "${key}":`, error);
-    return null;
-  }
+  try { return await client.get<T>(key); }
+  catch (error) { console.error(`[redis] GET failed for ${key}:`, error); return null; }
 }
 
-export async function cacheSet(
-  key: string,
-  value: unknown,
-  ttlSeconds: number,
-): Promise<void> {
-  try {
-    await redis.set(key, JSON.stringify(value), { EX: ttlSeconds });
-  } catch (error) {
-    console.error(`Redis SET failed for key "${key}":`, error);
-  }
+export async function cacheSet(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+  try { await client.set(key, value, { ex: ttlSeconds }); }
+  catch (error) { console.error(`[redis] SET failed for ${key}:`, error); }
 }
 
 export async function cacheDel(key: string | string[]): Promise<void> {
-  try {
-    const keys = Array.isArray(key) ? key : [key];
-    if (keys.length === 0) return;
-    await redis.del(keys);
-  } catch (error) {
-    console.error(`Redis DEL failed for key(s) "${key}":`, error);
-  }
+  try { await client.del(...(Array.isArray(key) ? key : [key])); }
+  catch (error) { console.error(`[redis] DEL failed for ${key}:`, error); }
 }
 
-/**
- * Cache-aside read-through with a distributed lock.
- *
- * Why the lock matters for concurrency:
- * If 500 users load the same page at once and the cache is cold,
- * without a lock all 500 requests hit Supabase/Postgres at the same
- * time ("cache stampede"), which is exactly what causes slow/failed
- * requests under load. With the lock, only ONE request computes the
- * value; everyone else briefly waits for it to land in Redis, then
- * reads the cached result instead of re-querying the DB.
- */
-export async function getOrSetCache<T>(
-  key: string,
-  ttlSeconds: number,
-  fetcher: () => Promise<T>,
-): Promise<T> {
+export async function getOrSetCache<T>(key: string, ttlSeconds: number, fetcher: () => Promise<T>): Promise<T> {
   const cached = await cacheGet<T>(key);
-  if (cached !== null) {
-    return cached;
-  }
-
+  if (cached !== null) return cached;
   const lockKey = `lock:${key}`;
-  const lockToken = `${process.pid}-${Date.now()}-${Math.random()}`;
-
-  let haveLock = false;
-
-  try {
-    const result = await redis.set(lockKey, lockToken, {
-      NX: true,
-      PX: LOCK_TTL_MS,
-    });
-    haveLock = result === "OK";
-  } catch (error) {
-    console.error(`Redis LOCK failed for key "${key}":`, error);
+  const token = `${process.pid}-${Date.now()}-${Math.random()}`;
+  const acquired = (await client.set(lockKey, token, { nx: true, ex: LOCK_TTL_SECONDS })) === "OK";
+  if (acquired) {
+    try { const fresh = await fetcher(); await cacheSet(key, fresh, ttlSeconds); return fresh; }
+    finally { if ((await client.get<string>(lockKey)) === token) await client.del(lockKey); }
   }
-
-  if (haveLock) {
-    try {
-      const fresh = await fetcher();
-      await cacheSet(key, fresh, ttlSeconds);
-      return fresh;
-    } finally {
-      try {
-        const current = await redis.get(lockKey);
-        if (current === lockToken) {
-          await redis.del(lockKey);
-        }
-      } catch (error) {
-        console.error(`Redis UNLOCK failed for key "${key}":`, error);
-      }
-    }
-  }
-
-  // Someone else is already computing this value right now.
-  // Poll the cache briefly instead of hammering the DB again.
-  const waitStart = Date.now();
-
-  while (Date.now() - waitStart < LOCK_MAX_WAIT_MS) {
+  const start = Date.now();
+  while (Date.now() - start < LOCK_MAX_WAIT_MS) {
     await sleep(LOCK_RETRY_DELAY_MS);
-
     const value = await cacheGet<T>(key);
-    if (value !== null) {
-      return value;
-    }
+    if (value !== null) return value;
   }
-
-  // Lock holder took too long or Redis hiccuped — don't make the
-  // user wait forever, just compute it directly.
   return fetcher();
 }
+
+export const redisHealth = () => client.ping();
+export const isRedisOpen = true;
+export { LOCK_TTL_SECONDS };
