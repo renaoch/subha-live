@@ -140,6 +140,9 @@ importers:
       '@tanstack/react-query-devtools':
         specifier: ^5.62.7
         version: 5.102.4(@tanstack/react-query@5.102.4(react@19.2.0))(react@19.2.0)
+      '@upstash/redis':
+        specifier: ^1.38.3
+        version: 1.38.3
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
