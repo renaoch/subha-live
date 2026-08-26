@@ -422,6 +422,9 @@ export default function RoomStagePage({
   const [requestPending, setRequestPending] =
     useState(false);
 
+  // Kept in sync below (see requestPendingRef) so the media-poll effect's
+  // closure always sees the current value instead of a stale one.
+
   const [guestMicEnabled, setGuestMicEnabled] =
     useState(true);
 
@@ -491,6 +494,20 @@ export default function RoomStagePage({
 
   const requestSyncBusyRef =
     useRef(false);
+
+  // The media-poll effect's `poll()` closure is only recreated when its
+  // dependency array changes, and `requestPending` deliberately isn't in
+  // that array (adding it would tear the interval down/rebuild it on every
+  // click, and re-introduce the race fixed above). That means `poll()`
+  // can't read the `requestPending` state variable directly — it would see
+  // whatever value was captured when the effect last ran, not the current
+  // one. Mirror it into a ref instead so poll() always sees the live value.
+  const requestPendingRef =
+    useRef(false);
+
+  useEffect(() => {
+    requestPendingRef.current = requestPending;
+  }, [requestPending]);
 
   const isHost = Boolean(
     room &&
@@ -1560,7 +1577,7 @@ export default function RoomStagePage({
          * before the guest's microphone track has been published.
          */
         let myRequestAccepted = false;
-        if (!isHost && !state.speakers[userId ?? ""] && requestPending) {
+        if (!isHost && !state.speakers[userId ?? ""] && requestPendingRef.current) {
           try {
             const myStatus = await roomsApi.getMyRequestStatus(id);
             if (!active) return;
