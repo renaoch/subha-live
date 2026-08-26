@@ -156,7 +156,7 @@ export default function LivePage() {
               </motion.div>
             ) : (
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
                   Subha Live
                 </p>
                 <h1 className="mt-0.5 font-display text-[1.7rem] font-bold tracking-[-0.04em] text-ink">
@@ -177,7 +177,7 @@ export default function LivePage() {
               </button>
               <button
                 onClick={() => setCreateOpen(true)}
-                className="flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-hot px-4 text-sm font-bold text-white shadow-lg shadow-accent/20"
+                className="flex h-10 items-center gap-2 rounded-full border border-border bg-surface-raised px-4 text-sm font-bold text-ink shadow-sm"
               >
                 <Plus className="h-4 w-4" />
                 Go Live
@@ -196,7 +196,7 @@ export default function LivePage() {
               {tab === item.key && (
                 <motion.span
                   layoutId="live-tab"
-                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-accent to-accent-hot"
+                  className="absolute inset-0 rounded-xl bg-ink"
                 />
               )}
               <span
@@ -228,14 +228,14 @@ export default function LivePage() {
               <section>
                 <div className="mb-3 flex items-end justify-between">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
                       Happening now
                     </p>
                     <h2 className="mt-0.5 text-xl font-bold tracking-tight text-ink">
                       Live now
                     </h2>
                   </div>
-                  <span className="rounded-full bg-green-500/10 px-2.5 py-1 text-[10px] font-bold text-green-600">
+                  <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-bold text-ink-muted">
                     {liveRooms.length} live
                   </span>
                 </div>
@@ -305,7 +305,7 @@ function RoomCard({ room, index }: { room: RoomRecord; index: number }) {
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
       ) : (
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_15%,rgba(168,85,247,0.65),transparent_34%),linear-gradient(145deg,#17121f,#3d075e_55%,#050307)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(145deg,#272727,#111111_55%,#050505)]" />
       )}
 
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-black/5" />
@@ -345,7 +345,7 @@ function WaitingRoomCard({ room }: { room: RoomRecord }) {
       onClick={() => window.location.assign(`/home/room/${room.id}`)}
       className="flex w-full items-center gap-3 rounded-2xl border border-border bg-surface-raised p-3 text-left transition hover:border-accent/40"
     >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/20 to-accent-hot/20 text-accent">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-surface-raised text-ink-muted">
         <Radio className="h-5 w-5" />
       </div>
       <div className="min-w-0 flex-1">
@@ -368,7 +368,7 @@ function EmptyRooms({
 }) {
   return (
     <div className="flex min-h-[48vh] flex-col items-center justify-center text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-accent/15 to-accent-hot/15 text-accent">
+      <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-border bg-surface-raised text-ink-muted">
         <Users className="h-7 w-7" />
       </div>
       <h2 className="mt-5 text-lg font-bold text-ink">
@@ -382,7 +382,7 @@ function EmptyRooms({
       {!query && (
         <button
           onClick={onCreate}
-          className="mt-5 rounded-full bg-gradient-to-r from-accent to-accent-hot px-5 py-2.5 text-sm font-bold text-white"
+          className="mt-5 rounded-full border border-border bg-surface-raised px-5 py-2.5 text-sm font-bold text-ink"
         >
           Create a room
         </button>
@@ -494,7 +494,7 @@ function CreateRoomModal({
           <button
             type="submit"
             disabled={creating}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-accent to-accent-hot text-sm font-bold text-white disabled:opacity-60"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink text-sm font-bold text-surface disabled:opacity-60"
           >
             {creating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
