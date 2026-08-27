@@ -187,6 +187,7 @@ router.post(
   cancelAgencyInvitation,
 );
 
+// ADMIN SHOULD BE ABLE TO CANCEL INVITATIONS AS WELL, BUT THAT'S HANDLED IN THE SERVICE.
 /* ========================================================================== */
 /* ADMIN PAYOUT ROUTE                                                         */
 /* ========================================================================== */

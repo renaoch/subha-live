@@ -15,6 +15,11 @@ export interface MediaProvider {
     input: CreateMediaSessionInput,
   ): Promise<CreateMediaSessionResult>;
 
+  /** Create a Cloudflare session without negotiating media. */
+  createSessionOnly(
+    input: CreateMediaSessionInput,
+  ): Promise<CreateMediaSessionResult>;
+
   publishTracks(
     input: PublishTracksInput,
   ): Promise<MediaNegotiationResult>;

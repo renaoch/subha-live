@@ -544,7 +544,11 @@ async subscribeHostToGuests(
     offerSdp: string,
     tracks: MediaTrack[],
   ) {
-    console.log("[GUEST-DEBUG][BE] publishGuest called", { roomId, userId, trackKinds: tracks.map(t => t.kind) });
+    console.log("[GUEST-DEBUG][BE] publishGuest called", {
+      roomId,
+      userId,
+      trackKinds: tracks.map((t) => t.kind),
+    });
 
     const room = await getRoom(roomId);
 
@@ -566,55 +570,17 @@ async subscribeHostToGuests(
     const state = await mediaService.getRoomState(roomId);
     const existingSpeaker = state.speakers[userId];
 
-    console.log("[GUEST-DEBUG][BE] publishGuest state check", {
-      roomId,
-      userId,
-      hasExistingSpeaker: !!existingSpeaker,
-      existingSpeakerStatus: existingSpeaker?.status,
-      existingSpeakerSessionId: existingSpeaker?.sessionId,
-      currentGuestCount: Object.keys(state.speakers).length,
-      maxGuestSlots: Math.min(room.max_guest_slots ?? 3, 3),
-    });
-
-    /*
-     * The viewer is only allowed to publish after the host has
-     * accepted the audio-seat request. Approval reserves this user's
-     * slot in `roomState` (room:{roomId}:speakers) BEFORE this method
-     * is ever called — see room-request.service.ts respondToRequest /
-     * acceptHostInvitation.
-     *
-     * That reservation, not the Cloudflare-side `mediaService` speaker
-     * hash, is the actual source of truth for "is this caller allowed
-     * to occupy a guest audio slot". The two trackers are independent:
-     * mediaService only reflects who has *actually started* a publish
-     * session. Without this check, any authenticated participant could
-     * call this endpoint directly and consume a guest slot before the
-     * genuinely-approved user's client gets to it — filling
-     * max_guest_slots with unapproved callers and leaving the approved
-     * user permanently stuck at "409 all guest slots full" even though
-     * the host approved them and their room_participants.role is
-     * already "speaker". That mismatch is exactly the "approved +
-     * slot granted, but audio never comes up" symptom.
-     */
     if (!existingSpeaker) {
       const isApprovedSpeaker = await roomState.isSpeaker(roomId, userId);
-      console.log("[GUEST-DEBUG][BE] approval check (no existing speaker entry)", {
-        roomId, userId, isApprovedSpeaker,
-      });
 
       if (!isApprovedSpeaker) {
-        console.warn("[GUEST-DEBUG][BE] REJECTED — not approved", { roomId, userId });
         throw new AppError(403, "You have not been approved to speak", {
           code: "ROOM_SPEAKER_NOT_APPROVED",
         });
       }
 
       const currentGuestCount = Object.keys(state.speakers).length;
-
       if (currentGuestCount >= Math.min(room.max_guest_slots ?? 3, 3)) {
-        console.warn("[GUEST-DEBUG][BE] REJECTED — slots full", {
-          roomId, userId, currentGuestCount,
-        });
         throw new AppError(409, "All guest slots are full", {
           code: "MEDIA_GUEST_SLOTS_FULL",
         });
@@ -623,101 +589,91 @@ async subscribeHostToGuests(
 
     const generation = state.generation;
     const provider = await mediaService.getProvider();
-
     let session: MediaSession | null = null;
+    let createdNewSession = false;
 
     try {
+      /*
+       * Cloudflare's documented publisher lifecycle is:
+       *
+       *   POST /sessions/new                 -> sessionId only
+       *   POST /sessions/{id}/tracks/new     -> SDP offer + local tracks
+       *                                           -> SDP answer
+       *
+       * The browser must receive that single SDP answer and apply it to
+       * the SAME RTCPeerConnection that generated `offerSdp`.
+       *
+       * Do not perform a first browser negotiation against /sessions/new
+       * and then create a second offer. That creates an unnecessary SDP
+       * phase and, in this room flow, was leaving the guest's media track
+       * unregistered / with zero outbound RTP.
+       */
       if (!existingSpeaker) {
-        console.log("[GUEST-DEBUG][BE] PHASE 1 — calling provider.createSession()", { roomId, userId });
-        const sessionResult = await provider.createSession({
+        const sessionResult = await provider.createSessionOnly({
           roomId,
           userId,
           role: "speaker",
           generation,
-          offerSdp,
         });
 
         session = sessionResult.session;
-        console.log("[GUEST-DEBUG][BE] PHASE 1 — createSession OK", {
-          roomId, userId, sessionId: session.sessionId,
-          hasAnswerSdp: !!sessionResult.sessionDescription?.sdp,
-        });
+        createdNewSession = true;
 
-        /*
-         * Phase 1 only creates the Cloudflare session. Persist it as
-         * connecting so the next negotiation reuses this exact
-         * session ID.
-         */
         await mediaService.saveSpeakerSession(
           session,
           audioTrack.trackName,
           videoTrack?.trackName ?? "",
         );
-        console.log("[GUEST-DEBUG][BE] PHASE 1 — speaker session saved as 'connecting'", {
-          roomId, userId, sessionId: session.sessionId,
-        });
+      } else {
+        if (
+          existingSpeaker.status !== "connecting" &&
+          existingSpeaker.status !== "connected" &&
+          existingSpeaker.status !== "reconnecting"
+        ) {
+          throw new AppError(409, "Speaker media session is not available", {
+            code: "MEDIA_SPEAKER_SESSION_UNAVAILABLE",
+          });
+        }
 
-        return {
-          session,
-          answerSdp: sessionResult.sessionDescription?.sdp,
-          offerSdp: undefined,
-          tracks: [],
-          requiresRenegotiation: false,
+        session = {
+          sessionId: existingSpeaker.sessionId,
+          roomId,
+          userId: existingSpeaker.userId,
+          role: "speaker",
+          generation: existingSpeaker.generation,
+          status: existingSpeaker.status,
+          createdAt: existingSpeaker.joinedAt,
+          lastHeartbeatAt: existingSpeaker.lastHeartbeatAt,
         };
       }
-
-      if (
-        existingSpeaker.status !== "connecting" &&
-        existingSpeaker.status !== "connected" &&
-        existingSpeaker.status !== "reconnecting"
-      ) {
-        console.warn("[GUEST-DEBUG][BE] REJECTED — speaker status not usable", {
-          roomId, userId, status: existingSpeaker.status,
-        });
-        throw new AppError(409, "Speaker media session is not available", {
-          code: "MEDIA_SPEAKER_SESSION_UNAVAILABLE",
-        });
-      }
-
-      session = {
-        sessionId: existingSpeaker.sessionId,
-        roomId,
-        userId: existingSpeaker.userId,
-        role: "speaker",
-        generation: existingSpeaker.generation,
-        status: existingSpeaker.status,
-        createdAt: existingSpeaker.joinedAt,
-        lastHeartbeatAt: existingSpeaker.lastHeartbeatAt,
-      };
 
       const publishTracks = videoTrack
         ? [audioTrack, videoTrack]
         : [audioTrack];
 
-      console.log("[GUEST-DEBUG][BE] PHASE 2 — calling provider.publishTracks()", {
-        roomId, userId, sessionId: existingSpeaker.sessionId, trackCount: publishTracks.length,
+      console.log("[GUEST-DEBUG][BE] publishing local tracks", {
+        roomId,
+        userId,
+        sessionId: session.sessionId,
+        trackCount: publishTracks.length,
+        tracks: publishTracks.map((track) => ({
+          kind: track.kind,
+          trackName: track.trackName,
+          mid: track.mid,
+        })),
       });
-      const phase2Start = Date.now();
 
       const negotiation = await provider.publishTracks({
-        sessionId: existingSpeaker.sessionId,
+        sessionId: session.sessionId,
         offerSdp,
         tracks: publishTracks,
       });
 
-      console.log("[GUEST-DEBUG][BE] PHASE 2 — publishTracks returned", {
-        roomId, userId, sessionId: existingSpeaker.sessionId,
-        elapsedMs: Date.now() - phase2Start,
-        hasAnswerSdp: !!negotiation.answerSdp,
-        hasOfferSdp: !!negotiation.offerSdp,
-        requiresRenegotiation: negotiation.requiresRenegotiation,
-      });
-
-      if (!negotiation.answerSdp && !negotiation.offerSdp) {
+      if (!negotiation.answerSdp) {
         throw new AppError(
           502,
-          "Cloudflare did not return a speaker track negotiation SDP",
-          { code: "MEDIA_TRACK_SDP_MISSING" },
+          "Cloudflare did not return the SDP answer for guest track publication",
+          { code: "MEDIA_TRACK_SDP_ANSWER_MISSING" },
         );
       }
 
@@ -730,10 +686,13 @@ async subscribeHostToGuests(
       await mediaService.saveSpeakerSession(
         connectedSession,
         audioTrack.trackName,
-        videoTrack?.trackName ?? existingSpeaker.videoTrackName ?? "",
+        videoTrack?.trackName ?? existingSpeaker?.videoTrackName ?? "",
       );
-      console.log("[GUEST-DEBUG][BE] PHASE 2 — speaker session saved as 'connected' — SHOULD BE LIVE NOW", {
-        roomId, userId, sessionId: existingSpeaker.sessionId,
+
+      console.log("[GUEST-DEBUG][BE] guest publish CONNECTED", {
+        roomId,
+        userId,
+        sessionId: connectedSession.sessionId,
       });
 
       return {
@@ -745,15 +704,17 @@ async subscribeHostToGuests(
       };
     } catch (error) {
       console.error("[GUEST-DEBUG][BE] publishGuest FAILED", {
-        roomId, userId,
-        wasExistingSpeaker: !!existingSpeaker,
+        roomId,
+        userId,
         sessionId: session?.sessionId,
-        error: error instanceof Error ? { name: error.name, message: error.message } : error,
+        createdNewSession,
+        error:
+          error instanceof Error
+            ? { name: error.name, message: error.message }
+            : error,
       });
-      /* Only destroy a newly-created session on failure. An existing
-       * approved speaker session may still be needed for a retry. */
-      if (session && !existingSpeaker) {
-        console.log("[GUEST-DEBUG][BE] cleaning up newly-created session after failure", { sessionId: session.sessionId });
+
+      if (session && createdNewSession) {
         await provider.closeSession(session.sessionId).catch(() => {});
         await mediaService.removeSpeakerSession(roomId, userId).catch(() => {});
       }

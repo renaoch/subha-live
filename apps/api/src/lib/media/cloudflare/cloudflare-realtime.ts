@@ -162,6 +162,48 @@ export class CloudflareRealtimeProvider
    * SESSION
    * ======================================================================== */
 
+  /**
+   * Create a Cloudflare Realtime session without sending SDP.
+   *
+   * This matches Cloudflare's documented simple-session lifecycle:
+   *   1. POST /sessions/new
+   *   2. POST /sessions/{sessionId}/tracks/new with the browser offer
+   *   3. apply the returned SDP answer in the browser
+   */
+  async createSessionOnly(
+    input: CreateMediaSessionInput,
+  ): Promise<CreateMediaSessionResult> {
+    const response =
+      await this.getHttp().request<CloudflareSessionResponse>(
+        "/sessions/new",
+        {
+          method: "POST",
+        },
+      );
+
+    if (!response?.sessionId) {
+      throw new MediaProviderError(
+        "Cloudflare did not return a session ID",
+        { response },
+      );
+    }
+
+    const timestamp = Date.now();
+
+    return {
+      session: {
+        sessionId: response.sessionId,
+        roomId: input.roomId,
+        userId: input.userId,
+        role: input.role,
+        generation: input.generation,
+        status: "connecting",
+        createdAt: timestamp,
+        lastHeartbeatAt: timestamp,
+      },
+    };
+  }
+
   async createSession(
     input: CreateMediaSessionInput,
   ): Promise<CreateMediaSessionResult> {
