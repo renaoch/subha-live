@@ -41,6 +41,42 @@ export function useWebRTC(
   // ---- Locks to prevent overlapping negotiations ----
   const mediaSyncBusyRef = useRef(false);
 
+  // ---- ICE servers (STUN + TURN) ----
+  // STUN alone can't help clients behind a NAT/firewall that blocks
+  // direct UDP paths (corporate networks, some carriers/VPNs) — those
+  // clients need a TURN relay or ICE negotiation fails outright
+  // ("connectionState=failed, iceConnectionState=disconnected"),
+  // which showed up specifically for guests trying to publish audio.
+  // Fetched once per mount and cached; falls back to STUN-only if the
+  // request fails so publishing still works on networks where a
+  // direct path is possible.
+  const iceServersPromiseRef = useRef<Promise<RTCIceServer[]> | null>(null);
+  const getIceServers = useCallback((): Promise<RTCIceServer[]> => {
+    if (!iceServersPromiseRef.current) {
+      iceServersPromiseRef.current = roomsApi
+        .getTurnCredentials()
+        .then((result) => [
+          { urls: 'stun:stun.cloudflare.com:3478' },
+          ...(result.iceServers ?? []),
+        ])
+        .catch((e) => {
+          console.error(
+            '[useWebRTC] Failed to fetch TURN credentials, falling back to STUN only:',
+            e,
+          );
+          return [{ urls: 'stun:stun.cloudflare.com:3478' }];
+        });
+    }
+    return iceServersPromiseRef.current;
+  }, []);
+
+  // Warm the TURN credential fetch as soon as this hook mounts, so it's
+  // typically already resolved by the time any publish/subscribe flow
+  // needs it below.
+  useEffect(() => {
+    getIceServers().catch(() => {});
+  }, [getIceServers]);
+
   // ---- Helper: stop local media ----
 const stopLocalMedia = useCallback(() => {
   localStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -99,8 +135,9 @@ const stopLocalMedia = useCallback(() => {
     async (currentRoom: RoomRecord) => {
       const stream = await ensureLocalPreview();
 
+      const iceServers = await getIceServers();
       const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+        iceServers,
         bundlePolicy: 'max-bundle',
       });
       hostPeerRef.current = peer;
@@ -175,7 +212,7 @@ const stopLocalMedia = useCallback(() => {
         }
       };
     },
-    [userId, ensureLocalPreview],
+    [userId, ensureLocalPreview, getIceServers],
   );
 
   // ---- Viewer connect ----
@@ -187,7 +224,7 @@ const stopLocalMedia = useCallback(() => {
       }
 
       const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+        iceServers: await getIceServers(),
         bundlePolicy: 'max-bundle',
       });
       viewerPeerRef.current = peer;
@@ -269,7 +306,7 @@ const stopLocalMedia = useCallback(() => {
       await waitForPeerConnectionConnected(peer, 20000, 500);
       setViewerConnected(true);
     },
-    [],
+    [getIceServers],
   );
 
   // ---- Guest publish audio ----
@@ -284,7 +321,7 @@ const stopLocalMedia = useCallback(() => {
     guestStreamRef.current = stream;
 
     const peer = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+      iceServers: await getIceServers(),
       bundlePolicy: 'max-bundle',
     });
     guestPeerRef.current = peer;
@@ -337,7 +374,7 @@ const stopLocalMedia = useCallback(() => {
     };
 
     setSpeakerPublishing(true);
-  }, [room, isHost, userId, speakerPublishing]);
+  }, [room, isHost, userId, speakerPublishing, getIceServers]);
 
   // ---- Sync host guest audio ----
   const syncHostGuestAudio = useCallback(

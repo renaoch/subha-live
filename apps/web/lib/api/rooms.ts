@@ -352,6 +352,12 @@ subscribeViewerToSpeakers(
       },
     );
   },
+
+  getTurnCredentials() {
+    return apiFetch<RoomEnvelope<{ iceServers: RTCIceServer[] }>>(
+      `/api/v1/media/turn-credentials`,
+    ).then((r) => r.data);
+  },
 };
 
 export function mediaBadgeLabel(type: RoomMediaType) {
