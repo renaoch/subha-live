@@ -351,6 +351,12 @@ const connectedSession: MediaSession = {
   }));
 
   if (tracks.length === 0) {
+    console.warn("[GUEST-DEBUG][BE] subscribeViewerToSpeakers NO_GUEST_AUDIO", {
+      roomId, viewerUserId: userId, requestedSpeakerIds: speakerIds,
+      allSpeakerStatuses: Object.fromEntries(
+        Object.entries(state.speakers).map(([id, s]) => [id, s.status]),
+      ),
+    });
     throw new AppError(409, "No guest audio is active", {
       code: "NO_GUEST_AUDIO",
     });
@@ -462,6 +468,12 @@ async subscribeHostToGuests(
   }));
 
   if (tracks.length === 0) {
+    console.warn("[GUEST-DEBUG][BE] subscribeHostToGuests NO_GUEST_AUDIO", {
+      roomId, hostUserId: userId, requestedSpeakerIds: speakerIds,
+      allSpeakerStatuses: Object.fromEntries(
+        Object.entries(state.speakers).map(([id, s]) => [id, s.status]),
+      ),
+    });
     throw new AppError(409, "No guest audio is active", {
       code: "NO_GUEST_AUDIO",
     });
@@ -532,6 +544,8 @@ async subscribeHostToGuests(
     offerSdp: string,
     tracks: MediaTrack[],
   ) {
+    console.log("[GUEST-DEBUG][BE] publishGuest called", { roomId, userId, trackKinds: tracks.map(t => t.kind) });
+
     const room = await getRoom(roomId);
 
     if (room.host_id === userId) {
@@ -551,6 +565,16 @@ async subscribeHostToGuests(
 
     const state = await mediaService.getRoomState(roomId);
     const existingSpeaker = state.speakers[userId];
+
+    console.log("[GUEST-DEBUG][BE] publishGuest state check", {
+      roomId,
+      userId,
+      hasExistingSpeaker: !!existingSpeaker,
+      existingSpeakerStatus: existingSpeaker?.status,
+      existingSpeakerSessionId: existingSpeaker?.sessionId,
+      currentGuestCount: Object.keys(state.speakers).length,
+      maxGuestSlots: Math.min(room.max_guest_slots ?? 3, 3),
+    });
 
     /*
      * The viewer is only allowed to publish after the host has
@@ -574,8 +598,12 @@ async subscribeHostToGuests(
      */
     if (!existingSpeaker) {
       const isApprovedSpeaker = await roomState.isSpeaker(roomId, userId);
+      console.log("[GUEST-DEBUG][BE] approval check (no existing speaker entry)", {
+        roomId, userId, isApprovedSpeaker,
+      });
 
       if (!isApprovedSpeaker) {
+        console.warn("[GUEST-DEBUG][BE] REJECTED — not approved", { roomId, userId });
         throw new AppError(403, "You have not been approved to speak", {
           code: "ROOM_SPEAKER_NOT_APPROVED",
         });
@@ -584,6 +612,9 @@ async subscribeHostToGuests(
       const currentGuestCount = Object.keys(state.speakers).length;
 
       if (currentGuestCount >= Math.min(room.max_guest_slots ?? 3, 3)) {
+        console.warn("[GUEST-DEBUG][BE] REJECTED — slots full", {
+          roomId, userId, currentGuestCount,
+        });
         throw new AppError(409, "All guest slots are full", {
           code: "MEDIA_GUEST_SLOTS_FULL",
         });
@@ -597,6 +628,7 @@ async subscribeHostToGuests(
 
     try {
       if (!existingSpeaker) {
+        console.log("[GUEST-DEBUG][BE] PHASE 1 — calling provider.createSession()", { roomId, userId });
         const sessionResult = await provider.createSession({
           roomId,
           userId,
@@ -606,6 +638,10 @@ async subscribeHostToGuests(
         });
 
         session = sessionResult.session;
+        console.log("[GUEST-DEBUG][BE] PHASE 1 — createSession OK", {
+          roomId, userId, sessionId: session.sessionId,
+          hasAnswerSdp: !!sessionResult.sessionDescription?.sdp,
+        });
 
         /*
          * Phase 1 only creates the Cloudflare session. Persist it as
@@ -617,6 +653,9 @@ async subscribeHostToGuests(
           audioTrack.trackName,
           videoTrack?.trackName ?? "",
         );
+        console.log("[GUEST-DEBUG][BE] PHASE 1 — speaker session saved as 'connecting'", {
+          roomId, userId, sessionId: session.sessionId,
+        });
 
         return {
           session,
@@ -632,6 +671,9 @@ async subscribeHostToGuests(
         existingSpeaker.status !== "connected" &&
         existingSpeaker.status !== "reconnecting"
       ) {
+        console.warn("[GUEST-DEBUG][BE] REJECTED — speaker status not usable", {
+          roomId, userId, status: existingSpeaker.status,
+        });
         throw new AppError(409, "Speaker media session is not available", {
           code: "MEDIA_SPEAKER_SESSION_UNAVAILABLE",
         });
@@ -652,10 +694,23 @@ async subscribeHostToGuests(
         ? [audioTrack, videoTrack]
         : [audioTrack];
 
+      console.log("[GUEST-DEBUG][BE] PHASE 2 — calling provider.publishTracks()", {
+        roomId, userId, sessionId: existingSpeaker.sessionId, trackCount: publishTracks.length,
+      });
+      const phase2Start = Date.now();
+
       const negotiation = await provider.publishTracks({
         sessionId: existingSpeaker.sessionId,
         offerSdp,
         tracks: publishTracks,
+      });
+
+      console.log("[GUEST-DEBUG][BE] PHASE 2 — publishTracks returned", {
+        roomId, userId, sessionId: existingSpeaker.sessionId,
+        elapsedMs: Date.now() - phase2Start,
+        hasAnswerSdp: !!negotiation.answerSdp,
+        hasOfferSdp: !!negotiation.offerSdp,
+        requiresRenegotiation: negotiation.requiresRenegotiation,
       });
 
       if (!negotiation.answerSdp && !negotiation.offerSdp) {
@@ -677,6 +732,9 @@ async subscribeHostToGuests(
         audioTrack.trackName,
         videoTrack?.trackName ?? existingSpeaker.videoTrackName ?? "",
       );
+      console.log("[GUEST-DEBUG][BE] PHASE 2 — speaker session saved as 'connected' — SHOULD BE LIVE NOW", {
+        roomId, userId, sessionId: existingSpeaker.sessionId,
+      });
 
       return {
         session: connectedSession,
@@ -686,9 +744,16 @@ async subscribeHostToGuests(
         requiresRenegotiation: negotiation.requiresRenegotiation,
       };
     } catch (error) {
+      console.error("[GUEST-DEBUG][BE] publishGuest FAILED", {
+        roomId, userId,
+        wasExistingSpeaker: !!existingSpeaker,
+        sessionId: session?.sessionId,
+        error: error instanceof Error ? { name: error.name, message: error.message } : error,
+      });
       /* Only destroy a newly-created session on failure. An existing
        * approved speaker session may still be needed for a retry. */
       if (session && !existingSpeaker) {
+        console.log("[GUEST-DEBUG][BE] cleaning up newly-created session after failure", { sessionId: session.sessionId });
         await provider.closeSession(session.sessionId).catch(() => {});
         await mediaService.removeSpeakerSession(roomId, userId).catch(() => {});
       }

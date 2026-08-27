@@ -250,6 +250,7 @@ const handleJoin = useCallback(async () => {
 
 useEffect(() => {
   if (isHost || !viewerRequestAccepted || speakerPublishing) return;
+  console.log('[GUEST-DEBUG] page.tsx effect triggering publishGuestAudio (viewerRequestAccepted=true)');
   publishGuestAudio().catch((e) => {
     console.error('[handleGuestAutoPublish] failed:', e);
   });

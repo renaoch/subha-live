@@ -70,13 +70,28 @@ export function useWebRTC(
     if (!iceServersPromiseRef.current) {
       iceServersPromiseRef.current = roomsApi
         .getTurnCredentials()
-        .then((result) => [
-          { urls: 'stun:stun.cloudflare.com:3478' },
-          ...(result.iceServers ?? []),
-        ])
+        .then((result) => {
+          const servers = [
+            { urls: 'stun:stun.cloudflare.com:3478' },
+            ...(result.iceServers ?? []),
+          ];
+          console.log('[GUEST-DEBUG] getIceServers resolved', {
+            rawResult: result,
+            turnServerCount: result.iceServers?.length ?? 0,
+            finalServers: servers,
+          });
+          if (!result.iceServers || result.iceServers.length === 0) {
+            console.warn(
+              '[GUEST-DEBUG] TURN CREDENTIALS EMPTY — running STUN-only. ' +
+              'This will fail on restrictive networks (mobile carriers, corp NAT). ' +
+              'Check CF_TURN_KEY_ID / CF_TURN_KEY_API_TOKEN are set on the API.',
+          );
+          }
+          return servers;
+        })
         .catch((e) => {
           console.error(
-            '[useWebRTC] Failed to fetch TURN credentials, falling back to STUN only:',
+            '[GUEST-DEBUG] Failed to fetch TURN credentials, falling back to STUN only:',
             e,
           );
           return [{ urls: 'stun:stun.cloudflare.com:3478' }];
@@ -326,33 +341,59 @@ const stopLocalMedia = useCallback(() => {
 
   // ---- Guest publish audio ----
   const publishGuestAudio = useCallback(async () => {
-    if (!room || isHost || speakerPublishing) return;
-    if (guestPublishInFlightRef.current) return;
+    const dbg = (msg: string, extra?: unknown) =>
+      console.log(`[GUEST-DEBUG] ${msg}`, extra ?? '');
+
+    if (!room || isHost || speakerPublishing) {
+      dbg('publishGuestAudio bailed at entry guard', { hasRoom: !!room, isHost, speakerPublishing });
+      return;
+    }
+    if (guestPublishInFlightRef.current) {
+      dbg('publishGuestAudio bailed — already in flight (this is the race guard working)');
+      return;
+    }
     guestPublishInFlightRef.current = true;
+    dbg('publishGuestAudio START', { roomId: room.id, userId });
 
     setMediaError('');
 
     try {
+      dbg('requesting getUserMedia...');
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: false,
       });
       guestStreamRef.current = stream;
+      dbg('getUserMedia OK', { audioTracks: stream.getAudioTracks().map(t => ({ label: t.label, enabled: t.enabled, readyState: t.readyState })) });
+
+      const iceServers = await getIceServers();
+      dbg('iceServers for guest peer', iceServers);
 
       const peer = new RTCPeerConnection({
-        iceServers: await getIceServers(),
+        iceServers,
         bundlePolicy: 'max-bundle',
       });
       guestPeerRef.current = peer;
+
+      peer.addEventListener('connectionstatechange', () =>
+        dbg('guest peer connectionstatechange', peer.connectionState));
+      peer.addEventListener('iceconnectionstatechange', () =>
+        dbg('guest peer iceconnectionstatechange', peer.iceConnectionState));
+      peer.addEventListener('icegatheringstatechange', () =>
+        dbg('guest peer icegatheringstatechange', peer.iceGatheringState));
+      peer.addEventListener('icecandidateerror', (e: any) =>
+        dbg('guest peer icecandidateerror', { errorCode: e.errorCode, errorText: e.errorText, url: e.url }));
 
       const track = stream.getAudioTracks()[0];
       if (!track) throw new Error('Microphone track not created.');
       const transceiver = peer.addTransceiver(track, { direction: 'sendonly' });
 
       // Initial offer
+      dbg('creating initial offer (phase 1)...');
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
       await waitForFirstUsableCandidate(peer);
+      dbg('phase 1 offer ready', { iceGatheringState: peer.iceGatheringState });
 
       const firstDescription = peer.localDescription;
       if (!firstDescription?.sdp) throw new Error('Microphone SDP offer not created.');
@@ -361,16 +402,24 @@ const stopLocalMedia = useCallback(() => {
         { transceiver, track, trackName: createTrackName('audio', userId ?? 'speaker') },
       ]);
 
+      dbg('calling POST /media/guest/publish (phase 1: create session)...');
       const initial = await roomsApi.publishGuest(room.id, {
         offerSdp: firstDescription.sdp,
         tracks,
       });
+      dbg('phase 1 response', { hasAnswerSdp: !!initial.answerSdp, session: initial.session });
 
       if (!initial.answerSdp) throw new Error('Guest media session did not return SDP answer.');
       await peer.setRemoteDescription({ type: 'answer', sdp: initial.answerSdp });
+      dbg('phase 1 remote description set, waiting for peer to reach connected...');
       await waitForPeerConnectionConnected(peer, 20000, 400);
+      dbg('phase 1 peer CONNECTED', {
+        connectionState: peer.connectionState,
+        iceConnectionState: peer.iceConnectionState,
+      });
 
       // Renegotiation
+      dbg('creating renegotiation offer (phase 2: publish tracks)...');
       const renegotiationOffer = await peer.createOffer();
       await peer.setLocalDescription(renegotiationOffer);
       await waitForFirstUsableCandidate(peer);
@@ -378,22 +427,42 @@ const stopLocalMedia = useCallback(() => {
       const renegotiationDescription = peer.localDescription;
       if (!renegotiationDescription?.sdp) throw new Error('Guest audio negotiation offer not created.');
 
+      dbg('calling POST /media/guest/publish (phase 2: renegotiate)...');
+      const phase2Start = Date.now();
       const result = await roomsApi.publishGuest(room.id, {
         offerSdp: renegotiationDescription.sdp,
         tracks,
       });
+      dbg('phase 2 response', {
+        elapsedMs: Date.now() - phase2Start,
+        hasAnswerSdp: !!result.answerSdp,
+        session: result.session,
+      });
 
       if (!result.answerSdp) throw new Error('Guest audio negotiation failed.');
       await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
+      dbg('phase 2 remote description set — guest publish should be LIVE now', {
+        connectionState: peer.connectionState,
+        iceConnectionState: peer.iceConnectionState,
+      });
 
       peer.onconnectionstatechange = () => {
+        dbg('guest peer state after go-live', peer.connectionState);
         if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+          dbg('guest peer FAILED/CLOSED after going live — this is why audio would drop');
           setSpeakerPublishing(false);
         }
       };
 
       setSpeakerPublishing(true);
+      dbg('publishGuestAudio COMPLETE — speakerPublishing=true');
     } catch (error) {
+      console.error('[GUEST-DEBUG] publishGuestAudio FAILED', {
+        error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+        peerConnectionState: guestPeerRef.current?.connectionState,
+        peerIceConnectionState: guestPeerRef.current?.iceConnectionState,
+        peerIceGatheringState: guestPeerRef.current?.iceGatheringState,
+      });
       /*
        * The FIRST publishGuest call above already wrote a "connecting"
        * speaker session to Redis, even if everything after it (e.g.
@@ -406,7 +475,9 @@ const stopLocalMedia = useCallback(() => {
        * "409 No guest audio is active". Clear the stale reservation so
        * the next attempt gets a clean slate.
        */
-      await roomsApi.unpublishGuest(room.id).catch(() => {});
+      console.log('[GUEST-DEBUG] cleaning up via unpublishGuest after failure...');
+      await roomsApi.unpublishGuest(room.id).catch((e) =>
+        console.error('[GUEST-DEBUG] unpublishGuest cleanup itself failed', e));
       closeGuestPeer();
       throw error;
     } finally {
@@ -714,9 +785,13 @@ const stopLocalMedia = useCallback(() => {
         if (!isHost && state.speakers[userId ?? '']) {
           if (!speakerPublishing && !mediaSyncBusyRef.current) {
             mediaSyncBusyRef.current = true;
+            console.log('[GUEST-DEBUG] poll-loop triggering publishGuestAudio', {
+              speakerEntry: state.speakers[userId ?? ''],
+            });
             try {
               await publishGuestAudio();
             } catch (e) {
+              console.error('[GUEST-DEBUG] poll-loop publishGuestAudio failed', e);
               setMediaError(e instanceof Error ? e.message : 'Microphone could not be connected.');
               closeGuestPeer();
             } finally {
