@@ -14,45 +14,52 @@ const client: RedisBackend = redisUrl
     ? new Redis({ url: restUrl, token: restToken })
     : (() => { throw new Error("Redis is not configured: set REDIS_URL or Upstash REST variables"); })();
 
+/*
+ * Call sites throughout the codebase use plain lowercase Redis command
+ * names (sismember, smembers, srem, scard, zrem, zscore, hgetall, hset,
+ * sadd, zadd...) which matches Upstash's REST client API directly.
+ *
+ * node-redis (used on Azure via REDIS_URL) instead exposes camelCase
+ * methods for multi-word commands (sIsMember, sMembers, sRem, sCard,
+ * zRem, zScore, hGetAll, hSet, sAdd, zAdd...). Without this map, every
+ * lowercase call resolves to `undefined` on node-redis and throws
+ * "redis.<name> is not a function" the moment it's invoked.
+ *
+ * This map is only applied when redisUrl is set (node-redis backend);
+ * on Upstash the lowercase name is already correct and passes through
+ * unchanged.
+ */
 const commandAliases: Record<string, string> = {
-  multi: "multi", hGetAll: "hGetAll", hSet: "hSet", hGet: "hGet", hDel: "hDel", hKeys: "hKeys", hIncrBy: "hIncrBy",
-  sAdd: "sAdd", sRem: "sRem", sMembers: "sMembers", sCard: "sCard", sIsMember: "sIsMember",
-  zAdd: "zAdd", zRem: "zRem", zRange: "zRange", zScore: "zScore",
-};
-
-// Lowercase-to-camelCase aliases for chained pipeline/multi commands.
-// node-redis's multi() chain only exposes camelCase methods (zAdd, hSet,
-// sAdd...) while Upstash's pipeline() already uses lowercase — this lets
-// call sites always use lowercase and work on either backend.
-const chainAliases: Record<string, string> = {
-  hset: "hSet", hget: "hGet", hdel: "hDel", hkeys: "hKeys", hincrby: "hIncrBy", hgetall: "hGetAll",
+  hgetall: "hGetAll", hset: "hSet", hget: "hGet", hdel: "hDel", hkeys: "hKeys", hincrby: "hIncrBy",
   sadd: "sAdd", srem: "sRem", smembers: "sMembers", scard: "sCard", sismember: "sIsMember",
   zadd: "zAdd", zrem: "zRem", zrange: "zRange", zscore: "zScore",
 };
+
 function wrapPipeline(pipeline: any): any {
   const proxy: any = new Proxy(pipeline, {
     get(target, property: string) {
-      const command = redisUrl ? (chainAliases[property] ?? property) : property;
+      const command = redisUrl ? (commandAliases[property] ?? property) : property;
       const value = target[command];
       if (typeof value !== "function") return value;
       return (...args: any[]) => {
         const result = value.apply(target, args);
-        // node-redis's multi commands return `this` for chaining (e.g.
-        // multi.hSet(...).expire(...)) — re-wrap so chained calls also
-        // get case-normalized instead of falling back to the raw object.
+        // node-redis's multi commands return `this` for chaining
+        // (e.g. multi.hSet(...).expire(...)) — re-wrap so chained
+        // calls also get case-normalized instead of the raw object.
         return result === target ? proxy : result;
       };
     },
   });
   return proxy;
 }
+
 export const redis: any = new Proxy(client as any, {
   get(target, property: string) {
     if (property === "pipeline") {
       const command = redisUrl ? "multi" : "pipeline";
       return () => wrapPipeline((target as any)[command].call(target));
     }
-    const command = commandAliases[property] ?? property;
+    const command = redisUrl ? (commandAliases[property] ?? property) : property;
     const value = target[command];
     if (typeof value !== "function") return value;
     return (...args: any[]) => value.apply(target, args);
@@ -129,7 +136,9 @@ export async function getOrSetCache<T>(key: string, ttlSeconds: number, fetcher:
   if (cached !== null) return cached;
   const lockKey = `lock:${key}`;
   const token = `${process.pid}-${Date.now()}-${Math.random()}`;
-  const acquired = (await client.set(lockKey, token, { nx: true, ex: LOCK_TTL_SECONDS })) === "OK";
+  const acquired = redisUrl
+    ? (await (client as any).set(lockKey, token, { NX: true, EX: LOCK_TTL_SECONDS })) === "OK"
+    : (await (client as any).set(lockKey, token, { nx: true, ex: LOCK_TTL_SECONDS })) === "OK";
   if (acquired) {
     try { const fresh = await fetcher(); await cacheSet(key, fresh, ttlSeconds); return fresh; }
     finally { if ((await client.get<string>(lockKey)) === token) await client.del(lockKey); }
