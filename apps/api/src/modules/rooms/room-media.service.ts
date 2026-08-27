@@ -326,11 +326,24 @@ const connectedSession: MediaSession = {
     });
   }
 
-  const speakerEntries = speakerIds && speakerIds.length > 0
-    ? speakerIds
-        .filter((id) => state.speakers[id])
-        .map((id) => [id, state.speakers[id]] as const)
-    : Object.entries(state.speakers);
+  /*
+   * A speaker entry appears in Redis as soon as publishGuest's FIRST
+   * negotiation phase completes (session created, status "connecting").
+   * The guest's actual audio track is only registered with Cloudflare
+   * during the SECOND phase (publishTracks), which flips status to
+   * "connected". Subscribing before that leaves this viewer's peer
+   * connection referencing a track Cloudflare hasn't registered yet,
+   * and it never gets retried once marked "already subscribed" on the
+   * client. Only subscribe to speakers whose track publish has
+   * actually completed.
+   */
+  const speakerEntries = (
+    speakerIds && speakerIds.length > 0
+      ? speakerIds
+          .filter((id) => state.speakers[id])
+          .map((id) => [id, state.speakers[id]] as const)
+      : Object.entries(state.speakers)
+  ).filter(([, speaker]) => speaker.status === "connected");
 
   const tracks: RemoteMediaTrack[] = speakerEntries.map(([, speaker]) => ({
     sessionId: speaker.sessionId,
@@ -418,11 +431,30 @@ async subscribeHostToGuests(
     });
   }
 
-  const speakerEntries = speakerIds && speakerIds.length > 0
-    ? speakerIds
-        .filter((id) => state.speakers[id])
-        .map((id) => [id, state.speakers[id]] as const)
-    : Object.entries(state.speakers);
+  /*
+   * A speaker entry appears in Redis as soon as publishGuest's FIRST
+   * negotiation phase completes (session created, status "connecting").
+   * The guest's actual audio track is only registered with Cloudflare
+   * during the SECOND phase (publishTracks), which flips status to
+   * "connected". The host polls every ~1.8s, so it can easily land in
+   * the gap between those two phases (the guest also has to wait for
+   * its PeerConnection to reach "connected" before phase two even
+   * fires). If the host subscribes during that gap, Cloudflare accepts
+   * the request against a track that doesn't exist yet, the peer
+   * connection reports success, and the client marks that speakerId as
+   * "already handled" — so the host never re-subscribes even after the
+   * guest finishes publishing, and that viewer's mic never comes
+   * through. Only subscribe to speakers whose track publish has
+   * actually completed; unready speakers are simply skipped and picked
+   * up on the next poll once they flip to "connected".
+   */
+  const speakerEntries = (
+    speakerIds && speakerIds.length > 0
+      ? speakerIds
+          .filter((id) => state.speakers[id])
+          .map((id) => [id, state.speakers[id]] as const)
+      : Object.entries(state.speakers)
+  ).filter(([, speaker]) => speaker.status === "connected");
 
   const tracks: RemoteMediaTrack[] = speakerEntries.map(([, speaker]) => ({
     sessionId: speaker.sessionId,
@@ -809,12 +841,25 @@ async subscribeHostToGuests(
 
     /*
      * Add every active speaker's audio and optional video.
+     *
+     * Only speakers whose publish has actually completed
+     * (status "connected") have a real track registered with
+     * Cloudflare. A speaker entry appears here as soon as
+     * publishGuest's FIRST negotiation phase finishes (status
+     * "connecting"), before their mic track exists. A newly
+     * joining/reloading viewer must skip those for now — the
+     * client seeds its "already subscribed" set from this same
+     * list, so including an unready speaker here would silently
+     * and permanently mute them for this viewer instead of
+     * picking them up on the next poll once they're ready.
      */
     for (
       const speaker of Object.values(
         state.speakers,
       )
     ) {
+      if (speaker.status !== "connected") continue;
+
       tracks.push({
         sessionId:
           speaker.sessionId,

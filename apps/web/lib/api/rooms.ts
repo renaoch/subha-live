@@ -67,6 +67,13 @@ host: {
       audioTrackName: string;
       videoTrackName?: string;
       hasVideo?: boolean;
+      status:
+        | "connecting"
+        | "connected"
+        | "reconnecting"
+        | "closing"
+        | "closed"
+        | "failed";
     }
   >;
   viewers: Record<string, unknown>;

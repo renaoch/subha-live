@@ -186,7 +186,13 @@ export function createViewerTransceivers(
   peer.addTransceiver("video", { direction: "recvonly" });
   peer.addTransceiver("audio", { direction: "recvonly" });
 
+  // Only reserve transceiver slots for speakers the server will actually
+  // fill in (status "connected"). The server applies the identical filter
+  // when building the initial track list — the two must stay in lockstep,
+  // or the m-line count in this offer won't match what Cloudflare is asked
+  // to bind, which breaks negotiation instead of just skipping one speaker.
   for (const speaker of Object.values(state.speakers)) {
+    if (speaker.status !== "connected") continue;
     peer.addTransceiver("audio", { direction: "recvonly" });
     if (speaker.videoTrackName) {
       peer.addTransceiver("video", { direction: "recvonly" });

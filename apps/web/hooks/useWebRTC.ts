@@ -212,7 +212,17 @@ const stopLocalMedia = useCallback(() => {
       };
 
       createViewerTransceivers(peer, state);
-      viewerSpeakerIdsRef.current = new Set(Object.keys(state.speakers));
+      // Only mark speakers as "already subscribed" if they were actually
+      // ready (status "connected") when this session was created — see
+      // createViewerTransceivers. Anyone still mid-publish must remain
+      // eligible for syncViewerSpeakerAudio's regular poll so they get
+      // picked up once their track is really live, instead of being
+      // silently and permanently skipped for this viewer.
+      viewerSpeakerIdsRef.current = new Set(
+        Object.entries(state.speakers)
+          .filter(([, speaker]) => speaker.status === 'connected')
+          .map(([id]) => id),
+      );
 
       // Phase 1: create session
       const offer = await peer.createOffer();
