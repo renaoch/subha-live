@@ -19,6 +19,8 @@ import {
   mediaKeys,
 } from "./media.state";
 
+import { roomState } from "../rooms/room-state.service";
+
 import type {
   MediaParticipantRole,
   MediaSession,
@@ -248,16 +250,83 @@ export function createMediaService(
           ),
         );
 
+      const staleSpeakerIds: string[] = [];
+
       for (const [
         userId,
         value,
       ] of Object.entries(
         speakerEntries,
       )) {
-        speakers[userId] =
-          parseRedisJson(
-            value,
-          );
+        const speaker =
+          parseRedisJson<
+            RoomMediaState["speakers"][string]
+          >(value);
+
+        /*
+         * A speaker can get permanently stuck in "connecting" if
+         * the guest's PeerConnection never reaches "connected" (e.g.
+         * a TURN/NAT failure) and their browser tab closes/crashes
+         * before the cleanup call (unpublishGuest) can run. With
+         * nothing to detect this, that entry sits in Redis forever:
+         * every host/viewer poll sees "a speaker exists", tries to
+         * subscribe, and gets a 409 "No guest audio is active" —
+         * on an infinite loop, since a stuck "connecting" entry
+         * never becomes a real, subscribable track.
+         *
+         * Treat any "connecting" speaker older than
+         * mediaConfig.session.staleAfterMs as abandoned: drop it
+         * from the state we return (so callers stop trying to
+         * subscribe to it this tick) and clean it up in Redis (so
+         * it doesn't keep coming back on the next read).
+         */
+        if (
+          speaker.status === "connecting" &&
+          now() - speaker.joinedAt > mediaConfig.session.staleAfterMs
+        ) {
+          staleSpeakerIds.push(userId);
+          continue;
+        }
+
+        speakers[userId] = speaker;
+      }
+
+      if (staleSpeakerIds.length > 0) {
+        await redis.hDel(
+          mediaKeys.speakers(roomId),
+          staleSpeakerIds,
+        );
+
+        // Also release the room-level "speaker slot" reservation and any
+        // Cloudflare session, or a stale entry here would keep the guest
+        // slot count full and leak the session even after being reaped
+        // from the state hash above.
+        await Promise.all(
+          staleSpeakerIds.map(async (userId) => {
+            await roomState
+              .removeVideoSpeaker(roomId, userId)
+              .catch(() => {});
+            await roomState
+              .removeSpeaker(roomId, userId)
+              .catch(() => {});
+
+            const raw = speakerEntries[userId];
+            if (!raw) return;
+            try {
+              const speaker =
+                parseRedisJson<
+                  RoomMediaState["speakers"][string]
+                >(raw);
+              if (speaker.sessionId) {
+                await provider
+                  .closeSession(speaker.sessionId)
+                  .catch(() => {});
+              }
+            } catch {
+              // Malformed entry — already removed from the hash above.
+            }
+          }),
+        );
       }
 
       const viewers:
