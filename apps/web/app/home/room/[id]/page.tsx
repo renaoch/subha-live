@@ -159,34 +159,26 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
 
   // ---- Handlers ----
+const handleStart = useCallback(async () => {
+  if (!room) return;
+  setActionLoading(true);
+  try {
+    // Flip the room to "live" on the server FIRST. Every downstream
+    // call (publishHost, speaker-requests polling, viewer join) is
+    // gated on room.status === "live" and will 409 until this succeeds.
+    const startedRoom = await roomsApi.start(room.id);
+    await refetch();
 
-  const handleStart = useCallback(async () => {
+    // Now that the room is live, actually publish the host's media.
+    await startHost(startedRoom ?? room);
 
-    if (!room) return;
-
-    setActionLoading(true);
-
-    try {
-
-      await startHost(room);
-
-      toast.success("You're live");
-
-      refetch();
-
-    } catch (e) {
-
-      toast.error(e instanceof Error ? e.message : 'Start failed');
-
-    } finally {
-
-      setActionLoading(false);
-
-    }
-
-  }, [room, startHost, refetch]);
-
-
+    toast.success("You're live");
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Start failed');
+  } finally {
+    setActionLoading(false);
+  }
+}, [room, startHost, refetch]);
 
   const handleJoin = useCallback(async () => {
 
