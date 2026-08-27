@@ -46,7 +46,7 @@ function wrapPipeline(pipeline: any): any {
   });
   return proxy;
 }
-eexport const redis: any = new Proxy(client as any, {
+export const redis: any = new Proxy(client as any, {
   get(target, property: string) {
     if (property === "pipeline") {
       const command = redisUrl ? "multi" : "pipeline";
