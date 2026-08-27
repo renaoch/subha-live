@@ -87,7 +87,7 @@ async function normalizeViewerCollectionKey(
   }
 
   if (keyType === "set") {
-    return redis.sMembers(
+    return redis.smembers(
       collectionKey,
     );
   }
@@ -100,7 +100,7 @@ async function normalizeViewerCollectionKey(
    */
   if (keyType === "hash") {
     const legacyEntries =
-      await redis.hGetAll(
+      await redis.hgetall(
         collectionKey,
       );
 
@@ -140,7 +140,7 @@ async function normalizeViewerCollectionKey(
         actualUserId,
       );
 
-      await redis.hSet(
+      await redis.hset(
         mediaKeys.viewer(
           roomId,
           actualUserId,
@@ -181,7 +181,7 @@ async function normalizeViewerCollectionKey(
     }
 
     if (viewerIds.length > 0) {
-      await redis.sAdd(
+      await redis.sadd(
         collectionKey,
         viewerIds,
       );
@@ -212,7 +212,7 @@ export function createMediaService(
       roomId: string,
     ): Promise<RoomMediaState> {
       const raw =
-        await redis.hGetAll(
+        await redis.hgetall(
           mediaKeys.media(roomId),
         );
 
@@ -244,7 +244,7 @@ export function createMediaService(
         {};
 
       const speakerEntries =
-        await redis.hGetAll(
+        await redis.hgetall(
           mediaKeys.speakers(
             roomId,
           ),
@@ -292,7 +292,7 @@ export function createMediaService(
       }
 
       if (staleSpeakerIds.length > 0) {
-        await redis.hDel(
+        await redis.hdel(
           mediaKeys.speakers(roomId),
           staleSpeakerIds,
         );
@@ -345,7 +345,7 @@ export function createMediaService(
 
       for (const userId of viewerIds) {
         const value =
-          await redis.hGetAll(
+          await redis.hgetall(
             mediaKeys.viewer(
               roomId,
               userId,
@@ -458,7 +458,7 @@ export function createMediaService(
           roomId,
         );
 
-      await redis.hSet(
+      await redis.hset(
         mediaKeys.media(
           roomId,
         ),
@@ -498,7 +498,7 @@ export function createMediaService(
       roomId: string,
       status: RoomMediaState["status"],
     ): Promise<void> {
-      await redis.hSet(
+      await redis.hset(
         mediaKeys.media(
           roomId,
         ),
@@ -523,7 +523,7 @@ export function createMediaService(
       roomId: string,
     ): Promise<number> {
       const generation =
-        await redis.hIncrBy(
+        await redis.hincrby(
           mediaKeys.media(
             roomId,
           ),
@@ -531,7 +531,7 @@ export function createMediaService(
           1,
         );
 
-      await redis.hSet(
+      await redis.hset(
         mediaKeys.media(
           roomId,
         ),
@@ -556,7 +556,7 @@ export function createMediaService(
       roomId: string,
     ): Promise<number> {
       const value =
-        await redis.hGet(
+        await redis.hget(
           mediaKeys.media(
             roomId,
           ),
@@ -596,7 +596,7 @@ export function createMediaService(
           session.roomId,
         );
 
-      await redis.hSet(
+      await redis.hset(
         key,
         {
           status:
@@ -616,7 +616,7 @@ export function createMediaService(
         session.role ===
         "host"
       ) {
-        await redis.hSet(
+        await redis.hset(
           key,
           {
             host:
@@ -653,7 +653,7 @@ export function createMediaService(
           session.roomId,
         );
 
-      await redis.hSet(
+      await redis.hset(
         key,
         {
           status:
@@ -715,7 +715,7 @@ export function createMediaService(
         );
       }
 
-      await redis.hSet(
+      await redis.hset(
         mediaKeys.speakers(
           session.roomId,
         ),
@@ -763,7 +763,7 @@ export function createMediaService(
       roomId: string,
       userId: string,
     ): Promise<void> {
-      await redis.hDel(
+      await redis.hdel(
         mediaKeys.speakers(
           roomId,
         ),
@@ -800,12 +800,12 @@ export function createMediaService(
           session.userId,
         );
 
-      await redis.sAdd(
+      await redis.sadd(
         collectionKey,
         session.userId,
       );
 
-      await redis.hSet(
+      await redis.hset(
         participantKey,
         {
           userId:
@@ -864,12 +864,12 @@ export function createMediaService(
       );
     }
 
-    await redis.hDel(
+    await redis.hdel(
       mediaKeys.media(roomId),
       "host",
     );
 
-    await redis.hSet(
+    await redis.hset(
       mediaKeys.media(roomId),
       {
         updatedAt: String(now()),
@@ -884,7 +884,7 @@ export function createMediaService(
     async clearParticipants(
       roomId: string,
     ): Promise<void> {
-      await redis.hDel(
+      await redis.hdel(
         mediaKeys.media(
           roomId,
         ),
@@ -892,14 +892,14 @@ export function createMediaService(
       );
 
       const speakerIds =
-        await redis.hKeys(
+        await redis.hkeys(
           mediaKeys.speakers(
             roomId,
           ),
         );
 
       const viewerIds =
-        await redis.sMembers(
+        await redis.smembers(
           mediaKeys.viewers(
             roomId,
           ),
@@ -940,7 +940,7 @@ export function createMediaService(
       roomId: string,
       userId: string,
     ): Promise<void> {
-      await redis.sRem(
+      await redis.srem(
         mediaKeys.viewers(
           roomId,
         ),
@@ -980,7 +980,7 @@ export function createMediaService(
           .roomStateTtlSeconds,
       );
 
-      await redis.hSet(
+      await redis.hset(
         mediaKeys.media(
           roomId,
         ),
@@ -1128,7 +1128,7 @@ export function createMediaService(
           ];
 
         if (viewer) {
-          await redis.hSet(
+          await redis.hset(
             mediaKeys.viewer(
               roomId,
               userId,

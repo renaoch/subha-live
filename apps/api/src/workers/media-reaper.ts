@@ -12,7 +12,7 @@ export async function reapExpiredMediaLeases(
     mediaKeys.leases(roomId);
 
   const leases =
-(await redis.hGetAll(
+(await redis.hgetall(
     leasesKey,
   )) as Record<string, string>;
 
@@ -42,14 +42,14 @@ export async function reapExpiredMediaLeases(
         continue;
       }
 
-      await redis.hDel(
+      await redis.hdel(
         leasesKey,
         participantId,
       );
 
       removed += 1;
     } catch {
-      await redis.hDel(
+      await redis.hdel(
         leasesKey,
         participantId,
       );
