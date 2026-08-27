@@ -130,7 +130,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
     reject,
 
-  } = useSpeakerRequests(room?.id ?? '', isHost);
+} = useSpeakerRequests(room?.id ?? '', isHost, room?.status);
 
 
 
@@ -179,6 +179,7 @@ const handleStart = useCallback(async () => {
     setActionLoading(false);
   }
 }, [room, startHost, refetch]);
+
 
   const handleJoin = useCallback(async () => {
 
