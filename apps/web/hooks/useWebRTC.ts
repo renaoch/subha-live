@@ -314,67 +314,86 @@ const stopLocalMedia = useCallback(() => {
     if (!room || isHost || speakerPublishing) return;
 
     setMediaError('');
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      video: false,
-    });
-    guestStreamRef.current = stream;
 
-    const peer = new RTCPeerConnection({
-      iceServers: await getIceServers(),
-      bundlePolicy: 'max-bundle',
-    });
-    guestPeerRef.current = peer;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+      guestStreamRef.current = stream;
 
-    const track = stream.getAudioTracks()[0];
-    if (!track) throw new Error('Microphone track not created.');
-    const transceiver = peer.addTransceiver(track, { direction: 'sendonly' });
+      const peer = new RTCPeerConnection({
+        iceServers: await getIceServers(),
+        bundlePolicy: 'max-bundle',
+      });
+      guestPeerRef.current = peer;
 
-    // Initial offer
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    await waitForFirstUsableCandidate(peer);
+      const track = stream.getAudioTracks()[0];
+      if (!track) throw new Error('Microphone track not created.');
+      const transceiver = peer.addTransceiver(track, { direction: 'sendonly' });
 
-    const firstDescription = peer.localDescription;
-    if (!firstDescription?.sdp) throw new Error('Microphone SDP offer not created.');
+      // Initial offer
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      await waitForFirstUsableCandidate(peer);
 
-    const tracks = createPublishTracks([
-      { transceiver, track, trackName: createTrackName('audio', userId ?? 'speaker') },
-    ]);
+      const firstDescription = peer.localDescription;
+      if (!firstDescription?.sdp) throw new Error('Microphone SDP offer not created.');
 
-    const initial = await roomsApi.publishGuest(room.id, {
-      offerSdp: firstDescription.sdp,
-      tracks,
-    });
+      const tracks = createPublishTracks([
+        { transceiver, track, trackName: createTrackName('audio', userId ?? 'speaker') },
+      ]);
 
-    if (!initial.answerSdp) throw new Error('Guest media session did not return SDP answer.');
-    await peer.setRemoteDescription({ type: 'answer', sdp: initial.answerSdp });
-    await waitForPeerConnectionConnected(peer, 20000, 400);
+      const initial = await roomsApi.publishGuest(room.id, {
+        offerSdp: firstDescription.sdp,
+        tracks,
+      });
 
-    // Renegotiation
-    const renegotiationOffer = await peer.createOffer();
-    await peer.setLocalDescription(renegotiationOffer);
-    await waitForFirstUsableCandidate(peer);
+      if (!initial.answerSdp) throw new Error('Guest media session did not return SDP answer.');
+      await peer.setRemoteDescription({ type: 'answer', sdp: initial.answerSdp });
+      await waitForPeerConnectionConnected(peer, 20000, 400);
 
-    const renegotiationDescription = peer.localDescription;
-    if (!renegotiationDescription?.sdp) throw new Error('Guest audio negotiation offer not created.');
+      // Renegotiation
+      const renegotiationOffer = await peer.createOffer();
+      await peer.setLocalDescription(renegotiationOffer);
+      await waitForFirstUsableCandidate(peer);
 
-    const result = await roomsApi.publishGuest(room.id, {
-      offerSdp: renegotiationDescription.sdp,
-      tracks,
-    });
+      const renegotiationDescription = peer.localDescription;
+      if (!renegotiationDescription?.sdp) throw new Error('Guest audio negotiation offer not created.');
 
-    if (!result.answerSdp) throw new Error('Guest audio negotiation failed.');
-    await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
+      const result = await roomsApi.publishGuest(room.id, {
+        offerSdp: renegotiationDescription.sdp,
+        tracks,
+      });
 
-    peer.onconnectionstatechange = () => {
-      if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-        setSpeakerPublishing(false);
-      }
-    };
+      if (!result.answerSdp) throw new Error('Guest audio negotiation failed.');
+      await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
 
-    setSpeakerPublishing(true);
-  }, [room, isHost, userId, speakerPublishing, getIceServers]);
+      peer.onconnectionstatechange = () => {
+        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+          setSpeakerPublishing(false);
+        }
+      };
+
+      setSpeakerPublishing(true);
+    } catch (error) {
+      /*
+       * The FIRST publishGuest call above already wrote a "connecting"
+       * speaker session to Redis, even if everything after it (e.g.
+       * ICE never reaching "connected") fails. Without cleaning that up,
+       * the next retry's server call sees an "existing speaker" and
+       * tries to renegotiate against that abandoned Cloudflare session
+       * instead of starting a fresh one — which can never succeed. That
+       * leaves the speaker permanently stuck in "connecting", and the
+       * host's subscription poll spins forever on
+       * "409 No guest audio is active". Clear the stale reservation so
+       * the next attempt gets a clean slate.
+       */
+      await roomsApi.unpublishGuest(room.id).catch(() => {});
+      closeGuestPeer();
+      throw error;
+    }
+  }, [room, isHost, userId, speakerPublishing, getIceServers, closeGuestPeer]);
 
   // ---- Sync host guest audio ----
   const syncHostGuestAudio = useCallback(
