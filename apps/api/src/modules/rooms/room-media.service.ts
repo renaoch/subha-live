@@ -288,6 +288,108 @@ const connectedSession: MediaSession = {
 }
   },
 
+
+  async subscribeViewerToSpeakers(
+  roomId: string,
+  userId: string,
+  offerSdp: string,
+  answerSdp?: string,
+  speakerIds?: string[],
+) {
+  const room = await getRoom(roomId);
+
+  if (room.host_id === userId) {
+    throw new AppError(409, "Host cannot join as a viewer", {
+      code: "HOST_CANNOT_BE_VIEWER",
+    });
+  }
+
+  if (!answerSdp && !stringValue(offerSdp)) {
+    throw new AppError(400, "offerSdp or answerSdp is required", {
+      code: "MEDIA_SDP_REQUIRED",
+    });
+  }
+
+  const state = await mediaService.getRoomState(roomId);
+  const viewer = state.viewers?.[userId];
+
+  // This is the whole point of this endpoint: reuse the viewer's EXISTING
+  // Cloudflare session instead of spinning up a new, disconnected one.
+  // createViewerSession() only knows how to create-or-resume a "connecting"
+  // session; once a viewer is fully "connected" there was previously no
+  // way to add a newly-joined speaker's track without silently creating
+  // a second, unrelated session that the browser's RTCPeerConnection
+  // was never bound to.
+  if (!viewer || viewer.status !== "connected") {
+    throw new AppError(409, "Viewer media is not connected", {
+      code: "MEDIA_VIEWER_NOT_CONNECTED",
+    });
+  }
+
+  const speakerEntries = speakerIds && speakerIds.length > 0
+    ? speakerIds
+        .filter((id) => state.speakers[id])
+        .map((id) => [id, state.speakers[id]] as const)
+    : Object.entries(state.speakers);
+
+  const tracks: RemoteMediaTrack[] = speakerEntries.map(([, speaker]) => ({
+    sessionId: speaker.sessionId,
+    trackName: speaker.audioTrackName,
+  }));
+
+  if (tracks.length === 0) {
+    throw new AppError(409, "No guest audio is active", {
+      code: "NO_GUEST_AUDIO",
+    });
+  }
+
+  const provider = await mediaService.getProvider();
+
+  if (answerSdp) {
+    await provider.renegotiate({
+      sessionId: viewer.sessionId,
+      answerSdp,
+    });
+
+    return {
+      session: { sessionId: viewer.sessionId, generation: viewer.generation, status: viewer.status },
+      answerSdp: undefined,
+      offerSdp: undefined,
+      tracks: [],
+      requiresRenegotiation: false,
+      alreadySubscribed: false,
+    };
+  }
+
+  const negotiation = await provider.subscribeTracks({
+    sessionId: viewer.sessionId,
+    offerSdp,
+    tracks,
+  });
+
+  if (!negotiation.answerSdp && !negotiation.offerSdp) {
+    return {
+      session: { sessionId: viewer.sessionId, generation: viewer.generation, status: viewer.status },
+      answerSdp: undefined,
+      offerSdp: undefined,
+      tracks: [],
+      requiresRenegotiation: false,
+      alreadySubscribed: true,
+    };
+  }
+
+  return {
+    session: { sessionId: viewer.sessionId, generation: viewer.generation, status: viewer.status },
+    answerSdp: negotiation.answerSdp,
+    offerSdp: negotiation.offerSdp,
+    tracks: negotiation.tracks,
+    requiresRenegotiation: negotiation.requiresRenegotiation,
+    alreadySubscribed: false,
+  };
+},
+
+
+
 async subscribeHostToGuests(
   roomId: string,
   userId: string,

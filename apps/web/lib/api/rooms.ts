@@ -129,7 +129,7 @@ export interface MediaViewerResult {
     mid?: string;
   }>;
   requiresRenegotiation: boolean;
-  alreadySubscribed?: boolean; // ✅ Add this
+  alreadySubscribed?: boolean; 
 }
 export const roomsApi = {
   list() {
@@ -239,19 +239,32 @@ export const roomsApi = {
     );
   },
 
-  subscribeHostToGuests(
-    id: string,
-    input: { offerSdp?: string; answerSdp?: string; speakerIds?: string[] },
-  ) {
-    return apiFetch<RoomEnvelope<MediaViewerResult>>(
-      `/api/v1/rooms/${id}/media/host/subscribe`,
-      {
-        method: "POST",
-        body: JSON.stringify(input),
-      },
-    ).then((r) => r.data);
-  },
 
+subscribeHostToGuests(
+  id: string,
+  input: { offerSdp?: string; answerSdp?: string; speakerIds?: string[] },
+) {
+  return apiFetch<RoomEnvelope<MediaViewerResult>>(
+    `/api/v1/rooms/${id}/media/host/subscribe`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  ).then((r) => r.data);
+},
+
+subscribeViewerToSpeakers(
+  id: string,
+  input: { offerSdp?: string; answerSdp?: string; speakerIds?: string[] },
+) {
+  return apiFetch<RoomEnvelope<MediaViewerResult>>(
+    `/api/v1/rooms/${id}/media/viewer/subscribe`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  ).then((r) => r.data);
+},
   listSpeakerRequests(id: string) {
     return apiFetch<RoomEnvelope<SpeakerRequest[]>>(
       `/api/v1/rooms/${id}/speaker-requests`,

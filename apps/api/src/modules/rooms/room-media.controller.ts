@@ -7,6 +7,34 @@ function getTracks(value: unknown) {
   return value;
 }
 
+export async function subscribeViewerToSpeakers(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.user) throw new AppError(401, "Authentication required", {
+      code: "AUTHENTICATION_REQUIRED",
+    });
+
+    const offerSdp = typeof req.body?.offerSdp === "string" ? req.body.offerSdp : "";
+    const answerSdp = typeof req.body?.answerSdp === "string" ? req.body.answerSdp : undefined;
+    const speakerIds = Array.isArray(req.body?.speakerIds)
+      ? req.body.speakerIds.filter((value: unknown): value is string => typeof value === "string")
+      : undefined;
+    const result = await roomMediaService.subscribeViewerToSpeakers(
+      req.params.id,
+      req.user.id,
+      offerSdp,
+      answerSdp,
+      speakerIds,
+    );
+
+    res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
 export async function getMediaState(
   req: Request<{ id: string }>,
   res: Response,

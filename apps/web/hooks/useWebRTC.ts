@@ -429,19 +429,21 @@ const stopLocalMedia = useCallback(() => {
   );
 
   // ---- Sync viewer speaker audio ----
-  const syncViewerSpeakerAudio = useCallback(
-    async (state: RoomMediaState) => {
-      if (!room || isHost || !viewerPeerRef.current || !viewerSessionRef.current) return;
+ const syncViewerSpeakerAudio = useCallback(
+  async (state: RoomMediaState) => {
+    if (!room || isHost || !viewerPeerRef.current || !viewerSessionRef.current) return;
 
-      const newSpeakers = Object.keys(state.speakers).filter(
-        (speakerId) => !viewerSpeakerIdsRef.current.has(speakerId),
-      );
-      if (newSpeakers.length === 0) return;
+    const newSpeakers = Object.keys(state.speakers).filter(
+      (speakerId) => !viewerSpeakerIdsRef.current.has(speakerId),
+    );
+    if (newSpeakers.length === 0) return;
 
-      const peer = viewerPeerRef.current;
+    const peer = viewerPeerRef.current;
+    const addedTransceivers: RTCRtpTransceiver[] = [];
+
+    try {
       for (const speakerId of newSpeakers) {
-        peer.addTransceiver('audio', { direction: 'recvonly' });
-        viewerSpeakerIdsRef.current.add(speakerId);
+        addedTransceivers.push(peer.addTransceiver('audio', { direction: 'recvonly' }));
       }
 
       const offer = await peer.createOffer();
@@ -451,29 +453,56 @@ const stopLocalMedia = useCallback(() => {
       const localDescription = peer.localDescription;
       if (!localDescription?.sdp) throw new Error('Viewer speaker-audio offer not created.');
 
-      const result = await roomsApi.createViewerSession(room.id, localDescription.sdp);
+      // Use the dedicated "add tracks to my existing viewer session" endpoint —
+      // NOT createViewerSession, which only resumes a session while it's still
+      // "connecting" and otherwise silently spins up a brand-new Cloudflare
+      // session that this RTCPeerConnection has no relationship to.
+      const result = await roomsApi.subscribeViewerToSpeakers(room.id, {
+        offerSdp: localDescription.sdp,
+        speakerIds: newSpeakers,
+      });
 
-      if (result.answerSdp) {
-        await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
+      if (result.alreadySubscribed || (!result.answerSdp && !result.offerSdp)) {
+        for (const speakerId of newSpeakers) viewerSpeakerIdsRef.current.add(speakerId);
+        if (peer.signalingState !== 'stable') {
+          await peer.setLocalDescription({ type: 'rollback' });
+        }
+        for (const transceiver of addedTransceivers) {
+          try { transceiver.stop(); } catch {}
+        }
         return;
       }
 
-      if (result.offerSdp) {
+      if (result.answerSdp) {
+        await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
+      } else if (result.offerSdp) {
         await peer.setRemoteDescription({ type: 'offer', sdp: result.offerSdp });
         const answer = await peer.createAnswer();
         await peer.setLocalDescription(answer);
         await waitForFirstUsableCandidate(peer);
         const localAnswer = peer.localDescription;
         if (!localAnswer?.sdp) throw new Error('Viewer speaker-audio answer not created.');
-        await roomsApi.completeRenegotiation(room.id, localAnswer.sdp);
-        return;
+        await roomsApi.subscribeViewerToSpeakers(room.id, {
+          answerSdp: localAnswer.sdp,
+          speakerIds: newSpeakers,
+        });
       }
 
-      throw new Error('Viewer speaker-audio negotiation returned no SDP.');
-    },
-    [room, isHost],
-  );
-
+      for (const speakerId of newSpeakers) {
+        viewerSpeakerIdsRef.current.add(speakerId);
+      }
+    } catch (error) {
+      for (const transceiver of addedTransceivers) {
+        try { transceiver.stop(); } catch {}
+      }
+      if (peer.signalingState !== 'stable') {
+        try { await peer.setLocalDescription({ type: 'rollback' }); } catch {}
+      }
+      throw error;
+    }
+  },
+  [room, isHost],
+);
   // ---- Host camera/mic preview while waiting to go live ----
   // Without this, getUserMedia() is only ever called from inside
   // publishHostMedia() (i.e. after clicking "Start Live"), so the camera
