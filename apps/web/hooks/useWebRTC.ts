@@ -442,7 +442,12 @@ const stopLocalMedia = useCallback(() => {
         }
 
         if (!result.answerSdp && !result.offerSdp) {
-          for (const speakerId of attemptedIds) hostSpeakerIdsRef.current.add(speakerId);
+          // Same issue as the viewer path: no SDP here means Cloudflare
+          // wants an immediate renegotiation (requiresRenegotiation: true),
+          // NOT "nothing to do". Marking these speakerIds as handled would
+          // leave the host's peer connection permanently missing that
+          // guest's audio, with no future retry. Roll back and leave them
+          // out of hostSpeakerIdsRef so the next poll retries.
           if (peer.signalingState !== 'stable') {
             await peer.setLocalDescription({ type: 'rollback' });
           }
@@ -528,8 +533,27 @@ const stopLocalMedia = useCallback(() => {
         speakerIds: newSpeakers,
       });
 
-      if (result.alreadySubscribed || (!result.answerSdp && !result.offerSdp)) {
+      if (result.alreadySubscribed) {
         for (const speakerId of newSpeakers) viewerSpeakerIdsRef.current.add(speakerId);
+        if (peer.signalingState !== 'stable') {
+          await peer.setLocalDescription({ type: 'rollback' });
+        }
+        for (const transceiver of addedTransceivers) {
+          try { transceiver.stop(); } catch {}
+        }
+        return;
+      }
+
+      if (!result.answerSdp && !result.offerSdp) {
+        // Cloudflare accepted the subscribe request but couldn't return an
+        // SDP answer this round (requiresRenegotiation: true) — this is NOT
+        // the same as "already subscribed". If we mark these speakerIds as
+        // handled here, this viewer's peer connection never actually
+        // receives the track and — because viewerSpeakerIdsRef now says
+        // "handled" — never gets retried again. Roll back our added
+        // transceivers and leave these speakerIds OUT of
+        // viewerSpeakerIdsRef so the next poll (~1.8s) retries the
+        // subscribe from scratch.
         if (peer.signalingState !== 'stable') {
           await peer.setLocalDescription({ type: 'rollback' });
         }
