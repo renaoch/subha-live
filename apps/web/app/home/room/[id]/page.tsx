@@ -180,32 +180,22 @@ const handleStart = useCallback(async () => {
   }
 }, [room, startHost, refetch]);
 
-
-  const handleJoin = useCallback(async () => {
-
-    if (!room) return;
-
-    setActionLoading(true);
-
-    try {
-
-      await joinViewer(room);
-
-      toast.success('Connected to the live');
-
-    } catch (e) {
-
-      toast.error(e instanceof Error ? e.message : 'Join failed');
-
-    } finally {
-
-      setActionLoading(false);
-
-    }
-
-  }, [room, joinViewer]);
-
-
+const handleJoin = useCallback(async () => {
+  if (!room) return;
+  setActionLoading(true);
+  try {
+    // Register the viewer as an active room_participants row FIRST —
+    // requestAudio/createSpeakerRequest requires this row to exist,
+    // and it was never being created anywhere before.
+    await roomsApi.join(room.id);
+    await joinViewer(room);
+    toast.success('Connected to the live');
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'Join failed');
+  } finally {
+    setActionLoading(false);
+  }
+}, [room, joinViewer]);
 
   const handleLeave = useCallback(async () => {
 
