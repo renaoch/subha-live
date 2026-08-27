@@ -747,5 +747,6 @@ const stopLocalMedia = useCallback(() => {
     startHost,
     joinViewer,
     leave,
+    publishGuestAudio
   };
 }

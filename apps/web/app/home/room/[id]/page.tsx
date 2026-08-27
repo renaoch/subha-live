@@ -112,6 +112,8 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
     leave,
 
+    publishGuestAudio
+
   } = useWebRTC(room, userId);
 
 
@@ -136,7 +138,8 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
   // ---- Viewer's own request status ----
 
-  const { isPending: viewerRequestPending } = useViewerRequestStatus(room?.id ?? '', isHost, userId);
+const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
+  useViewerRequestStatus(room?.id ?? '', isHost, userId);
 
 
 
@@ -245,7 +248,12 @@ const handleJoin = useCallback(async () => {
 
   }, [room?.id, room?.status, isHost, handleJoin]);
 
-
+useEffect(() => {
+  if (isHost || !viewerRequestAccepted || speakerPublishing) return;
+  publishGuestAudio().catch((e) => {
+    console.error('[handleGuestAutoPublish] failed:', e);
+  });
+}, [isHost, viewerRequestAccepted, speakerPublishing, publishGuestAudio]);
 
   // ---- Auto-leave when room ends ----
 

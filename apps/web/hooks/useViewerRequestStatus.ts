@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 export function useViewerRequestStatus(roomId: string, isHost: boolean, userId: string | null) {
   const [isPending, setIsPending] = useState(false);
+  const [isAccepted, setIsAccepted] = useState(false);
   const hasShownToast = useRef(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -19,15 +20,18 @@ export function useViewerRequestStatus(roomId: string, isHost: boolean, userId: 
 
         if (status.status === 'accepted') {
           setIsPending(false);
+          setIsAccepted(true);
           if (!hasShownToast.current) {
             hasShownToast.current = true;
             toast.success('Your audio seat was accepted');
           }
         } else if (status.status === 'pending') {
           setIsPending(true);
+          setIsAccepted(false);
           hasShownToast.current = false;
         } else {
           setIsPending(false);
+          setIsAccepted(false);
           hasShownToast.current = false;
         }
       } catch (error) {
@@ -47,5 +51,5 @@ export function useViewerRequestStatus(roomId: string, isHost: boolean, userId: 
     };
   }, [roomId, isHost, userId]);
 
-  return { isPending };
+  return { isPending, isAccepted };
 }
