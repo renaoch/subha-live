@@ -40,6 +40,21 @@ export function useWebRTC(
 
   // ---- Locks to prevent overlapping negotiations ----
   const mediaSyncBusyRef = useRef(false);
+  /*
+   * publishGuestAudio() is triggered from two independent places
+   * (the viewerRequestAccepted effect in page.tsx, and the
+   * media-state poll loop below) and only guarded by the
+   * `speakerPublishing` React state — which isn't set to true until
+   * AFTER the full two-phase SDP negotiation completes. Because that
+   * negotiation spans several awaits (getUserMedia, ICE, two API
+   * round trips), both triggers can see `speakerPublishing === false`
+   * and start a SECOND concurrent publish while the first is still
+   * mid-flight, creating two competing RTCPeerConnections against the
+   * same backend session. This ref is set synchronously (no await
+   * before it) so the second caller bails out immediately instead of
+   * racing.
+   */
+  const guestPublishInFlightRef = useRef(false);
 
   // ---- ICE servers (STUN + TURN) ----
   // STUN alone can't help clients behind a NAT/firewall that blocks
@@ -312,6 +327,8 @@ const stopLocalMedia = useCallback(() => {
   // ---- Guest publish audio ----
   const publishGuestAudio = useCallback(async () => {
     if (!room || isHost || speakerPublishing) return;
+    if (guestPublishInFlightRef.current) return;
+    guestPublishInFlightRef.current = true;
 
     setMediaError('');
 
@@ -392,6 +409,8 @@ const stopLocalMedia = useCallback(() => {
       await roomsApi.unpublishGuest(room.id).catch(() => {});
       closeGuestPeer();
       throw error;
+    } finally {
+      guestPublishInFlightRef.current = false;
     }
   }, [room, isHost, userId, speakerPublishing, getIceServers, closeGuestPeer]);
 
