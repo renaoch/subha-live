@@ -1,989 +1,1888 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
-import { roomsApi, type RoomRecord, type RoomMediaState } from '@/lib/api/rooms';
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  waitForFirstUsableCandidate,
-  waitForPeerConnectionConnected,
-  waitForHostMediaState,
+  roomsApi,
+  type RoomMediaState,
+  type RoomRecord,
+} from "@/lib/api/rooms";
+import {
   createPublishTracks,
   createTrackName,
-  createViewerTransceivers,
-} from '@/lib/webrtc-utils';
+  waitForFirstUsableCandidate,
+  waitForHostMediaState,
+  waitForPeerConnectionConnected,
+} from "@/lib/webrtc-utils";
+
+type SessionInfo = {
+  sessionId: string;
+  generation: number;
+};
+
+type Role = "host" | "viewer" | "speaker";
+
+type PeerRole = "host" | "viewer" | "guest";
+
+const MEDIA_POLL_MS = 2000;
+const HEARTBEAT_MS = 15000;
+
+function isPeerAlive(peer: RTCPeerConnection | null) {
+  if (!peer) return false;
+
+  return (
+    peer.connectionState !== "closed" &&
+    peer.signalingState !== "closed"
+  );
+}
+
+function isConnected(peer: RTCPeerConnection | null) {
+  return peer?.connectionState === "connected";
+}
+
+function safeClosePeer(peer: RTCPeerConnection | null) {
+  if (!peer) return;
+
+  try {
+    peer.ontrack = null;
+    peer.onconnectionstatechange = null;
+    peer.oniceconnectionstatechange = null;
+    peer.onicecandidateerror = null;
+    peer.close();
+  } catch {
+    // Peer may already be closed.
+  }
+}
+
+/**
+ * Serialize all SDP operations belonging to ONE PeerConnection.
+ *
+ * This is deliberately kept outside React state.
+ * React state is for UI. WebRTC signaling state is not UI state.
+ */
+function createNegotiationQueue() {
+  let chain = Promise.resolve();
+
+  return {
+    run<T>(operation: () => Promise<T>): Promise<T> {
+      const next = chain.then(operation);
+
+      chain = next.then(
+        () => undefined,
+        () => undefined,
+      );
+
+      return next;
+    },
+  };
+}
 
 export function useWebRTC(
   room: RoomRecord | null,
   userId: string | null,
-  cameraEnabled: boolean = true,
-  micEnabled: boolean = true,
+  cameraEnabled = true,
+  micEnabled = true,
 ) {
-  const isHost = !!room && userId === room.host_id;
+  const isHost = Boolean(room && userId === room.host_id);
 
-  // ---- State ----
+  // ---------------------------------------------------------------------------
+  // React/UI state
+  // ---------------------------------------------------------------------------
+
   const [hostPublishing, setHostPublishing] = useState(false);
   const [hostMediaReady, setHostMediaReady] = useState(false);
   const [viewerConnected, setViewerConnected] = useState(false);
   const [speakerPublishing, setSpeakerPublishing] = useState(false);
-  const [mediaError, setMediaError] = useState('');
+  const [mediaError, setMediaError] = useState("");
   const [mediaState, setMediaState] = useState<RoomMediaState | null>(null);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null); 
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
-  // ---- Refs for peers and streams ----
+  // ---------------------------------------------------------------------------
+  // Stable refs
+  // ---------------------------------------------------------------------------
+
+  const mountedRef = useRef(true);
+
   const localStreamRef = useRef<MediaStream | null>(null);
+
   const hostPeerRef = useRef<RTCPeerConnection | null>(null);
   const viewerPeerRef = useRef<RTCPeerConnection | null>(null);
   const guestPeerRef = useRef<RTCPeerConnection | null>(null);
-  const guestStreamRef = useRef<MediaStream | null>(null);
+
   const remoteStreamRef = useRef<MediaStream | null>(null);
-  const hostSessionRef = useRef<{ sessionId: string; generation: number } | null>(null);
-  const viewerSessionRef = useRef<{ sessionId: string; generation: number } | null>(null);
+  const guestStreamRef = useRef<MediaStream | null>(null);
+
+  const hostSessionRef = useRef<SessionInfo | null>(null);
+  const viewerSessionRef = useRef<SessionInfo | null>(null);
+  const guestSessionRef = useRef<SessionInfo | null>(null);
+
+  /**
+   * These sets represent media tracks that THIS PeerConnection has already
+   * successfully subscribed to.
+   *
+   * They are not React state because changing them must never cause a render.
+   */
   const hostSpeakerIdsRef = useRef<Set<string>>(new Set());
   const viewerSpeakerIdsRef = useRef<Set<string>>(new Set());
 
-  // ---- Locks to prevent overlapping negotiations ----
-  const mediaSyncBusyRef = useRef(false);
-  /*
-   * publishGuestAudio() is triggered from two independent places
-   * (the viewerRequestAccepted effect in page.tsx, and the
-   * media-state poll loop below) and only guarded by the
-   * `speakerPublishing` React state — which isn't set to true until
-   * AFTER the full two-phase SDP negotiation completes. Because that
-   * negotiation spans several awaits (getUserMedia, ICE, two API
-   * round trips), both triggers can see `speakerPublishing === false`
-   * and start a SECOND concurrent publish while the first is still
-   * mid-flight, creating two competing RTCPeerConnections against the
-   * same backend session. This ref is set synchronously (no await
-   * before it) so the second caller bails out immediately instead of
-   * racing.
+  /**
+   * One negotiation queue per PeerConnection.
+   *
+   * No polling callback can start another SDP transaction while one is
+   * already running.
    */
+  const hostNegotiationRef = useRef(createNegotiationQueue());
+  const viewerNegotiationRef = useRef(createNegotiationQueue());
+  const guestNegotiationRef = useRef(createNegotiationQueue());
+
+  /**
+   * Operation-level guards.
+   */
+  const hostPublishInFlightRef = useRef(false);
+  const viewerConnectInFlightRef = useRef(false);
   const guestPublishInFlightRef = useRef(false);
 
-  // ---- ICE servers (STUN + TURN) ----
-  // STUN alone can't help clients behind a NAT/firewall that blocks
-  // direct UDP paths (corporate networks, some carriers/VPNs) — those
-  // clients need a TURN relay or ICE negotiation fails outright
-  // ("connectionState=failed, iceConnectionState=disconnected"),
-  // which showed up specifically for guests trying to publish audio.
-  // Fetched once per mount and cached; falls back to STUN-only if the
-  // request fails so publishing still works on networks where a
-  // direct path is possible.
-  const iceServersPromiseRef = useRef<Promise<RTCIceServer[]> | null>(null);
+  const mediaPollInFlightRef = useRef(false);
+
+  /**
+   * Used to ignore stale async operations after room/user changes.
+   */
+  const lifecycleGenerationRef = useRef(0);
+
+  // ---------------------------------------------------------------------------
+  // ICE
+  // ---------------------------------------------------------------------------
+
+  const iceServersPromiseRef =
+    useRef<Promise<RTCIceServer[]> | null>(null);
+
   const getIceServers = useCallback((): Promise<RTCIceServer[]> => {
     if (!iceServersPromiseRef.current) {
       iceServersPromiseRef.current = roomsApi
         .getTurnCredentials()
         .then((result) => {
-          const servers = [
-            { urls: 'stun:stun.cloudflare.com:3478' },
+          return [
+            { urls: "stun:stun.cloudflare.com:3478" },
             ...(result.iceServers ?? []),
           ];
-          console.log('[GUEST-DEBUG] getIceServers resolved', {
-            rawResult: result,
-            turnServerCount: result.iceServers?.length ?? 0,
-            finalServers: servers,
-          });
-          if (!result.iceServers || result.iceServers.length === 0) {
-            console.warn(
-              '[GUEST-DEBUG] TURN CREDENTIALS EMPTY — running STUN-only. ' +
-              'This will fail on restrictive networks (mobile carriers, corp NAT). ' +
-              'Check CF_TURN_KEY_ID / CF_TURN_KEY_API_TOKEN are set on the API.',
-          );
-          }
-          return servers;
         })
-        .catch((e) => {
+        .catch((error) => {
           console.error(
-            '[GUEST-DEBUG] Failed to fetch TURN credentials, falling back to STUN only:',
-            e,
+            "[WebRTC] Failed to load TURN credentials. Using STUN only.",
+            error,
           );
-          return [{ urls: 'stun:stun.cloudflare.com:3478' }];
+
+          return [
+            {
+              urls: "stun:stun.cloudflare.com:3478",
+            },
+          ];
         });
     }
+
     return iceServersPromiseRef.current;
   }, []);
 
-  // Warm the TURN credential fetch as soon as this hook mounts, so it's
-  // typically already resolved by the time any publish/subscribe flow
-  // needs it below.
   useEffect(() => {
     getIceServers().catch(() => {});
   }, [getIceServers]);
 
-  // ---- Helper: stop local media ----
-const stopLocalMedia = useCallback(() => {
-  localStreamRef.current?.getTracks().forEach((t) => t.stop());
-  localStreamRef.current = null;
-  setLocalStream(null);
-}, []);
+  // ---------------------------------------------------------------------------
+  // Local media
+  // ---------------------------------------------------------------------------
 
-  // ---- Helper: close peer connections ----
+  const stopLocalMedia = useCallback(() => {
+    const stream = localStreamRef.current;
+
+    if (stream) {
+      for (const track of stream.getTracks()) {
+        try {
+          track.stop();
+        } catch {
+          // Already stopped.
+        }
+      }
+    }
+
+    localStreamRef.current = null;
+
+    if (mountedRef.current) {
+      setLocalStream(null);
+    }
+  }, []);
+
+  const ensureLocalPreview = useCallback(async () => {
+    const existing = localStreamRef.current;
+
+    if (existing) {
+      return existing;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: {
+        facingMode: "user",
+        width: { ideal: 1080 },
+        height: { ideal: 1920 },
+      },
+    });
+
+    localStreamRef.current = stream;
+
+    if (mountedRef.current) {
+      setLocalStream(stream);
+    }
+
+    return stream;
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Peer cleanup
+  // ---------------------------------------------------------------------------
+
   const closeHostPeer = useCallback(() => {
-    hostPeerRef.current?.close();
+    safeClosePeer(hostPeerRef.current);
+
     hostPeerRef.current = null;
     hostSessionRef.current = null;
+    hostSpeakerIdsRef.current.clear();
+
+    if (mountedRef.current) {
+      setHostPublishing(false);
+      setHostMediaReady(false);
+    }
   }, []);
 
   const closeViewerPeer = useCallback(() => {
-    viewerPeerRef.current?.close();
+    safeClosePeer(viewerPeerRef.current);
+
     viewerPeerRef.current = null;
     viewerSessionRef.current = null;
-    remoteStreamRef.current = null;
     viewerSpeakerIdsRef.current.clear();
+
+    remoteStreamRef.current = null;
+
+    if (mountedRef.current) {
+      setViewerConnected(false);
+    }
   }, []);
 
   const closeGuestPeer = useCallback(() => {
-    guestPeerRef.current?.close();
+    safeClosePeer(guestPeerRef.current);
+
     guestPeerRef.current = null;
-    guestStreamRef.current?.getTracks().forEach((t) => t.stop());
+    guestSessionRef.current = null;
+
+    const stream = guestStreamRef.current;
+
+    if (stream) {
+      for (const track of stream.getTracks()) {
+        try {
+          track.stop();
+        } catch {
+          // Already stopped.
+        }
+      }
+    }
+
     guestStreamRef.current = null;
-    setSpeakerPublishing(false);
+
+    if (mountedRef.current) {
+      setSpeakerPublishing(false);
+    }
   }, []);
 
-  const closeHostSubscriptions = useCallback(() => {
-    hostSpeakerIdsRef.current.clear();
-  }, []);
+  // ---------------------------------------------------------------------------
+  // Generic SDP helper
+  // ---------------------------------------------------------------------------
 
-  // ---- Ensure local preview ----
- const ensureLocalPreview = useCallback(async () => {
-  if (localStreamRef.current) return localStreamRef.current;
+  const createOfferAndWaitForIce = useCallback(
+    async (peer: RTCPeerConnection) => {
+      if (!isPeerAlive(peer)) {
+        throw new Error("PeerConnection is no longer alive.");
+      }
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video: {
-      facingMode: 'user',
-      width: { ideal: 1080 },
-      height: { ideal: 1920 },
+      if (peer.signalingState !== "stable") {
+        throw new Error(
+          `Cannot create offer while signalingState=${peer.signalingState}`,
+        );
+      }
+
+      const offer = await peer.createOffer();
+
+      await peer.setLocalDescription(offer);
+
+      await waitForFirstUsableCandidate(peer);
+
+      const description = peer.localDescription;
+
+      if (!description?.sdp) {
+        throw new Error("PeerConnection did not produce an SDP offer.");
+      }
+
+      return description.sdp;
     },
-  });
+    [],
+  );
 
-  localStreamRef.current = stream;
-  setLocalStream(stream); // NEW — triggers a re-render the moment the camera turns on,
-                           // instead of waiting for negotiation to finish
-  return stream;
-}, []);
+  // ---------------------------------------------------------------------------
+  // HOST PUBLISH
+  // ---------------------------------------------------------------------------
 
-  // ---- Host publish media ----
   const publishHostMedia = useCallback(
     async (currentRoom: RoomRecord) => {
-      const stream = await ensureLocalPreview();
-
-      const iceServers = await getIceServers();
-      const peer = new RTCPeerConnection({
-        iceServers,
-        bundlePolicy: 'max-bundle',
-      });
-      hostPeerRef.current = peer;
-
-      const transceivers: Array<{
-        transceiver: RTCRtpTransceiver;
-        track: MediaStreamTrack;
-        trackName: string;
-      }> = [];
-
-      for (const track of stream.getTracks()) {
-        const transceiver = peer.addTransceiver(track, { direction: 'sendonly' });
-        transceivers.push({
-          transceiver,
-          track,
-          trackName: createTrackName(track.kind === 'video' ? 'video' : 'audio', userId ?? 'host'),
-        });
+      if (hostPublishInFlightRef.current) {
+        return;
       }
 
-      // Initial offer
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      await waitForFirstUsableCandidate(peer);
+      hostPublishInFlightRef.current = true;
 
-      const localDescription = peer.localDescription;
-      if (!localDescription?.sdp) throw new Error('Browser did not generate a valid SDP offer.');
+      const lifecycle = lifecycleGenerationRef.current;
 
-      const tracks = createPublishTracks(transceivers);
-      const initialResult = await roomsApi.publishHost(currentRoom.id, {
-        offerSdp: localDescription.sdp,
-        tracks,
-      });
+      try {
+        setMediaError("");
+        setHostPublishing(false);
+        setHostMediaReady(false);
 
-      if (!initialResult.answerSdp) throw new Error('Cloudflare did not return initial SDP answer.');
-      await peer.setRemoteDescription({ type: 'answer', sdp: initialResult.answerSdp });
-      await waitForPeerConnectionConnected(peer);
+        const stream = await ensureLocalPreview();
 
-      // Renegotiation for tracks
-      const renegotiationOffer = await peer.createOffer();
-      await peer.setLocalDescription(renegotiationOffer);
-      await waitForFirstUsableCandidate(peer);
-
-      const renegotiationDescription = peer.localDescription;
-      if (!renegotiationDescription?.sdp) throw new Error('No valid track negotiation offer.');
-
-      const result = await roomsApi.publishHost(currentRoom.id, {
-        offerSdp: renegotiationDescription.sdp,
-        tracks,
-      });
-
-      if (!result.answerSdp) throw new Error('Cloudflare did not return track negotiation answer.');
-      await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
-
-      hostSessionRef.current = {
-        sessionId: result.session.sessionId,
-        generation: result.session.generation,
-      };
-
-      // Wait for host media state to propagate
-      const state = await waitForHostMediaState(currentRoom.id, 5000, 250);
-      if (!state.host || state.host.sessionId !== result.session.sessionId) {
-        throw new Error('Host media state not registered.');
-      }
-
-      setHostMediaReady(true);
-      setHostPublishing(true);
-
-      peer.onconnectionstatechange = () => {
-        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-          setHostPublishing(false);
-          setHostMediaReady(false);
+        if (lifecycle !== lifecycleGenerationRef.current) {
+          return;
         }
-      };
+
+        closeHostPeer();
+
+        const peer = new RTCPeerConnection({
+          iceServers: await getIceServers(),
+          bundlePolicy: "max-bundle",
+        });
+
+        hostPeerRef.current = peer;
+
+        peer.onconnectionstatechange = () => {
+          if (peer !== hostPeerRef.current) {
+            return;
+          }
+
+          console.log(
+            "[WebRTC][HOST] connectionState:",
+            peer.connectionState,
+          );
+
+          if (
+            peer.connectionState === "failed" ||
+            peer.connectionState === "closed"
+          ) {
+            if (mountedRef.current) {
+              setHostPublishing(false);
+              setHostMediaReady(false);
+            }
+          }
+        };
+
+        const transceivers: Array<{
+          transceiver: RTCRtpTransceiver;
+          track: MediaStreamTrack;
+          trackName: string;
+        }> = [];
+
+        for (const track of stream.getTracks()) {
+          const transceiver = peer.addTransceiver(track, {
+            direction: "sendonly",
+          });
+
+          transceivers.push({
+            transceiver,
+            track,
+            trackName: createTrackName(
+              track.kind === "video" ? "video" : "audio",
+              userId ?? "host",
+            ),
+          });
+        }
+
+        /**
+         * IMPORTANT:
+         *
+         * Host media is published in ONE browser offer.
+         *
+         * We do NOT immediately manufacture a second offer against the same
+         * PeerConnection.
+         */
+        const offerSdp = await createOfferAndWaitForIce(peer);
+
+        const tracks = createPublishTracks(transceivers);
+
+        const result = await roomsApi.publishHost(currentRoom.id, {
+          offerSdp,
+          tracks,
+        });
+
+        if (!result.answerSdp) {
+          throw new Error(
+            "Cloudflare did not return the host SDP answer.",
+          );
+        }
+
+        await peer.setRemoteDescription({
+          type: "answer",
+          sdp: result.answerSdp,
+        });
+
+        await waitForPeerConnectionConnected(peer, 20000, 400);
+
+        if (lifecycle !== lifecycleGenerationRef.current) {
+          return;
+        }
+
+        hostSessionRef.current = {
+          sessionId: result.session.sessionId,
+          generation: result.session.generation,
+        };
+
+        const state = await waitForHostMediaState(
+          currentRoom.id,
+          10000,
+          400,
+        );
+
+        if (
+          !state.host ||
+          state.host.sessionId !== result.session.sessionId
+        ) {
+          throw new Error("Host media state was not registered.");
+        }
+
+        if (mountedRef.current) {
+          setHostMediaReady(true);
+          setHostPublishing(true);
+        }
+
+        console.log("[WebRTC][HOST] publish complete");
+      } catch (error) {
+        console.error("[WebRTC][HOST] publish failed", error);
+
+        closeHostPeer();
+
+        if (mountedRef.current) {
+          setMediaError(
+            error instanceof Error
+              ? error.message
+              : "Host media could not be connected.",
+          );
+        }
+
+        throw error;
+      } finally {
+        hostPublishInFlightRef.current = false;
+      }
     },
-    [userId, ensureLocalPreview, getIceServers],
+    [
+      closeHostPeer,
+      createOfferAndWaitForIce,
+      ensureLocalPreview,
+      getIceServers,
+      userId,
+    ],
   );
 
-  // ---- Viewer connect ----
+  // ---------------------------------------------------------------------------
+  // VIEWER CONNECT
+  // ---------------------------------------------------------------------------
+
   const connectViewer = useCallback(
     async (currentRoom: RoomRecord) => {
-      const state = await waitForHostMediaState(currentRoom.id, 20000, 500);
-      if (!state.host || state.host.status !== 'connected') {
-        throw new Error('Host is still connecting. Try again.');
+      if (viewerConnectInFlightRef.current) {
+        return;
       }
 
-      const peer = new RTCPeerConnection({
-        iceServers: await getIceServers(),
-        bundlePolicy: 'max-bundle',
-      });
-      viewerPeerRef.current = peer;
+      if (isConnected(viewerPeerRef.current)) {
+        return;
+      }
 
-      const remoteStream = new MediaStream();
-      remoteStreamRef.current = remoteStream;
+      viewerConnectInFlightRef.current = true;
 
-      peer.ontrack = (event) => {
-        for (const track of event.streams[0]?.getTracks() ?? [event.track]) {
-          if (!remoteStream.getTracks().some((t) => t.id === track.id)) {
-            remoteStream.addTrack(track);
+      const lifecycle = lifecycleGenerationRef.current;
+
+      try {
+        setMediaError("");
+
+        const state = await waitForHostMediaState(
+          currentRoom.id,
+          20000,
+          500,
+        );
+
+        if (
+          !state.host ||
+          state.host.status !== "connected"
+        ) {
+          throw new Error(
+            "Host is still connecting. Try again.",
+          );
+        }
+
+        closeViewerPeer();
+
+        const peer = new RTCPeerConnection({
+          iceServers: await getIceServers(),
+          bundlePolicy: "max-bundle",
+        });
+
+        viewerPeerRef.current = peer;
+
+        const remoteStream = new MediaStream();
+
+        remoteStreamRef.current = remoteStream;
+
+        peer.ontrack = (event) => {
+          if (peer !== viewerPeerRef.current) {
+            return;
+          }
+
+          const tracks =
+            event.streams[0]?.getTracks() ?? [event.track];
+
+          for (const track of tracks) {
+            if (
+              !remoteStream
+                .getTracks()
+                .some((existing) => existing.id === track.id)
+            ) {
+              remoteStream.addTrack(track);
+            }
+          }
+        };
+
+        peer.onconnectionstatechange = () => {
+          if (peer !== viewerPeerRef.current) {
+            return;
+          }
+
+          const connected =
+            peer.connectionState === "connected";
+
+          if (mountedRef.current) {
+            setViewerConnected(connected);
+          }
+
+          if (
+            peer.connectionState === "failed" ||
+            peer.connectionState === "closed"
+          ) {
+            if (mountedRef.current) {
+              setViewerConnected(false);
+            }
+          }
+        };
+
+        /**
+         * Reserve the initial media sections.
+         *
+         * This is the ONLY place where the initial viewer transceivers
+         * are created.
+         */
+        peer.addTransceiver("video", {
+          direction: "recvonly",
+        });
+
+        peer.addTransceiver("audio", {
+          direction: "recvonly",
+        });
+
+        const connectedSpeakers = Object.entries(
+          state.speakers,
+        ).filter(
+          ([, speaker]) =>
+            speaker.status === "connected",
+        );
+
+        for (const [, speaker] of connectedSpeakers) {
+          peer.addTransceiver("audio", {
+            direction: "recvonly",
+          });
+
+          if (speaker.videoTrackName) {
+            peer.addTransceiver("video", {
+              direction: "recvonly",
+            });
           }
         }
-      };
 
-      peer.onconnectionstatechange = () => {
-        const ready = peer.connectionState === 'connected';
-        setViewerConnected(ready);
-        if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
-          setViewerConnected(false);
+        const initialSpeakerIds = new Set(
+          connectedSpeakers.map(([id]) => id),
+        );
+
+        viewerSpeakerIdsRef.current = initialSpeakerIds;
+
+        /**
+         * ONE initial viewer negotiation.
+         */
+        const offerSdp =
+          await createOfferAndWaitForIce(peer);
+
+        const result =
+          await roomsApi.createViewerSession(
+            currentRoom.id,
+            offerSdp,
+          );
+
+        if (!result.answerSdp) {
+          throw new Error(
+            "Viewer session did not return an SDP answer.",
+          );
         }
-      };
 
-      createViewerTransceivers(peer, state);
-      // Only mark speakers as "already subscribed" if they were actually
-      // ready (status "connected") when this session was created — see
-      // createViewerTransceivers. Anyone still mid-publish must remain
-      // eligible for syncViewerSpeakerAudio's regular poll so they get
-      // picked up once their track is really live, instead of being
-      // silently and permanently skipped for this viewer.
-      viewerSpeakerIdsRef.current = new Set(
-        Object.entries(state.speakers)
-          .filter(([, speaker]) => speaker.status === 'connected')
-          .map(([id]) => id),
-      );
+        await peer.setRemoteDescription({
+          type: "answer",
+          sdp: result.answerSdp,
+        });
 
-      // Phase 1: create session
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      await waitForFirstUsableCandidate(peer);
+        await waitForPeerConnectionConnected(
+          peer,
+          20000,
+          400,
+        );
 
-      const localDescription = peer.localDescription;
-      if (!localDescription?.sdp) throw new Error('No valid viewer SDP.');
+        if (
+          lifecycle !== lifecycleGenerationRef.current
+        ) {
+          return;
+        }
 
-      const initialResult = await roomsApi.createViewerSession(currentRoom.id, localDescription.sdp);
-      if (!initialResult.answerSdp) throw new Error('No initial viewer SDP answer.');
-      await peer.setRemoteDescription({ type: 'answer', sdp: initialResult.answerSdp });
-      await waitForPeerConnectionConnected(peer, 20000, 500);
+        viewerSessionRef.current = {
+          sessionId: result.session.sessionId,
+          generation: result.session.generation,
+        };
 
-      viewerSessionRef.current = {
-        sessionId: initialResult.session.sessionId,
-        generation: initialResult.session.generation,
-      };
+        if (mountedRef.current) {
+          setViewerConnected(true);
+        }
 
-      // Phase 2: add tracks
-      const renegotiationOffer = await peer.createOffer();
-      await peer.setLocalDescription(renegotiationOffer);
-      await waitForFirstUsableCandidate(peer);
+        console.log(
+          "[WebRTC][VIEWER] initial session connected",
+          {
+            sessionId: result.session.sessionId,
+            speakers: [...initialSpeakerIds],
+          },
+        );
+      } catch (error) {
+        console.error(
+          "[WebRTC][VIEWER] connect failed",
+          error,
+        );
 
-      const renegotiationDescription = peer.localDescription;
-      if (!renegotiationDescription?.sdp) throw new Error('No valid track negotiation offer.');
+        closeViewerPeer();
 
-      const result = await roomsApi.createViewerSession(currentRoom.id, renegotiationDescription.sdp);
+        if (mountedRef.current) {
+          setMediaError(
+            error instanceof Error
+              ? error.message
+              : "Viewer connection failed.",
+          );
+        }
 
-      if (result.answerSdp) {
-        await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
-      } else if (result.offerSdp) {
-        await peer.setRemoteDescription({ type: 'offer', sdp: result.offerSdp });
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-        await waitForFirstUsableCandidate(peer);
-        const localAnswer = peer.localDescription;
-        if (!localAnswer?.sdp) throw new Error('No viewer renegotiation answer.');
-        await roomsApi.completeRenegotiation(currentRoom.id, localAnswer.sdp);
-      } else {
-        throw new Error('No SDP returned for track negotiation.');
+        throw error;
+      } finally {
+        viewerConnectInFlightRef.current = false;
       }
-
-      await waitForPeerConnectionConnected(peer, 20000, 500);
-      setViewerConnected(true);
     },
-    [getIceServers],
+    [
+      closeViewerPeer,
+      createOfferAndWaitForIce,
+      getIceServers,
+    ],
   );
 
-  // ---- Guest publish audio ----
-  const publishGuestAudio = useCallback(async () => {
-    const dbg = (msg: string, extra?: unknown) =>
-      console.log(`[GUEST-DEBUG] ${msg}`, extra ?? '');
+  // ---------------------------------------------------------------------------
+  // GUEST / SPEAKER PUBLISH
+  // ---------------------------------------------------------------------------
 
-    if (!room || isHost || speakerPublishing) {
-      dbg('publishGuestAudio bailed at entry guard', {
-        hasRoom: !!room,
-        isHost,
-        speakerPublishing,
-      });
+  const publishGuestAudio = useCallback(async () => {
+    if (!room || isHost) {
       return;
     }
 
     if (guestPublishInFlightRef.current) {
-      dbg('publishGuestAudio bailed — already in flight');
+      return;
+    }
+
+    if (isConnected(guestPeerRef.current)) {
       return;
     }
 
     guestPublishInFlightRef.current = true;
-    setMediaError('');
+
+    const lifecycle = lifecycleGenerationRef.current;
 
     try {
-      dbg('requesting getUserMedia...');
+      setMediaError("");
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-        video: false,
-      });
+      closeGuestPeer();
+
+      const stream =
+        await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+
+      if (lifecycle !== lifecycleGenerationRef.current) {
+        for (const track of stream.getTracks()) {
+          track.stop();
+        }
+        return;
+      }
 
       guestStreamRef.current = stream;
 
-      dbg('getUserMedia OK', {
-        audioTracks: stream.getAudioTracks().map((track) => ({
-          id: track.id,
-          label: track.label,
-          enabled: track.enabled,
-          readyState: track.readyState,
-        })),
-      });
-
-      const iceServers = await getIceServers();
       const peer = new RTCPeerConnection({
-        iceServers,
-        bundlePolicy: 'max-bundle',
+        iceServers: await getIceServers(),
+        bundlePolicy: "max-bundle",
       });
 
       guestPeerRef.current = peer;
 
-      peer.addEventListener('connectionstatechange', () =>
-        dbg('guest peer connectionstatechange', peer.connectionState),
-      );
-      peer.addEventListener('iceconnectionstatechange', () =>
-        dbg('guest peer iceconnectionstatechange', peer.iceConnectionState),
-      );
-      peer.addEventListener('icecandidateerror', (event: any) =>
-        dbg('guest peer icecandidateerror', {
-          errorCode: event.errorCode,
-          errorText: event.errorText,
-          url: event.url,
-        }),
-      );
+      peer.onconnectionstatechange = () => {
+        if (peer !== guestPeerRef.current) {
+          return;
+        }
+
+        console.log(
+          "[WebRTC][SPEAKER] connectionState:",
+          peer.connectionState,
+        );
+
+        if (
+          peer.connectionState === "failed" ||
+          peer.connectionState === "closed"
+        ) {
+          if (mountedRef.current) {
+            setSpeakerPublishing(false);
+          }
+        }
+      };
+
+      peer.oniceconnectionstatechange = () => {
+        if (peer !== guestPeerRef.current) {
+          return;
+        }
+
+        console.log(
+          "[WebRTC][SPEAKER] iceConnectionState:",
+          peer.iceConnectionState,
+        );
+      };
+
+      peer.onicecandidateerror = (event) => {
+        console.warn(
+          "[WebRTC][SPEAKER] ICE candidate error",
+          {
+            errorCode: event.errorCode,
+            errorText: event.errorText,
+            url: event.url,
+          },
+        );
+      };
 
       const track = stream.getAudioTracks()[0];
+
       if (!track) {
-        throw new Error('Microphone track not created.');
+        throw new Error(
+          "Microphone track was not created.",
+        );
       }
 
-      const transceiver = peer.addTransceiver(track, {
-        direction: 'sendonly',
-      });
-
-      /*
-       * IMPORTANT:
-       *
-       * There is ONE browser offer for this publish operation.
-       * The backend creates the Cloudflare session and immediately
-       * sends this offer to /tracks/new together with the local track.
-       * Cloudflare returns the SDP answer for this same PeerConnection.
+      /**
+       * Exactly ONE audio transceiver.
        */
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      await waitForFirstUsableCandidate(peer);
+      const transceiver = peer.addTransceiver(
+        track,
+        {
+          direction: "sendonly",
+        },
+      );
 
-      const localDescription = peer.localDescription;
-      if (!localDescription?.sdp) {
-        throw new Error('Microphone SDP offer not created.');
-      }
+      const offerSdp =
+        await createOfferAndWaitForIce(peer);
 
       const tracks = createPublishTracks([
         {
           transceiver,
           track,
-          trackName: createTrackName('audio', userId ?? 'speaker'),
+          trackName: createTrackName(
+            "audio",
+            userId ?? "speaker",
+          ),
         },
       ]);
 
-      dbg('publishing guest audio in ONE Cloudflare negotiation', {
-        trackName: tracks[0]?.trackName,
-        mid: tracks[0]?.mid,
-        sdpLength: localDescription.sdp.length,
-      });
-
-      const result = await roomsApi.publishGuest(room.id, {
-        offerSdp: localDescription.sdp,
-        tracks,
-      });
+      const result =
+        await roomsApi.publishGuest(room.id, {
+          offerSdp,
+          tracks,
+        });
 
       if (!result.answerSdp) {
-        throw new Error('Cloudflare did not return the guest audio SDP answer.');
+        throw new Error(
+          "Cloudflare did not return the speaker SDP answer.",
+        );
       }
 
       await peer.setRemoteDescription({
-        type: 'answer',
+        type: "answer",
         sdp: result.answerSdp,
       });
 
-      dbg('Cloudflare answer applied', {
-        connectionState: peer.connectionState,
-        iceConnectionState: peer.iceConnectionState,
-        sessionId: result.session.sessionId,
-      });
-
-      await waitForPeerConnectionConnected(peer, 20000, 400);
-
-      peer.onconnectionstatechange = () => {
-        dbg('guest peer state after go-live', peer.connectionState);
-        if (
-          peer.connectionState === 'failed' ||
-          peer.connectionState === 'closed'
-        ) {
-          setSpeakerPublishing(false);
-        }
-      };
-
-      setSpeakerPublishing(true);
-      dbg('publishGuestAudio COMPLETE — speakerPublishing=true');
-    } catch (error) {
-      console.error('[GUEST-DEBUG] publishGuestAudio FAILED', {
-        error:
-          error instanceof Error
-            ? { message: error.message, stack: error.stack }
-            : error,
-        peerConnectionState: guestPeerRef.current?.connectionState,
-        peerIceConnectionState: guestPeerRef.current?.iceConnectionState,
-        peerIceGatheringState: guestPeerRef.current?.iceGatheringState,
-      });
-
-      await roomsApi.unpublishGuest(room.id).catch((cleanupError) =>
-        console.error('[GUEST-DEBUG] unpublishGuest cleanup failed', cleanupError),
+      await waitForPeerConnectionConnected(
+        peer,
+        20000,
+        400,
       );
 
+      if (
+        lifecycle !== lifecycleGenerationRef.current
+      ) {
+        return;
+      }
+
+      guestSessionRef.current = {
+        sessionId: result.session.sessionId,
+        generation: result.session.generation,
+      };
+
+      if (mountedRef.current) {
+        setSpeakerPublishing(true);
+      }
+
+      console.log(
+        "[WebRTC][SPEAKER] publish complete",
+        result.session,
+      );
+    } catch (error) {
+      console.error(
+        "[WebRTC][SPEAKER] publish failed",
+        error,
+      );
+
+      await room &&
+        roomsApi
+          .unpublishGuest(room.id)
+          .catch(() => {});
+
       closeGuestPeer();
+
+      if (mountedRef.current) {
+        setMediaError(
+          error instanceof Error
+            ? error.message
+            : "Microphone could not be connected.",
+        );
+      }
+
       throw error;
     } finally {
       guestPublishInFlightRef.current = false;
     }
   }, [
-    room,
-    isHost,
-    userId,
-    speakerPublishing,
-    getIceServers,
     closeGuestPeer,
+    createOfferAndWaitForIce,
+    getIceServers,
+    isHost,
+    room,
+    userId,
   ]);
 
-  // ---- Sync host guest audio ----
+  // ---------------------------------------------------------------------------
+  // HOST: subscribe to new speakers
+  // ---------------------------------------------------------------------------
+
   const syncHostGuestAudio = useCallback(
     async (state: RoomMediaState) => {
-      if (!room || !isHost || !hostPeerRef.current || !hostMediaReady) return;
-
-      const speakerIds = Object.keys(state.speakers).filter(
-        (speakerId) => !hostSpeakerIdsRef.current.has(speakerId),
-      );
-      if (speakerIds.length === 0) return;
+      if (!room || !isHost) {
+        return;
+      }
 
       const peer = hostPeerRef.current;
-      const attemptedIds: string[] = [];
-      const addedTransceivers: RTCRtpTransceiver[] = [];
 
-      try {
-        for (const speakerId of speakerIds) {
-          const transceiver = peer.addTransceiver('audio', { direction: 'recvonly' });
-          addedTransceivers.push(transceiver);
-          attemptedIds.push(speakerId);
-        }
-
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        await waitForFirstUsableCandidate(peer);
-
-        const localDescription = peer.localDescription;
-        if (!localDescription?.sdp) throw new Error('Host guest-audio SDP not created.');
-
-        const result = await roomsApi.subscribeHostToGuests(room.id, {
-          offerSdp: localDescription.sdp,
-          speakerIds: attemptedIds,
-        });
-
-        if (result.alreadySubscribed) {
-          for (const speakerId of attemptedIds) hostSpeakerIdsRef.current.add(speakerId);
-          if (peer.signalingState !== 'stable') {
-            await peer.setLocalDescription({ type: 'rollback' });
-          }
-          for (const transceiver of addedTransceivers) {
-            try {
-              transceiver.stop();
-            } catch {}
-          }
-          return;
-        }
-
-        if (!result.answerSdp && !result.offerSdp) {
-          // Same issue as the viewer path: no SDP here means Cloudflare
-          // wants an immediate renegotiation (requiresRenegotiation: true),
-          // NOT "nothing to do". Marking these speakerIds as handled would
-          // leave the host's peer connection permanently missing that
-          // guest's audio, with no future retry. Roll back and leave them
-          // out of hostSpeakerIdsRef so the next poll retries.
-          if (peer.signalingState !== 'stable') {
-            await peer.setLocalDescription({ type: 'rollback' });
-          }
-          for (const transceiver of addedTransceivers) {
-            try {
-              transceiver.stop();
-            } catch {}
-          }
-          return;
-        }
-
-        if (result.answerSdp) {
-          await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
-        } else if (result.offerSdp) {
-          await peer.setRemoteDescription({ type: 'offer', sdp: result.offerSdp });
-          const answer = await peer.createAnswer();
-          await peer.setLocalDescription(answer);
-          await waitForFirstUsableCandidate(peer);
-          const localAnswer = peer.localDescription;
-          if (!localAnswer?.sdp) throw new Error('Host guest-audio answer not created.');
-          await roomsApi.subscribeHostToGuests(room.id, {
-            answerSdp: localAnswer.sdp,
-            speakerIds: attemptedIds,
-          });
-        } else {
-          throw new Error('Host guest-audio negotiation returned no SDP.');
-        }
-
-        for (const speakerId of attemptedIds) {
-          hostSpeakerIdsRef.current.add(speakerId);
-        }
-      } catch (error) {
-        for (const speakerId of attemptedIds) {
-          hostSpeakerIdsRef.current.delete(speakerId);
-        }
-        for (const transceiver of addedTransceivers) {
-          try {
-            transceiver.stop();
-          } catch {}
-        }
-        if (peer.signalingState !== 'stable') {
-          try {
-            await peer.setLocalDescription({ type: 'rollback' });
-          } catch {}
-        }
-        throw error;
+      if (!peer || !isPeerAlive(peer)) {
+        return;
       }
+
+      if (!hostSessionRef.current) {
+        return;
+      }
+
+      if (!hostMediaReady) {
+        return;
+      }
+
+      const newSpeakers = Object.entries(
+        state.speakers,
+      )
+        .filter(
+          ([speakerId, speaker]) =>
+            speaker.status === "connected" &&
+            !hostSpeakerIdsRef.current.has(
+              speakerId,
+            ),
+        )
+        .map(([speakerId]) => speakerId);
+
+      if (newSpeakers.length === 0) {
+        return;
+      }
+
+      await hostNegotiationRef.current.run(
+        async () => {
+          /**
+           * The state may have changed while this operation was waiting
+           * in the queue. Re-check before touching SDP.
+           */
+          const currentPeer =
+            hostPeerRef.current;
+
+          if (
+            !currentPeer ||
+            currentPeer !== peer ||
+            !isPeerAlive(currentPeer)
+          ) {
+            return;
+          }
+
+          const actualSpeakerIds =
+            newSpeakers.filter(
+              (id) =>
+                !hostSpeakerIdsRef.current.has(id),
+            );
+
+          if (actualSpeakerIds.length === 0) {
+            return;
+          }
+
+          /**
+           * Add exactly one recvonly audio section per new speaker.
+           */
+          const addedTransceivers =
+            actualSpeakerIds.map(() =>
+              currentPeer.addTransceiver(
+                "audio",
+                {
+                  direction: "recvonly",
+                },
+              ),
+            );
+
+          try {
+            const offerSdp =
+              await createOfferAndWaitForIce(
+                currentPeer,
+              );
+
+            const result =
+              await roomsApi.subscribeHostToGuests(
+                room.id,
+                {
+                  offerSdp,
+                  speakerIds:
+                    actualSpeakerIds,
+                },
+              );
+
+            if (result.alreadySubscribed) {
+              for (const id of actualSpeakerIds) {
+                hostSpeakerIdsRef.current.add(id);
+              }
+
+              return;
+            }
+
+            if (result.answerSdp) {
+              await currentPeer.setRemoteDescription({
+                type: "answer",
+                sdp: result.answerSdp,
+              });
+            } else if (result.offerSdp) {
+              await currentPeer.setRemoteDescription({
+                type: "offer",
+                sdp: result.offerSdp,
+              });
+
+              const answer =
+                await currentPeer.createAnswer();
+
+              await currentPeer.setLocalDescription(
+                answer,
+              );
+
+              await waitForFirstUsableCandidate(
+                currentPeer,
+              );
+
+              const localAnswer =
+                currentPeer.localDescription;
+
+              if (!localAnswer?.sdp) {
+                throw new Error(
+                  "Host subscription answer SDP was not created.",
+                );
+              }
+
+              await roomsApi.subscribeHostToGuests(
+                room.id,
+                {
+                  answerSdp:
+                    localAnswer.sdp,
+                  speakerIds:
+                    actualSpeakerIds,
+                },
+              );
+            } else {
+              throw new Error(
+                "Host subscription returned no SDP.",
+              );
+            }
+
+            for (const id of actualSpeakerIds) {
+              hostSpeakerIdsRef.current.add(id);
+            }
+
+            console.log(
+              "[WebRTC][HOST] subscribed to speakers",
+              actualSpeakerIds,
+            );
+          } catch (error) {
+            /**
+             * Do NOT mark failed speakers as subscribed.
+             *
+             * The next media-state reconciliation can retry them.
+             */
+            for (const id of actualSpeakerIds) {
+              hostSpeakerIdsRef.current.delete(id);
+            }
+
+            /**
+             * Only rollback if we are actually in have-local-offer.
+             */
+            if (
+              currentPeer.signalingState ===
+              "have-local-offer"
+            ) {
+              try {
+                await currentPeer.setLocalDescription({
+                  type: "rollback",
+                });
+              } catch {
+                // If rollback fails, the next lifecycle reset
+                // will close this PeerConnection.
+              }
+            }
+
+            for (const transceiver of addedTransceivers) {
+              try {
+                transceiver.stop();
+              } catch {
+                // Already stopped.
+              }
+            }
+
+            throw error;
+          }
+        },
+      );
     },
-    [room, isHost, hostMediaReady],
+    [
+      createOfferAndWaitForIce,
+      hostMediaReady,
+      isHost,
+      room,
+    ],
   );
 
-  // ---- Sync viewer speaker audio ----
- const syncViewerSpeakerAudio = useCallback(
-  async (state: RoomMediaState) => {
-    if (!room || isHost || !viewerPeerRef.current || !viewerSessionRef.current) return;
+  // ---------------------------------------------------------------------------
+  // VIEWER: subscribe to new speakers
+  // ---------------------------------------------------------------------------
 
-    const newSpeakers = Object.keys(state.speakers).filter(
-      (speakerId) => !viewerSpeakerIdsRef.current.has(speakerId),
-    );
-    if (newSpeakers.length === 0) return;
-
-    const peer = viewerPeerRef.current;
-    const addedTransceivers: RTCRtpTransceiver[] = [];
-
-    try {
-      for (const speakerId of newSpeakers) {
-        addedTransceivers.push(peer.addTransceiver('audio', { direction: 'recvonly' }));
-      }
-
-      const offer = await peer.createOffer();
-      await peer.setLocalDescription(offer);
-      await waitForFirstUsableCandidate(peer);
-
-      const localDescription = peer.localDescription;
-      if (!localDescription?.sdp) throw new Error('Viewer speaker-audio offer not created.');
-
-      // Use the dedicated "add tracks to my existing viewer session" endpoint —
-      // NOT createViewerSession, which only resumes a session while it's still
-      // "connecting" and otherwise silently spins up a brand-new Cloudflare
-      // session that this RTCPeerConnection has no relationship to.
-      const result = await roomsApi.subscribeViewerToSpeakers(room.id, {
-        offerSdp: localDescription.sdp,
-        speakerIds: newSpeakers,
-      });
-
-      if (result.alreadySubscribed) {
-        for (const speakerId of newSpeakers) viewerSpeakerIdsRef.current.add(speakerId);
-        if (peer.signalingState !== 'stable') {
-          await peer.setLocalDescription({ type: 'rollback' });
-        }
-        for (const transceiver of addedTransceivers) {
-          try { transceiver.stop(); } catch {}
-        }
+  const syncViewerSpeakerAudio = useCallback(
+    async (state: RoomMediaState) => {
+      if (!room || isHost) {
         return;
       }
 
-      if (!result.answerSdp && !result.offerSdp) {
-        // Cloudflare accepted the subscribe request but couldn't return an
-        // SDP answer this round (requiresRenegotiation: true) — this is NOT
-        // the same as "already subscribed". If we mark these speakerIds as
-        // handled here, this viewer's peer connection never actually
-        // receives the track and — because viewerSpeakerIdsRef now says
-        // "handled" — never gets retried again. Roll back our added
-        // transceivers and leave these speakerIds OUT of
-        // viewerSpeakerIdsRef so the next poll (~1.8s) retries the
-        // subscribe from scratch.
-        if (peer.signalingState !== 'stable') {
-          await peer.setLocalDescription({ type: 'rollback' });
-        }
-        for (const transceiver of addedTransceivers) {
-          try { transceiver.stop(); } catch {}
-        }
+      const peer = viewerPeerRef.current;
+
+      if (!peer || !isPeerAlive(peer)) {
         return;
       }
 
-      if (result.answerSdp) {
-        await peer.setRemoteDescription({ type: 'answer', sdp: result.answerSdp });
-      } else if (result.offerSdp) {
-        await peer.setRemoteDescription({ type: 'offer', sdp: result.offerSdp });
-        const answer = await peer.createAnswer();
-        await peer.setLocalDescription(answer);
-        await waitForFirstUsableCandidate(peer);
-        const localAnswer = peer.localDescription;
-        if (!localAnswer?.sdp) throw new Error('Viewer speaker-audio answer not created.');
-        await roomsApi.subscribeViewerToSpeakers(room.id, {
-          answerSdp: localAnswer.sdp,
-          speakerIds: newSpeakers,
-        });
+      if (!viewerSessionRef.current) {
+        return;
       }
 
-      for (const speakerId of newSpeakers) {
-        viewerSpeakerIdsRef.current.add(speakerId);
+      if (!isConnected(peer)) {
+        return;
       }
-    } catch (error) {
-      for (const transceiver of addedTransceivers) {
-        try { transceiver.stop(); } catch {}
+
+      const newSpeakers = Object.entries(
+        state.speakers,
+      )
+        .filter(
+          ([speakerId, speaker]) =>
+            speaker.status === "connected" &&
+            !viewerSpeakerIdsRef.current.has(
+              speakerId,
+            ),
+        )
+        .map(([speakerId]) => speakerId);
+
+      if (newSpeakers.length === 0) {
+        return;
       }
-      if (peer.signalingState !== 'stable') {
-        try { await peer.setLocalDescription({ type: 'rollback' }); } catch {}
-      }
-      throw error;
+
+      await viewerNegotiationRef.current.run(
+        async () => {
+          const currentPeer =
+            viewerPeerRef.current;
+
+          if (
+            !currentPeer ||
+            currentPeer !== peer ||
+            !isPeerAlive(currentPeer)
+          ) {
+            return;
+          }
+
+          if (
+            currentPeer.signalingState !== "stable"
+          ) {
+            /**
+             * Do not stack another offer on top of an existing
+             * negotiation.
+             *
+             * The queue should normally prevent this, but this guard
+             * makes the invariant explicit.
+             */
+            return;
+          }
+
+          const actualSpeakerIds =
+            newSpeakers.filter(
+              (id) =>
+                !viewerSpeakerIdsRef.current.has(id),
+            );
+
+          if (actualSpeakerIds.length === 0) {
+            return;
+          }
+
+          /**
+           * One recvonly audio transceiver per new speaker.
+           *
+           * We do NOT touch existing transceivers.
+           */
+          const addedTransceivers =
+            actualSpeakerIds.map(() =>
+              currentPeer.addTransceiver(
+                "audio",
+                {
+                  direction: "recvonly",
+                },
+              ),
+            );
+
+          try {
+            const offerSdp =
+              await createOfferAndWaitForIce(
+                currentPeer,
+              );
+
+            const result =
+              await roomsApi.subscribeViewerToSpeakers(
+                room.id,
+                {
+                  offerSdp,
+                  speakerIds:
+                    actualSpeakerIds,
+                },
+              );
+
+            if (result.alreadySubscribed) {
+              for (const id of actualSpeakerIds) {
+                viewerSpeakerIdsRef.current.add(id);
+              }
+
+              return;
+            }
+
+            if (result.answerSdp) {
+              await currentPeer.setRemoteDescription({
+                type: "answer",
+                sdp: result.answerSdp,
+              });
+            } else if (result.offerSdp) {
+              await currentPeer.setRemoteDescription({
+                type: "offer",
+                sdp: result.offerSdp,
+              });
+
+              const answer =
+                await currentPeer.createAnswer();
+
+              await currentPeer.setLocalDescription(
+                answer,
+              );
+
+              await waitForFirstUsableCandidate(
+                currentPeer,
+              );
+
+              const localAnswer =
+                currentPeer.localDescription;
+
+              if (!localAnswer?.sdp) {
+                throw new Error(
+                  "Viewer subscription answer SDP was not created.",
+                );
+              }
+
+              await roomsApi.subscribeViewerToSpeakers(
+                room.id,
+                {
+                  answerSdp:
+                    localAnswer.sdp,
+                  speakerIds:
+                    actualSpeakerIds,
+                },
+              );
+            } else {
+              throw new Error(
+                "Viewer subscription returned no SDP.",
+              );
+            }
+
+            for (const id of actualSpeakerIds) {
+              viewerSpeakerIdsRef.current.add(id);
+            }
+
+            console.log(
+              "[WebRTC][VIEWER] subscribed to speakers",
+              actualSpeakerIds,
+            );
+          } catch (error) {
+            for (const id of actualSpeakerIds) {
+              viewerSpeakerIdsRef.current.delete(id);
+            }
+
+       const signalingState =
+  currentPeer.signalingState;
+
+if (signalingState !== "stable") {
+  try {
+    await currentPeer.setLocalDescription({
+      type: "rollback",
+    });
+  } catch {
+    // The PeerConnection may already have moved
+    // to another signaling state or failed.
+  }
+}
+
+            for (const transceiver of addedTransceivers) {
+              try {
+                transceiver.stop();
+              } catch {
+                // Already stopped.
+              }
+            }
+
+            throw error;
+          }
+        },
+      );
+    },
+    [
+      createOfferAndWaitForIce,
+      isHost,
+      room,
+    ],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Preview
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (
+      !isHost ||
+      room?.status !== "created"
+    ) {
+      return;
     }
-  },
-  [room, isHost],
-);
-  // ---- Host camera/mic preview while waiting to go live ----
-  // Without this, getUserMedia() is only ever called from inside
-  // publishHostMedia() (i.e. after clicking "Start Live"), so the camera
-  // light never turns on and there's nothing to preview beforehand.
-  useEffect(() => {
-    if (!isHost || room?.status !== 'created') return;
 
-    ensureLocalPreview().catch((e) => {
-      setMediaError(e instanceof Error ? e.message : 'Camera or microphone permission was denied.');
+    ensureLocalPreview().catch((error) => {
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setMediaError(
+        error instanceof Error
+          ? error.message
+          : "Camera or microphone permission was denied.",
+      );
     });
-  }, [isHost, room?.status, ensureLocalPreview]);
+  }, [
+    ensureLocalPreview,
+    isHost,
+    room?.status,
+  ]);
 
-  // ---- Reflect camera/mic toggle state onto the live local tracks ----
+  // ---------------------------------------------------------------------------
+  // Camera toggle
+  // ---------------------------------------------------------------------------
+
   useEffect(() => {
-    localStreamRef.current?.getVideoTracks().forEach((track) => {
+    const stream = localStreamRef.current;
+
+    if (!stream) {
+      return;
+    }
+
+    for (const track of stream.getVideoTracks()) {
       track.enabled = cameraEnabled;
-    });
+    }
   }, [cameraEnabled]);
 
+  // ---------------------------------------------------------------------------
+  // Microphone toggle
+  // ---------------------------------------------------------------------------
+
   useEffect(() => {
-    localStreamRef.current?.getAudioTracks().forEach((track) => {
+    const stream = localStreamRef.current;
+
+    if (!stream) {
+      return;
+    }
+
+    for (const track of stream.getAudioTracks()) {
       track.enabled = micEnabled;
-    });
+    }
   }, [micEnabled]);
 
-  // ---- Heartbeats ----
-  useEffect(() => {
-    if (!hostSessionRef.current || !isHost) return;
-    const timer = setInterval(() => {
-      const s = hostSessionRef.current;
-      if (!s) return;
-      roomsApi
-        .heartbeat(room!.id, {
-          role: 'host',
-          sessionId: s.sessionId,
-          generation: s.generation,
-        })
-        .catch(() => {});
-    }, 15000);
-    return () => clearInterval(timer);
-  }, [isHost, room?.id]);
+  // ---------------------------------------------------------------------------
+  // MEDIA STATE POLLER
+  //
+  // Important:
+  //
+  // This effect ONLY observes room media state.
+  //
+  // It does not depend on viewerConnected/speakerPublishing/etc.
+  // Therefore the interval itself is stable and cannot be recreated just
+  // because React state changed.
+  // ---------------------------------------------------------------------------
+
+  const mediaStateRef =
+    useRef<RoomMediaState | null>(null);
 
   useEffect(() => {
-    if (!viewerSessionRef.current || isHost) return;
-    const timer = setInterval(() => {
-      const s = viewerSessionRef.current;
-      if (!s) return;
-      roomsApi
-        .heartbeat(room!.id, {
-          role: 'viewer',
-          sessionId: s.sessionId,
-          generation: s.generation,
-        })
-        .catch(() => {});
-    }, 15000);
-    return () => clearInterval(timer);
-  }, [isHost, room?.id]);
+    mediaStateRef.current = mediaState;
+  }, [mediaState]);
 
   useEffect(() => {
-    if (!speakerPublishing || isHost) return;
-    const timer = setInterval(() => {
-      const session = mediaState?.speakers[userId ?? ''];
-      if (!session) return;
-      roomsApi
-        .heartbeat(room!.id, {
-          role: 'speaker',
-          sessionId: session.sessionId,
-          generation: mediaState.generation,
-        })
-        .catch(() => {});
-    }, 15000);
-    return () => clearInterval(timer);
-  }, [speakerPublishing, isHost, mediaState, userId, room?.id]);
+    if (
+      !room ||
+      room.status !== "live"
+    ) {
+      return;
+    }
 
-  // ---- Media state polling ----
-  useEffect(() => {
-    if (!room || room.status !== 'live') return;
     let active = true;
-    let interval: NodeJS.Timeout | null = null;
+
+    const roomId = room.id;
+    const currentUserId = userId;
+    const currentIsHost = isHost;
 
     const poll = async () => {
+      if (!active) {
+        return;
+      }
+
+      if (mediaPollInFlightRef.current) {
+        return;
+      }
+
+      mediaPollInFlightRef.current = true;
+
       try {
-        const state = await roomsApi.getMediaState(room.id);
-        if (!active) return;
+        const state =
+          await roomsApi.getMediaState(roomId);
+
+        if (!active) {
+          return;
+        }
+
+        mediaStateRef.current = state;
         setMediaState(state);
 
-        // Host sync
-        if (isHost && !mediaSyncBusyRef.current) {
-          mediaSyncBusyRef.current = true;
-          try {
-            await syncHostGuestAudio(state);
-          } catch (e) {
-            console.error('Host guest audio sync failed', e);
-          } finally {
-            mediaSyncBusyRef.current = false;
-          }
-        }
+        // ---------------------------------------------------------------
+        // HOST
+        // ---------------------------------------------------------------
 
-        // Guest auto-publish if accepted
-        if (!isHost && state.speakers[userId ?? '']) {
-          if (!speakerPublishing && !mediaSyncBusyRef.current) {
-            mediaSyncBusyRef.current = true;
-            console.log('[GUEST-DEBUG] poll-loop triggering publishGuestAudio', {
-              speakerEntry: state.speakers[userId ?? ''],
-            });
-            try {
-              await publishGuestAudio();
-            } catch (e) {
-              console.error('[GUEST-DEBUG] poll-loop publishGuestAudio failed', e);
-              setMediaError(e instanceof Error ? e.message : 'Microphone could not be connected.');
-              closeGuestPeer();
-            } finally {
-              mediaSyncBusyRef.current = false;
+        if (currentIsHost) {
+          const hostSession =
+            hostSessionRef.current;
+
+          if (
+            state.host &&
+            state.host.userId === currentUserId
+          ) {
+            if (
+              hostSession &&
+              state.host.sessionId ===
+                hostSession.sessionId &&
+              state.host.status === "connected"
+            ) {
+              setHostMediaReady(true);
+              setHostPublishing(true);
             }
+
+            /**
+             * Reconcile guest speakers.
+             *
+             * The reconciliation function owns the WebRTC negotiation
+             * queue. The poller merely asks it to reconcile.
+             */
+            await syncHostGuestAudio(state);
           }
+
+          return;
         }
 
-        // Viewer speaker sync
-        if (!isHost && viewerConnected && !mediaSyncBusyRef.current) {
-          mediaSyncBusyRef.current = true;
-          try {
-            await syncViewerSpeakerAudio(state);
-          } catch (e) {
-            console.error('Viewer speaker sync failed', e);
-          } finally {
-            mediaSyncBusyRef.current = false;
-          }
+        // ---------------------------------------------------------------
+        // SPEAKER
+        // ---------------------------------------------------------------
+
+        const mySpeaker =
+          currentUserId
+            ? state.speakers[currentUserId]
+            : undefined;
+
+        if (
+          mySpeaker &&
+          (
+            mySpeaker.status ===
+              "connecting" ||
+            mySpeaker.status ===
+              "connected"
+          ) &&
+          !guestPeerRef.current
+        ) {
+          await publishGuestAudio().catch(
+            (error) => {
+              console.error(
+                "[WebRTC] automatic speaker publish failed",
+                error,
+              );
+            },
+          );
         }
 
-        // Host media ready check
-        if (isHost && state.host?.userId === userId) {
-          setHostMediaReady(true);
-          setHostPublishing(true);
+        // ---------------------------------------------------------------
+        // VIEWER
+        // ---------------------------------------------------------------
+
+        if (
+          viewerSessionRef.current &&
+          isConnected(
+            viewerPeerRef.current,
+          )
+        ) {
+          await syncViewerSpeakerAudio(
+            state,
+          );
         }
-      } catch {
-        // ignore polling errors
+      } catch (error) {
+        if (active) {
+          console.warn(
+            "[WebRTC] media-state poll failed",
+            error,
+          );
+        }
+      } finally {
+        mediaPollInFlightRef.current = false;
       }
     };
 
-    poll();
-    interval = setInterval(poll, 1800);
+    void poll();
+
+    const timer = window.setInterval(
+      () => {
+        void poll();
+      },
+      MEDIA_POLL_MS,
+    );
+
     return () => {
       active = false;
-      if (interval) clearInterval(interval);
+      window.clearInterval(timer);
     };
   }, [
+    isHost,
     room?.id,
     room?.status,
-    isHost,
     userId,
+    publishGuestAudio,
     syncHostGuestAudio,
     syncViewerSpeakerAudio,
-    publishGuestAudio,
-    viewerConnected,
-    speakerPublishing,
-    closeGuestPeer,
   ]);
 
-  // ---- Leave / cleanup ----
-  const leave = useCallback(async () => {
-    try {
-      if (viewerSessionRef.current) {
-        await roomsApi.leaveViewer(room!.id).catch(() => {});
-      }
-      if (speakerPublishing) {
-        await roomsApi.unpublishGuest(room!.id).catch(() => {});
-      }
-      if (isHost && room?.status === 'live') {
-        await roomsApi.end(room.id).catch(() => {});
-      }
-    } finally {
-      closeViewerPeer();
-      closeGuestPeer();
-      closeHostPeer();
-      closeHostSubscriptions();
-      stopLocalMedia();
-      setHostPublishing(false);
-      setHostMediaReady(false);
-      setViewerConnected(false);
-    }
-  }, [
-    room,
-    isHost,
-    speakerPublishing,
-    closeViewerPeer,
-    closeGuestPeer,
-    closeHostPeer,
-    closeHostSubscriptions,
-    stopLocalMedia,
-  ]);
+  // ---------------------------------------------------------------------------
+  // HEARTBEAT
+  //
+  // One stable heartbeat loop instead of three React effects whose
+  // dependencies change whenever media state changes.
+  // ---------------------------------------------------------------------------
 
-  // ---- Cleanup on unmount ----
   useEffect(() => {
-    return () => {
-      closeViewerPeer();
-      closeGuestPeer();
-      closeHostPeer();
-      closeHostSubscriptions();
-      stopLocalMedia();
-    };
-  }, [closeViewerPeer, closeGuestPeer, closeHostPeer, closeHostSubscriptions, stopLocalMedia]);
+    if (!room) {
+      return;
+    }
 
-  // ---- Expose methods and state ----
+    const roomId = room.id;
+
+    const heartbeat = () => {
+      if (isHost) {
+        const session =
+          hostSessionRef.current;
+
+        if (session) {
+          void roomsApi.heartbeat(
+            roomId,
+            {
+              role: "host",
+              sessionId:
+                session.sessionId,
+              generation:
+                session.generation,
+            },
+          ).catch(() => {});
+        }
+
+        return;
+      }
+
+      const viewerSession =
+        viewerSessionRef.current;
+
+      if (viewerSession) {
+        void roomsApi.heartbeat(
+          roomId,
+          {
+            role: "viewer",
+            sessionId:
+              viewerSession.sessionId,
+            generation:
+              viewerSession.generation,
+          },
+        ).catch(() => {});
+      }
+
+      const speakerSession =
+        guestSessionRef.current;
+
+      if (speakerSession) {
+        void roomsApi.heartbeat(
+          roomId,
+          {
+            role: "speaker",
+            sessionId:
+              speakerSession.sessionId,
+            generation:
+              speakerSession.generation,
+          },
+        ).catch(() => {});
+      }
+    };
+
+    const timer = window.setInterval(
+      heartbeat,
+      HEARTBEAT_MS,
+    );
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [
+    isHost,
+    room?.id,
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // START HOST
+  // ---------------------------------------------------------------------------
+
   const startHost = useCallback(
     async (currentRoom: RoomRecord) => {
-      setMediaError('');
-      setHostMediaReady(false);
+      setMediaError("");
       setHostPublishing(false);
+      setHostMediaReady(false);
 
-      let roomStartedByThisCall = false;
+      let startedRoom = false;
 
       try {
-        // The host preview may already have acquired the camera/mic while
-        // the room is still in the `created` state. Reuse that stream.
         await ensureLocalPreview();
 
-        // IMPORTANT: publishing media is not what makes the room live.
-        // The database room lifecycle must be advanced first so the media
-        // endpoints (and speaker-request polling) are allowed to proceed.
         const liveRoom =
-          currentRoom.status === 'created'
-            ? await roomsApi.start(currentRoom.id)
+          currentRoom.status === "created"
+            ? await roomsApi.start(
+                currentRoom.id,
+              )
             : currentRoom;
 
-        roomStartedByThisCall = currentRoom.status === 'created';
+        startedRoom =
+          currentRoom.status === "created";
 
-        await publishHostMedia(liveRoom);
-      } catch (e) {
-        // If we successfully transitioned the room to live but media setup
-        // failed, don't leave a ghost live room behind.
-        if (roomStartedByThisCall) {
-          await roomsApi.end(currentRoom.id).catch(() => {});
+        await publishHostMedia(
+          liveRoom,
+        );
+      } catch (error) {
+        if (startedRoom) {
+          await roomsApi
+            .end(currentRoom.id)
+            .catch(() => {});
         }
 
         closeHostPeer();
         stopLocalMedia();
-        setHostMediaReady(false);
-        setHostPublishing(false);
-        setMediaError(e instanceof Error ? e.message : 'Start failed');
-        throw e;
+
+        if (mountedRef.current) {
+          setHostPublishing(false);
+          setHostMediaReady(false);
+          setMediaError(
+            error instanceof Error
+              ? error.message
+              : "Start failed.",
+          );
+        }
+
+        throw error;
       }
     },
     [
+      closeHostPeer,
       ensureLocalPreview,
       publishHostMedia,
-      closeHostPeer,
       stopLocalMedia,
     ],
   );
 
+  // ---------------------------------------------------------------------------
+  // JOIN VIEWER
+  // ---------------------------------------------------------------------------
+
   const joinViewer = useCallback(
     async (currentRoom: RoomRecord) => {
-      setMediaError('');
+      setMediaError("");
+
       try {
-        await connectViewer(currentRoom);
-      } catch (e) {
-        setMediaError(e instanceof Error ? e.message : 'Join failed');
-        throw e;
+        await connectViewer(
+          currentRoom,
+        );
+      } catch (error) {
+        if (mountedRef.current) {
+          setMediaError(
+            error instanceof Error
+              ? error.message
+              : "Join failed.",
+          );
+        }
+
+        throw error;
       }
     },
     [connectViewer],
   );
 
+  // ---------------------------------------------------------------------------
+  // LEAVE
+  // ---------------------------------------------------------------------------
+
+  const leave = useCallback(async () => {
+    /**
+     * Invalidate every outstanding async operation.
+     */
+    lifecycleGenerationRef.current += 1;
+
+    const currentRoom = room;
+    const currentIsHost = isHost;
+
+    try {
+      if (viewerSessionRef.current && currentRoom) {
+        await roomsApi
+          .leaveViewer(currentRoom.id)
+          .catch(() => {});
+      }
+
+      if (
+        guestSessionRef.current &&
+        currentRoom
+      ) {
+        await roomsApi
+          .unpublishGuest(
+            currentRoom.id,
+          )
+          .catch(() => {});
+      }
+
+      if (
+        currentIsHost &&
+        currentRoom &&
+        currentRoom.status === "live"
+      ) {
+        await roomsApi
+          .end(currentRoom.id)
+          .catch(() => {});
+      }
+    } finally {
+      closeViewerPeer();
+      closeGuestPeer();
+      closeHostPeer();
+      stopLocalMedia();
+
+      if (mountedRef.current) {
+        setHostPublishing(false);
+        setHostMediaReady(false);
+        setViewerConnected(false);
+        setSpeakerPublishing(false);
+        setMediaState(null);
+        setMediaError("");
+      }
+    }
+  }, [
+    closeGuestPeer,
+    closeHostPeer,
+    closeViewerPeer,
+    isHost,
+    room,
+    stopLocalMedia,
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // ROOM / USER CHANGE
+  //
+  // A PeerConnection belongs to a specific room/user lifecycle.
+  // Do not carry it into another room.
+  // ---------------------------------------------------------------------------
+
+  const previousRoomIdRef =
+    useRef<string | null>(null);
+
+  useEffect(() => {
+    const currentRoomId =
+      room?.id ?? null;
+
+    if (
+      previousRoomIdRef.current !== null &&
+      previousRoomIdRef.current !==
+        currentRoomId
+    ) {
+      lifecycleGenerationRef.current += 1;
+
+      closeViewerPeer();
+      closeGuestPeer();
+      closeHostPeer();
+
+      mediaStateRef.current = null;
+      setMediaState(null);
+    }
+
+    previousRoomIdRef.current =
+      currentRoomId;
+  }, [
+    closeGuestPeer,
+    closeHostPeer,
+    closeViewerPeer,
+    room?.id,
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // UNMOUNT
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+
+      lifecycleGenerationRef.current += 1;
+
+      safeClosePeer(
+        hostPeerRef.current,
+      );
+      safeClosePeer(
+        viewerPeerRef.current,
+      );
+      safeClosePeer(
+        guestPeerRef.current,
+      );
+
+      hostPeerRef.current = null;
+      viewerPeerRef.current = null;
+      guestPeerRef.current = null;
+
+      const streams = [
+        localStreamRef.current,
+        guestStreamRef.current,
+      ];
+
+      for (const stream of streams) {
+        if (!stream) continue;
+
+        for (const track of stream.getTracks()) {
+          try {
+            track.stop();
+          } catch {
+            // Already stopped.
+          }
+        }
+      }
+
+      localStreamRef.current = null;
+      guestStreamRef.current = null;
+      remoteStreamRef.current = null;
+
+      hostSessionRef.current = null;
+      viewerSessionRef.current = null;
+      guestSessionRef.current = null;
+
+      hostSpeakerIdsRef.current.clear();
+      viewerSpeakerIdsRef.current.clear();
+    };
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // PUBLIC API
+  // ---------------------------------------------------------------------------
+
   return {
-    // state
     hostPublishing,
     hostMediaReady,
     viewerConnected,
     speakerPublishing,
     mediaError,
     mediaState,
-    localStream, 
+    localStream,
+
     localStreamRef,
     remoteStreamRef,
+
     startHost,
     joinViewer,
     leave,
-    publishGuestAudio
+    publishGuestAudio,
   };
 }
