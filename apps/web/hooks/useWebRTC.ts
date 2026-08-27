@@ -24,6 +24,7 @@ export function useWebRTC(
   const [speakerPublishing, setSpeakerPublishing] = useState(false);
   const [mediaError, setMediaError] = useState('');
   const [mediaState, setMediaState] = useState<RoomMediaState | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null); 
 
   // ---- Refs for peers and streams ----
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -41,10 +42,11 @@ export function useWebRTC(
   const mediaSyncBusyRef = useRef(false);
 
   // ---- Helper: stop local media ----
-  const stopLocalMedia = useCallback(() => {
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    localStreamRef.current = null;
-  }, []);
+const stopLocalMedia = useCallback(() => {
+  localStreamRef.current?.getTracks().forEach((t) => t.stop());
+  localStreamRef.current = null;
+  setLocalStream(null);
+}, []);
 
   // ---- Helper: close peer connections ----
   const closeHostPeer = useCallback(() => {
@@ -74,21 +76,23 @@ export function useWebRTC(
   }, []);
 
   // ---- Ensure local preview ----
-  const ensureLocalPreview = useCallback(async () => {
-    if (localStreamRef.current) return localStreamRef.current;
+ const ensureLocalPreview = useCallback(async () => {
+  if (localStreamRef.current) return localStreamRef.current;
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: {
-        facingMode: 'user',
-        width: { ideal: 1080 },
-        height: { ideal: 1920 },
-      },
-    });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: true,
+    video: {
+      facingMode: 'user',
+      width: { ideal: 1080 },
+      height: { ideal: 1920 },
+    },
+  });
 
-    localStreamRef.current = stream;
-    return stream;
-  }, []);
+  localStreamRef.current = stream;
+  setLocalStream(stream); // NEW — triggers a re-render the moment the camera turns on,
+                           // instead of waiting for negotiation to finish
+  return stream;
+}, []);
 
   // ---- Host publish media ----
   const publishHostMedia = useCallback(
@@ -737,10 +741,9 @@ export function useWebRTC(
     speakerPublishing,
     mediaError,
     mediaState,
-    // refs
+    localStream, 
     localStreamRef,
     remoteStreamRef,
-    // actions
     startHost,
     joinViewer,
     leave,
