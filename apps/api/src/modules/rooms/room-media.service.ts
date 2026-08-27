@@ -554,15 +554,33 @@ async subscribeHostToGuests(
 
     /*
      * The viewer is only allowed to publish after the host has
-     * accepted the audio-seat request. Approval creates the Redis
-     * speaker reservation before this method is called.
+     * accepted the audio-seat request. Approval reserves this user's
+     * slot in `roomState` (room:{roomId}:speakers) BEFORE this method
+     * is ever called — see room-request.service.ts respondToRequest /
+     * acceptHostInvitation.
      *
-     * Most importantly, the first and second browser negotiations
-     * MUST use the same Cloudflare session. Creating a new session
-     * for the second offer breaks the browser's ICE/DTLS state and
-     * leaves the accepted speaker apparently stuck in the room UI.
+     * That reservation, not the Cloudflare-side `mediaService` speaker
+     * hash, is the actual source of truth for "is this caller allowed
+     * to occupy a guest audio slot". The two trackers are independent:
+     * mediaService only reflects who has *actually started* a publish
+     * session. Without this check, any authenticated participant could
+     * call this endpoint directly and consume a guest slot before the
+     * genuinely-approved user's client gets to it — filling
+     * max_guest_slots with unapproved callers and leaving the approved
+     * user permanently stuck at "409 all guest slots full" even though
+     * the host approved them and their room_participants.role is
+     * already "speaker". That mismatch is exactly the "approved +
+     * slot granted, but audio never comes up" symptom.
      */
     if (!existingSpeaker) {
+      const isApprovedSpeaker = await roomState.isSpeaker(roomId, userId);
+
+      if (!isApprovedSpeaker) {
+        throw new AppError(403, "You have not been approved to speak", {
+          code: "ROOM_SPEAKER_NOT_APPROVED",
+        });
+      }
+
       const currentGuestCount = Object.keys(state.speakers).length;
 
       if (currentGuestCount >= Math.min(room.max_guest_slots ?? 3, 3)) {

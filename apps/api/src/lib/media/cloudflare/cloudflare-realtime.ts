@@ -524,20 +524,6 @@ export class CloudflareRealtimeProvider
         },
       );
 
-    // --- ADDED LOGGING TO DIAGNOSE MISSING SDP ---
-    console.log(
-      "[cloudflare-realtime] TRACKS/NEW RESPONSE (subscribe)",
-      {
-        sessionId: input.sessionId,
-        hasSessionDescription: !!response.sessionDescription,
-        responseType: response.sessionDescription?.type,
-        sdpLength: response.sessionDescription?.sdp?.length || 0,
-        tracksCount: response.tracks?.length || 0,
-        requiresImmediateRenegotiation: response.requiresImmediateRenegotiation,
-      },
-    );
-    // --------------------------------------------
-
     return {
       answerSdp:
         response.sessionDescription
