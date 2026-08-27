@@ -40,6 +40,13 @@ export function useWebRTC(
 
   // ---- Locks to prevent overlapping negotiations ----
   const mediaSyncBusyRef = useRef(false);
+  // Tracks whether THIS client has already published (or is publishing)
+  // guest audio for the current speaker-accepted window. Checked instead of
+  // the `speakerPublishing` state inside the poll loop, because state
+  // updates are batched/async and can still read stale inside an
+  // already-in-flight poll tick even after mediaSyncBusyRef correctly
+  // serializes the ticks themselves.
+  const guestPublishedRef = useRef(false);
   /*
    * publishGuestAudio() is triggered from two independent places
    * (the viewerRequestAccepted effect in page.tsx, and the
@@ -764,51 +771,56 @@ const stopLocalMedia = useCallback(() => {
     let interval: NodeJS.Timeout | null = null;
 
     const poll = async () => {
+      // Reserve the slot synchronously, before any await, so that no other
+      // overlapping tick (fired by setInterval while this one is still
+      // running) can slip through the gap between this tick's own await
+      // boundaries. This is checked-and-set in a single synchronous step.
+      if (mediaSyncBusyRef.current) return;
+      mediaSyncBusyRef.current = true;
+
       try {
         const state = await roomsApi.getMediaState(room.id);
         if (!active) return;
         setMediaState(state);
 
         // Host sync
-        if (isHost && !mediaSyncBusyRef.current) {
-          mediaSyncBusyRef.current = true;
+        if (isHost) {
           try {
             await syncHostGuestAudio(state);
           } catch (e) {
             console.error('Host guest audio sync failed', e);
-          } finally {
-            mediaSyncBusyRef.current = false;
           }
         }
 
-        // Guest auto-publish if accepted
-        if (!isHost && state.speakers[userId ?? '']) {
-          if (!speakerPublishing && !mediaSyncBusyRef.current) {
-            mediaSyncBusyRef.current = true;
-            console.log('[GUEST-DEBUG] poll-loop triggering publishGuestAudio', {
-              speakerEntry: state.speakers[userId ?? ''],
-            });
-            try {
-              await publishGuestAudio();
-            } catch (e) {
-              console.error('[GUEST-DEBUG] poll-loop publishGuestAudio failed', e);
-              setMediaError(e instanceof Error ? e.message : 'Microphone could not be connected.');
-              closeGuestPeer();
-            } finally {
-              mediaSyncBusyRef.current = false;
-            }
+        // Guest auto-publish if accepted.
+        // Use the ref, not the `speakerPublishing` state, to decide whether
+        // a publish is already live — state updates are batched/async and
+        // can still read stale here even though this closure already holds
+        // the busy reservation.
+        if (!isHost && state.speakers[userId ?? ''] && !guestPublishedRef.current) {
+          console.log('[GUEST-DEBUG] poll-loop triggering publishGuestAudio', {
+            speakerEntry: state.speakers[userId ?? ''],
+          });
+          try {
+            await publishGuestAudio();
+            guestPublishedRef.current = true;
+          } catch (e) {
+            console.error('[GUEST-DEBUG] poll-loop publishGuestAudio failed', e);
+            setMediaError(e instanceof Error ? e.message : 'Microphone could not be connected.');
+            closeGuestPeer();
+            guestPublishedRef.current = false; // allow the next tick to retry
           }
+        }
+        if (!isHost && !state.speakers[userId ?? '']) {
+          guestPublishedRef.current = false;
         }
 
         // Viewer speaker sync
-        if (!isHost && viewerConnected && !mediaSyncBusyRef.current) {
-          mediaSyncBusyRef.current = true;
+        if (!isHost && viewerConnected) {
           try {
             await syncViewerSpeakerAudio(state);
           } catch (e) {
             console.error('Viewer speaker sync failed', e);
-          } finally {
-            mediaSyncBusyRef.current = false;
           }
         }
 
@@ -819,6 +831,8 @@ const stopLocalMedia = useCallback(() => {
         }
       } catch {
         // ignore polling errors
+      } finally {
+        mediaSyncBusyRef.current = false;
       }
     };
 
@@ -862,6 +876,7 @@ const stopLocalMedia = useCallback(() => {
       setHostPublishing(false);
       setHostMediaReady(false);
       setViewerConnected(false);
+      guestPublishedRef.current = false;
     }
   }, [
     room,
