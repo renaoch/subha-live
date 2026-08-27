@@ -20,9 +20,39 @@ const commandAliases: Record<string, string> = {
   zAdd: "zAdd", zRem: "zRem", zRange: "zRange", zScore: "zScore",
 };
 
-export const redis: any = new Proxy(client as any, {
+// Lowercase-to-camelCase aliases for chained pipeline/multi commands.
+// node-redis's multi() chain only exposes camelCase methods (zAdd, hSet,
+// sAdd...) while Upstash's pipeline() already uses lowercase — this lets
+// call sites always use lowercase and work on either backend.
+const chainAliases: Record<string, string> = {
+  hset: "hSet", hget: "hGet", hdel: "hDel", hkeys: "hKeys", hincrby: "hIncrBy", hgetall: "hGetAll",
+  sadd: "sAdd", srem: "sRem", smembers: "sMembers", scard: "sCard", sismember: "sIsMember",
+  zadd: "zAdd", zrem: "zRem", zrange: "zRange", zscore: "zScore",
+};
+function wrapPipeline(pipeline: any): any {
+  const proxy: any = new Proxy(pipeline, {
+    get(target, property: string) {
+      const command = redisUrl ? (chainAliases[property] ?? property) : property;
+      const value = target[command];
+      if (typeof value !== "function") return value;
+      return (...args: any[]) => {
+        const result = value.apply(target, args);
+        // node-redis's multi commands return `this` for chaining (e.g.
+        // multi.hSet(...).expire(...)) — re-wrap so chained calls also
+        // get case-normalized instead of falling back to the raw object.
+        return result === target ? proxy : result;
+      };
+    },
+  });
+  return proxy;
+}
+eexport const redis: any = new Proxy(client as any, {
   get(target, property: string) {
-    const command = property === "pipeline" && redisUrl ? "multi" : commandAliases[property] ?? property;
+    if (property === "pipeline") {
+      const command = redisUrl ? "multi" : "pipeline";
+      return () => wrapPipeline((target as any)[command].call(target));
+    }
+    const command = commandAliases[property] ?? property;
     const value = target[command];
     if (typeof value !== "function") return value;
     return (...args: any[]) => value.apply(target, args);
