@@ -34,6 +34,9 @@ export function useWebRTC(room: RoomRecord | null, userId: string | null) {
 
   // ---- Locks to prevent overlapping negotiations ----
   const mediaSyncBusyRef = useRef(false);
+  const hostStartBusyRef = useRef(false);
+  const viewerJoinBusyRef = useRef(false);
+  const guestPublishBusyRef = useRef(false);
 
   // ---- Helper: stop local media ----
   const stopLocalMedia = useCallback(() => {
@@ -255,13 +258,20 @@ export function useWebRTC(room: RoomRecord | null, userId: string | null) {
 
   // ---- Guest publish audio ----
   const publishGuestAudio = useCallback(async () => {
-    if (!room || isHost || speakerPublishing) return;
+    if (!room || isHost || speakerPublishing || guestPublishBusyRef.current || guestPeerRef.current) return;
+    guestPublishBusyRef.current = true;
 
     setMediaError('');
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      video: false,
-    });
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+    } catch (error) {
+      guestPublishBusyRef.current = false;
+      throw error;
+    }
     guestStreamRef.current = stream;
 
     const peer = new RTCPeerConnection({
@@ -318,7 +328,8 @@ export function useWebRTC(room: RoomRecord | null, userId: string | null) {
     };
 
     setSpeakerPublishing(true);
-  }, [room, isHost, userId, speakerPublishing]);
+    guestPublishBusyRef.current = false;
+  }, [room, isHost, userId, speakerPublishing, closeGuestPeer]);
 
   // ---- Sync host guest audio ----
   const syncHostGuestAudio = useCallback(
@@ -641,14 +652,20 @@ export function useWebRTC(room: RoomRecord | null, userId: string | null) {
   // ---- Expose methods and state ----
   const startHost = useCallback(
     async (currentRoom: RoomRecord) => {
+      if (hostStartBusyRef.current || hostPeerRef.current) return;
+      hostStartBusyRef.current = true;
       setMediaError('');
       setHostMediaReady(false);
       setHostPublishing(false);
       try {
         await publishHostMedia(currentRoom);
       } catch (e) {
+        closeHostPeer();
+        stopLocalMedia();
         setMediaError(e instanceof Error ? e.message : 'Start failed');
         throw e;
+      } finally {
+        hostStartBusyRef.current = false;
       }
     },
     [publishHostMedia],
@@ -656,12 +673,18 @@ export function useWebRTC(room: RoomRecord | null, userId: string | null) {
 
   const joinViewer = useCallback(
     async (currentRoom: RoomRecord) => {
+      if (viewerJoinBusyRef.current || viewerPeerRef.current) return;
+      viewerJoinBusyRef.current = true;
       setMediaError('');
       try {
+        await roomsApi.join(currentRoom.id);
         await connectViewer(currentRoom);
       } catch (e) {
+        closeViewerPeer();
         setMediaError(e instanceof Error ? e.message : 'Join failed');
         throw e;
+      } finally {
+        viewerJoinBusyRef.current = false;
       }
     },
     [connectViewer],

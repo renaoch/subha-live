@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useEffect, useMemo, useCallback } from 'react';
+import { use, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader2, Headphones, Mic, MicOff } from 'lucide-react';
@@ -77,6 +77,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const [speakerPanelOpen, setSpeakerPanelOpen] = useState(false);
   const [guestMicEnabled, setGuestMicEnabled] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const joinAttemptedRef = useRef(false);
 
   // ---- Handlers ----
   const handleStart = useCallback(async () => {
@@ -94,7 +95,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   }, [room, startHost, refetch]);
 
   const handleJoin = useCallback(async () => {
-    if (!room) return;
+    if (!room || actionLoading) return;
     setActionLoading(true);
     try {
       await joinViewer(room);
@@ -127,8 +128,15 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
   // ---- Auto-join for viewers ----
   useEffect(() => {
-    if (!room || isHost || room.status !== 'live') return;
-    handleJoin();
+    joinAttemptedRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    if (!room || isHost || room.status !== 'live' || joinAttemptedRef.current) return;
+    joinAttemptedRef.current = true;
+    handleJoin().catch(() => {
+      joinAttemptedRef.current = false;
+    });
   }, [room?.id, room?.status, isHost, handleJoin]);
 
   // ---- Auto-leave when room ends ----
