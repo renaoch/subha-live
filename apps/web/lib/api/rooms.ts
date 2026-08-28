@@ -12,6 +12,15 @@ export interface RoomHost {
   handle: string;
   avatar: string | null;
   country_flag: string | null;
+  /**
+   * Same role values used on PublicProfile/PrivateProfile:
+   *   user | agency_owner | agency_agent | agency_admin | agency_host
+   */
+  role?: string | null;
+  is_verified?: boolean;
+  /** Platform admin / engineer — separate from agency ownership. */
+  is_admin?: boolean;
+  level?: number;
 }
 
 export interface RoomRecord {

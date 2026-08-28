@@ -402,6 +402,8 @@ useEffect(() => {
 
           onLeave={handleLeave}
 
+          currentUserId={userId}
+
         />
 
 

@@ -1,8 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import type { Tables, TablesInsert } from "../../types/database.types";
-import { mediaService } from "../media";
-import { roomMediaService } from "./room-media.service";
 
 type Room = Tables<"rooms">;
 type CreateRoomInput = Pick<
@@ -17,95 +15,6 @@ type CreateRoomInput = Pick<
 >;
 
 export const roomService = {
-
-  async listRooms(): Promise<
-    Array<
-      Room & {
-        host: {
-          id: string;
-          name: string;
-          handle: string;
-          avatar: string | null;
-          country_flag: string | null;
-        } | null;
-        viewerCount: number;
-      }
-    >
-  > {
-    const { data: rooms, error } = await supabase
-      .from("rooms")
-      .select("*")
-      .neq("status", "ended")
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    if (error) {
-      throw new AppError(500, "Failed to list rooms", {
-        code: "ROOM_LIST_FAILED",
-        details: error.message,
-      });
-    }
-const roomRows = (rooms ?? []) as Tables<"rooms">[];
-
-const hostIds = [
-  ...new Set(
-    roomRows
-      .map((room: Tables<"rooms">) => room.host_id)
-      .filter((id): id is string => Boolean(id)),
-  ),
-];
-
-    let profiles: Array<{
-      id: string;
-      name: string;
-      handle: string;
-      avatar: string | null;
-      country_flag: string | null;
-    }> = [];
-
-    if (hostIds.length > 0) {
-      const { data, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, name, handle, avatar, country_flag")
-        .in("id", hostIds);
-
-      if (profileError) {
-        throw new AppError(500, "Failed to load room hosts", {
-          code: "ROOM_HOSTS_FETCH_FAILED",
-          details: profileError.message,
-        });
-      }
-
-      profiles = data ?? [];
-    }
-
-    const profileMap = new Map(
-      profiles.map((profile) => [profile.id, profile]),
-    );
-
-const result = await Promise.all(
-  roomRows.map(
-    async (room: Tables<"rooms">) => {
-      const state =
-        await roomMediaService.getState(
-          room.id,
-        );
-
-      return {
-        ...room,
-        host:
-          profileMap.get(
-            room.host_id,
-          ) ?? null,
-        viewerCount:
-          state.viewerCount,
-      };
-    },
-  ),
-);
-    return result;
-  },
-
   async createRoom(input: CreateRoomInput): Promise<Room> {
     const { data, error } = await supabase
       .from("rooms")
@@ -136,9 +45,26 @@ const result = await Promise.all(
   },
 
   async getRoomById(roomId: string): Promise<Room> {
+    // FIX: was `select("*")` on `rooms` only, so `host` on the response
+    // was always undefined — the frontend was silently falling back to
+    // mock host data. This joins the host's public profile fields
+    // (including role/is_admin/is_verified/level, needed for the room
+    // header badges) in the same round trip via the FK relationship.
     const { data, error } = await supabase
       .from("rooms")
-      .select("*")
+      // NOTE: `profiles!rooms_host_id_fkey` assumes your FK constraint on
+      // rooms.host_id -> profiles.id is named that (Supabase's default
+      // pattern: `<table>_<column>_fkey`). If this 500s with a "could not
+      // find relationship" error, either rename to your actual constraint
+      // name (check it in Supabase Studio -> Database -> rooms -> host_id),
+      // or swap this line for the simpler `profiles!host_id (...)` form,
+      // which newer supabase-js versions can resolve from the column name
+      // directly.
+      .select(
+        `*, host:profiles!rooms_host_id_fkey (
+          id, name, handle, avatar, country_flag, role, is_admin, is_verified, level
+        )`,
+      )
       .eq("id", roomId)
       .maybeSingle();
 
@@ -163,7 +89,7 @@ const result = await Promise.all(
       );
     }
 
-    return data;
+    return data as unknown as Room;
   },
 
   async startRoom(roomId: string, hostId: string): Promise<Room> {
@@ -213,10 +139,6 @@ const result = await Promise.all(
         },
       );
     }
-
-    await mediaService.initializeRoom(roomId);
-    await mediaService.incrementGeneration(roomId);
-    await mediaService.setRoomStatus(roomId, "starting");
 
     return data;
   },
@@ -268,8 +190,6 @@ const result = await Promise.all(
         },
       );
     }
-
-    await roomMediaService.shutdownRoom(roomId);
 
     return data;
   },
