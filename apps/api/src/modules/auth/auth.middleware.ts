@@ -31,6 +31,8 @@ if (!process.env.SUPABASE_JWT_SECRET) {
   );
 }
 
+// Re-assigned to a `string`-typed const so TypeScript doesn't lose the
+// above null-check when this is read later inside authMiddleware().
 const SUPABASE_JWT_SECRET: string = process.env.SUPABASE_JWT_SECRET;
 
 interface SupabaseJwtPayload {
