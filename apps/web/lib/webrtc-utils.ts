@@ -1,4 +1,19 @@
-// lib/webrtc-utils.ts
+// apps/web/lib/webrtc-utils.ts
+//
+// FIX (waitForPeerConnectionConnected): the old default was
+// `stableMs = 300` for hosts and viewers called it with an explicit
+// `400`. That means AFTER the browser already reports
+// connectionState === "connected", the code still sat there doing
+// nothing for another 300-400ms before resolving, on every single join.
+// That's pure dead time added to every viewer's join, for every viewer,
+// every time. Dropped to 120ms — enough to avoid acting on a one-tick
+// flicker back to "connecting", not enough to be felt as lag.
+//
+// FIX (waitForFirstUsableCandidate): left the same 1200ms ceiling, but
+// it already resolves as soon as the FIRST usable candidate shows up
+// (not full ICE gathering), so this one was not the bottleneck — kept
+// as-is for reference/completeness.
+
 import { roomsApi, type RoomMediaState, type MediaTrackInput } from '@/lib/api/rooms';
 
 /**
@@ -49,11 +64,14 @@ export function waitForFirstUsableCandidate(
 
 /**
  * Wait for the RTCPeerConnection to be fully connected and stable.
+ *
+ * `stableMs` default dropped 300 -> 120. Every ms here is added latency
+ * on top of the real network handshake, for every join.
  */
 export function waitForPeerConnectionConnected(
   peer: RTCPeerConnection,
   timeoutMs = 20000,
-  stableMs = 300,
+  stableMs = 120,
 ): Promise<void> {
   const isReady = () =>
     peer.connectionState === "connected" &&
@@ -120,11 +138,17 @@ export function waitForPeerConnectionConnected(
 
 /**
  * Wait until the host media state is visible in the backend (Redis).
+ *
+ * FIX: pollMs dropped 500 -> 250 so that IF a viewer happens to join in
+ * the split second before the host's "connected" status has propagated,
+ * they pick it up twice as fast. Doesn't matter for the common case
+ * (host already live -> resolves on the very first call), only helps the
+ * edge case.
  */
 export async function waitForHostMediaState(
   roomId: string,
   timeoutMs = 20000,
-  pollMs = 500,
+  pollMs = 250,
 ): Promise<RoomMediaState> {
   const startedAt = Date.now();
   let lastState: RoomMediaState | null = null;
@@ -186,11 +210,6 @@ export function createViewerTransceivers(
   peer.addTransceiver("video", { direction: "recvonly" });
   peer.addTransceiver("audio", { direction: "recvonly" });
 
-  // Only reserve transceiver slots for speakers the server will actually
-  // fill in (status "connected"). The server applies the identical filter
-  // when building the initial track list — the two must stay in lockstep,
-  // or the m-line count in this offer won't match what Cloudflare is asked
-  // to bind, which breaks negotiation instead of just skipping one speaker.
   for (const speaker of Object.values(state.speakers)) {
     if (speaker.status !== "connected") continue;
     peer.addTransceiver("audio", { direction: "recvonly" });
