@@ -158,134 +158,113 @@ export const roomMediaService = {
       await mediaService.getProvider();
 
     /*
-     * Cloudflare's current Connection API uses two API calls
-     * for a normal media negotiation:
+     * SINGLE-PHASE PUBLISH — matches the browser exactly.
      *
-     *   1. POST /sessions/new
-     *      Creates the Cloudflare session. No SDP is sent here.
+     * publishHostMedia() on the client builds ONE RTCPeerConnection,
+     * creates exactly ONE SDP offer (with mids already assigned via
+     * addTransceiver + setLocalDescription), and makes exactly ONE call
+     * to this endpoint. It never performs a second negotiation round
+     * against the same PeerConnection.
      *
-     *   2. POST /sessions/:sessionId/tracks/new
-     *      Sends the browser-generated SDP offer and the local
-     *      tracks. Cloudflare returns the SDP answer.
+     * This used to be split into two separate phases that each required
+     * their own client round trip (create the Cloudflare session with
+     * /sessions/new, wait for the client to reconnect and call again,
+     * THEN publish tracks via /tracks/new). Because the client only ever
+     * calls this endpoint once, that second phase never ran: the host's
+     * session stayed stuck in "connecting" forever, tracks were never
+     * registered with Cloudflare, and every viewer's
+     * waitForHostMediaState() poll timed out with
+     * "Host is still connecting. Try again."
      *
-     * The browser then applies that answer to the same
-     * RTCPeerConnection and completes ICE/DTLS.
-     *
-     * Do NOT send sessionDescription to /sessions/new.
-     * Cloudflare rejects that request with HTTP 400.
+     * The fix is to do both Cloudflare calls (create session, then
+     * publish tracks against that session) inside this ONE request,
+     * exactly like publishGuest() already does for speakers below.
      */
     let session: MediaSession | null = null;
+    let createdNewSession = false;
 
-try {
-  const existingHost = state.host;
+    try {
+      const existingHost = state.host;
 
-  const hasConnectingSession =
-    existingHost &&
-    existingHost.status === "connecting" &&
-    existingHost.userId === userId;
+      const hasReusableSession =
+        existingHost &&
+        existingHost.userId === userId &&
+        (existingHost.status === "connecting" ||
+          existingHost.status === "connected" ||
+          existingHost.status === "reconnecting");
 
-  if (!hasConnectingSession) {
-    /*
-     * FIRST call: create the Cloudflare session only.
-     * Do NOT publish tracks yet — the browser must apply
-     * this answer and reach PeerConnection "connected"
-     * before Cloudflare will accept /tracks/new.
-     */
-    const sessionResult =
-      await provider.createSession({
-        roomId,
-        userId,
-        role: "host",
-        generation,
+      if (!hasReusableSession) {
+        const sessionResult = await provider.createSessionOnly({
+          roomId,
+          userId,
+          role: "host",
+          generation,
+        });
+
+        session = sessionResult.session;
+        createdNewSession = true;
+
+        await mediaService.saveHostSession(
+          session,
+          videoTrack.trackName,
+          audioTrack.trackName,
+        );
+      } else {
+        session = {
+          sessionId: existingHost.sessionId,
+          roomId,
+          userId: existingHost.userId,
+          role: "host",
+          generation: existingHost.generation,
+          status: existingHost.status,
+          createdAt: existingHost.connectedAt,
+          lastHeartbeatAt: existingHost.lastHeartbeatAt,
+        };
+      }
+
+      const negotiation = await provider.publishTracks({
+        sessionId: session.sessionId,
         offerSdp,
+        tracks: [audioTrack, videoTrack],
       });
 
-    session = sessionResult.session;
+      if (!negotiation.answerSdp) {
+        throw new AppError(
+          502,
+          "Cloudflare did not return the host track negotiation answer",
+          { code: "MEDIA_TRACK_SDP_ANSWER_MISSING" },
+        );
+      }
 
-    await mediaService.saveHostSession(
-      session,
-      videoTrack.trackName,
-      audioTrack.trackName,
-    );
+      const connectedSession: MediaSession = {
+        ...session,
+        status: "connected",
+        lastHeartbeatAt: Date.now(),
+      };
 
-    return {
-      session,
-      answerSdp: sessionResult.sessionDescription?.sdp,
-      offerSdp: undefined,
-      tracks: [],
-      requiresRenegotiation: false,
-    };
-  }
+      await mediaService.saveHostSession(
+        connectedSession,
+        videoTrack.trackName,
+        audioTrack.trackName,
+      );
 
-  /*
-   * SECOND call: the PeerConnection is already connected.
-   * Reuse the existing session and publish tracks now.
-   */
-session = {
-  sessionId: existingHost.sessionId,
-  roomId,
-  userId: existingHost.userId,
-  role: "host",
-  generation: existingHost.generation,
-  status: existingHost.status,
-  createdAt: existingHost.connectedAt,
-  lastHeartbeatAt: existingHost.lastHeartbeatAt,
-};
+      await mediaService.setRoomStatus(roomId, "live");
 
-  const negotiation =
-    await provider.publishTracks({
-      sessionId: existingHost.sessionId,
-      offerSdp,
-      tracks: [audioTrack, videoTrack],
-    });
+      return {
+        session: connectedSession,
+        answerSdp: negotiation.answerSdp,
+        offerSdp: negotiation.offerSdp,
+        tracks: negotiation.tracks,
+        requiresRenegotiation: negotiation.requiresRenegotiation,
+      };
+    } catch (error) {
+      if (session && createdNewSession) {
+        await provider.closeSession(session.sessionId).catch(() => {});
+        await mediaService.removeHostSession(roomId).catch(() => {});
+      }
 
-  if (!negotiation.answerSdp) {
-    throw new AppError(
-      502,
-      "Cloudflare did not return the host track negotiation answer",
-      { code: "MEDIA_TRACK_SDP_ANSWER_MISSING" },
-    );
-  }
-
-const connectedSession: MediaSession = {
-  sessionId: existingHost.sessionId,
-  roomId,
-  userId: existingHost.userId,
-  role: "host",
-  generation: existingHost.generation,
-  status: "connected",
-  createdAt: existingHost.connectedAt,
-  lastHeartbeatAt: Date.now(),
-};
-
-  await mediaService.saveHostSession(
-    connectedSession,
-    videoTrack.trackName,
-    audioTrack.trackName,
-  );
-
-  await mediaService.setRoomStatus(roomId, "live");
-
-  return {
-    session: connectedSession,
-    answerSdp: negotiation.answerSdp,
-    offerSdp: negotiation.offerSdp,
-    tracks: negotiation.tracks,
-    requiresRenegotiation: negotiation.requiresRenegotiation,
-  };
-} catch (error) {
-  if (session) {
-    await provider
-      .closeSession(session.sessionId)
-      .catch(() => {});
-
-    await mediaService
-      .removeHostSession(roomId)
-      .catch(() => {});
-  }
-
-  throw error;
-}
+      throw error;
+    }
   },
 
 
