@@ -45,21 +45,10 @@ export const roomService = {
   },
 
   async getRoomById(roomId: string): Promise<Room> {
-    // FIX: was `select("*")` on `rooms` only, so `host` on the response
-    // was always undefined — the frontend was silently falling back to
-    // mock host data. This joins the host's public profile fields
-    // (including role/is_admin/is_verified/level, needed for the room
-    // header badges) in the same round trip via the FK relationship.
+    // Joins the host's public profile fields (role/is_admin/is_verified/level)
+    // in the same query, needed for the room header badges.
     const { data, error } = await supabase
       .from("rooms")
-      // NOTE: `profiles!rooms_host_id_fkey` assumes your FK constraint on
-      // rooms.host_id -> profiles.id is named that (Supabase's default
-      // pattern: `<table>_<column>_fkey`). If this 500s with a "could not
-      // find relationship" error, either rename to your actual constraint
-      // name (check it in Supabase Studio -> Database -> rooms -> host_id),
-      // or swap this line for the simpler `profiles!host_id (...)` form,
-      // which newer supabase-js versions can resolve from the column name
-      // directly.
       .select(
         `*, host:profiles!rooms_host_id_fkey (
           id, name, handle, avatar, country_flag, role, is_admin, is_verified, level
