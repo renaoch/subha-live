@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 
 import { toast } from 'sonner';
 
-import { Loader2, Headphones, Mic, MicOff } from 'lucide-react';
+import { Loader2, Mic, MicOff } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
 
@@ -31,6 +31,8 @@ import { BottomBar } from '@/components/BottomBar';
 import { HostControls } from '@/components/HostControls';
 
 import { AudioStageModal } from '@/components/AudioStageModal';
+
+import { SpeakerDock, type DockSpeaker } from '@/components/SpeakerDock';
 
 
 
@@ -102,6 +104,8 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
     mediaState,
 
+    speakingSpeakerIds,
+
     localStreamRef,
 
     remoteStreamRef,
@@ -158,6 +162,28 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
   const [guestMicEnabled, setGuestMicEnabled] = useState(true);
 
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Cache of userId -> {name, avatar} picked up from speaker requests, so
+  // approved speakers still show a real name/avatar (instead of "Guest N")
+  // once they leave the pending-requests list.
+  const [speakerProfiles, setSpeakerProfiles] = useState<
+    Record<string, { name: string; avatar: string | null }>
+  >({});
+
+  useEffect(() => {
+    if (requests.length === 0) return;
+    setSpeakerProfiles((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const r of requests) {
+        if (r.user && !next[r.user_id]) {
+          next[r.user_id] = { name: r.user.name, avatar: r.user.avatar };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [requests]);
 
 
 
@@ -285,6 +311,24 @@ useEffect(() => {
   const seatCount = room?.max_guest_slots ?? 3;
 
   const occupiedSeats = Math.min(activeSpeakers.length, seatCount);
+
+  const dockSpeakers: DockSpeaker[] = useMemo(
+    () =>
+      activeSpeakers.map((speaker, index) => {
+        const profile = speakerProfiles[speaker.userId];
+        return {
+          userId: speaker.userId,
+          name: profile?.name || `Guest ${index + 1}`,
+          avatar: profile?.avatar ?? undefined,
+          speaking: speakingSpeakerIds?.has(speaker.userId) ?? false,
+        };
+      }),
+    [activeSpeakers, speakerProfiles, speakingSpeakerIds],
+  );
+
+  // Only the host sees pending requests, so only the host gets the
+  // notification dot on the audio-stage button.
+  const pendingRequestCount = isHost ? requests.length : 0;
 
 
 
@@ -440,13 +484,15 @@ useEffect(() => {
 
           onClick={() => setSpeakerPanelOpen(true)}
 
-          aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} occupied`}
+          aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} occupied${
+            pendingRequestCount > 0 ? `, ${pendingRequestCount} pending requests` : ''
+          }`}
 
-          className="absolute right-[13px] top-1/2 z-40 flex h-[29px] w-[29px] -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/45 backdrop-blur-xl"
+          className="absolute right-[13px] top-1/2 z-40 flex h-[29px] w-[29px] -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/45 backdrop-blur-xl transition hover:bg-black/60 active:scale-95"
 
         >
 
-          <Headphones className="h-[13px] w-[13px]" strokeWidth={1.6} />
+          <Mic className="h-[13px] w-[13px]" strokeWidth={1.6} />
 
           {occupiedSeats > 0 && (
 
@@ -458,7 +504,25 @@ useEffect(() => {
 
           )}
 
+          {pendingRequestCount > 0 && (
+
+            <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-[#FF3B5C] ring-2 ring-black">
+
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF3B5C] opacity-75" />
+
+            </span>
+
+          )}
+
         </button>
+
+
+
+        {/* Always-visible speaker dock: shows connected speakers no matter
+
+            whether the audio-stage sheet is open or closed. */}
+
+        <SpeakerDock speakers={dockSpeakers} topOffset={100} />
 
 
 
@@ -635,6 +699,10 @@ useEffect(() => {
             requests={requests}
 
             speakers={activeSpeakers}
+
+            speakerProfiles={speakerProfiles}
+
+            speakingSpeakerIds={speakingSpeakerIds}
 
             seatCount={seatCount}
 

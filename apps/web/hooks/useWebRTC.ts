@@ -111,6 +111,108 @@ function playRemoteAudioTrack(
   track.addEventListener("ended", cleanup, { once: true });
 }
 
+/**
+ * Lightweight per-track speaking detector.
+ *
+ * Attaches a WebAudio AnalyserNode to a remote audio track (without
+ * affecting playback - this taps the track, it doesn't own it) and polls
+ * its volume. Calls `onChange(isSpeaking)` whenever the speaking state
+ * crosses the threshold, with a little hysteresis so it doesn't flicker.
+ *
+ * Cleans itself up automatically when the track ends.
+ */
+function attachSpeakingDetector(
+  track: MediaStreamTrack,
+  onChange: (speaking: boolean) => void,
+): () => void {
+  let stopped = false;
+  let raf = 0;
+  let ctx: AudioContext | null = null;
+
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+
+    if (!AudioCtx) return () => {};
+
+    ctx = new AudioCtx();
+    ctx.resume().catch(() => {});
+
+    const source = ctx.createMediaStreamSource(new MediaStream([track]));
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.6;
+    source.connect(analyser);
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let speaking = false;
+    let aboveSince = 0;
+    let belowSince = 0;
+
+    const SPEAK_ON = 0.035;
+    const SPEAK_OFF = 0.02;
+    const HOLD_MS = 120;
+
+    const tick = () => {
+      if (stopped) return;
+      analyser.getByteTimeDomainData(data);
+
+      let sumSquares = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128;
+        sumSquares += v * v;
+      }
+      const rms = Math.sqrt(sumSquares / data.length);
+      const now = performance.now();
+
+      if (rms > SPEAK_ON) {
+        if (!aboveSince) aboveSince = now;
+        belowSince = 0;
+        if (!speaking && now - aboveSince > HOLD_MS) {
+          speaking = true;
+          onChange(true);
+        }
+      } else if (rms < SPEAK_OFF) {
+        if (!belowSince) belowSince = now;
+        aboveSince = 0;
+        if (speaking && now - belowSince > HOLD_MS * 3) {
+          speaking = false;
+          onChange(false);
+        }
+      } else {
+        aboveSince = 0;
+        belowSince = 0;
+      }
+
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+
+    const cleanup = () => {
+      if (stopped) return;
+      stopped = true;
+      cancelAnimationFrame(raf);
+      try {
+        source.disconnect();
+        analyser.disconnect();
+      } catch {
+        // Already disconnected.
+      }
+      ctx?.close().catch(() => {});
+      if (speaking) onChange(false);
+    };
+
+    track.addEventListener("ended", cleanup, { once: true });
+
+    return cleanup;
+  } catch {
+    return () => {};
+  }
+}
+
 function removeRemoteAudioTrack(
   trackId: string,
   registry: Map<string, HTMLAudioElement>,
@@ -180,6 +282,23 @@ export function useWebRTC(
   const [mediaError, setMediaError] = useState("");
   const [mediaState, setMediaState] = useState<RoomMediaState | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [speakingSpeakerIds, setSpeakingSpeakerIds] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const markSpeaking = useCallback(
+    (speakerId: string, speaking: boolean) => {
+      setSpeakingSpeakerIds((prev) => {
+        const has = prev.has(speakerId);
+        if (speaking === has) return prev;
+        const next = new Set(prev);
+        if (speaking) next.add(speakerId);
+        else next.delete(speakerId);
+        return next;
+      });
+    },
+    [],
+  );
 
   // ---------------------------------------------------------------------------
   // Stable refs
@@ -220,6 +339,14 @@ export function useWebRTC(
    */
   const hostSpeakerIdsRef = useRef<Set<string>>(new Set());
   const viewerSpeakerIdsRef = useRef<Set<string>>(new Set());
+
+  // Ordered queues used to correlate an inbound recvonly audio track back to
+  // the speakerId it belongs to (WebRTC gives us a raw MediaStreamTrack on
+  // `ontrack`, not who it belongs to - but transceivers are added, and their
+  // tracks arrive, in the same order we requested them in).
+  const hostGuestTrackQueueRef = useRef<string[]>([]);
+  const viewerSpeakerTrackQueueRef = useRef<string[]>([]);
+  const viewerHostAudioSeenRef = useRef(false);
 
   /**
    * One negotiation queue per PeerConnection.
@@ -346,12 +473,14 @@ export function useWebRTC(
     hostPeerRef.current = null;
     hostSessionRef.current = null;
     hostSpeakerIdsRef.current.clear();
+    hostGuestTrackQueueRef.current = [];
 
     clearRemoteAudioRegistry(hostRemoteAudioRef.current);
 
     if (mountedRef.current) {
       setHostPublishing(false);
       setHostMediaReady(false);
+      setSpeakingSpeakerIds(new Set());
     }
   }, []);
 
@@ -361,6 +490,8 @@ export function useWebRTC(
     viewerPeerRef.current = null;
     viewerSessionRef.current = null;
     viewerSpeakerIdsRef.current.clear();
+    viewerSpeakerTrackQueueRef.current = [];
+    viewerHostAudioSeenRef.current = false;
 
     remoteStreamRef.current = null;
 
@@ -368,6 +499,7 @@ export function useWebRTC(
 
     if (mountedRef.current) {
       setViewerConnected(false);
+      setSpeakingSpeakerIds(new Set());
     }
   }, []);
 
@@ -484,6 +616,13 @@ export function useWebRTC(
             event.track,
             hostRemoteAudioRef.current,
           );
+
+          const speakerId = hostGuestTrackQueueRef.current.shift();
+          if (speakerId) {
+            attachSpeakingDetector(event.track, (speaking) =>
+              markSpeaking(speakerId, speaking),
+            );
+          }
         };
 
         peer.onconnectionstatechange = () => {
@@ -697,6 +836,23 @@ export function useWebRTC(
             event.track,
             viewerRemoteAudioRef.current,
           );
+
+          if (!viewerHostAudioSeenRef.current) {
+            // The very first audio track a viewer receives is always the
+            // host's mic (subscribed to before any speaker can exist).
+            viewerHostAudioSeenRef.current = true;
+            attachSpeakingDetector(event.track, (speaking) =>
+              markSpeaking("host", speaking),
+            );
+          } else {
+            const speakerId =
+              viewerSpeakerTrackQueueRef.current.shift();
+            if (speakerId) {
+              attachSpeakingDetector(event.track, (speaking) =>
+                markSpeaking(speakerId, speaking),
+              );
+            }
+          }
         };
 
         peer.onconnectionstatechange = () => {
@@ -1121,6 +1277,10 @@ export function useWebRTC(
               ),
             );
 
+          hostGuestTrackQueueRef.current.push(
+            ...actualSpeakerIds,
+          );
+
           try {
             const offerSdp =
               await createOfferAndWaitForIce(
@@ -1337,6 +1497,10 @@ export function useWebRTC(
                 },
               ),
             );
+
+          viewerSpeakerTrackQueueRef.current.push(
+            ...actualSpeakerIds,
+          );
 
           try {
             const offerSdp =
@@ -2023,6 +2187,7 @@ if (signalingState !== "stable") {
     mediaError,
     mediaState,
     localStream,
+    speakingSpeakerIds,
 
     localStreamRef,
     remoteStreamRef,
