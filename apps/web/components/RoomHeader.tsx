@@ -230,8 +230,7 @@ export function RoomHeader({
           <div className="flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-sm">
             {isLive && (
               <span className="flex items-center gap-1 rounded-full bg-[#FF3B5C] px-2 py-0.5 text-[10px] font-black leading-none text-white">
-                <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                LIVE
+             
               </span>
             )}
 
