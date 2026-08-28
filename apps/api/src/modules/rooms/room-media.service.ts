@@ -909,88 +909,91 @@ async subscribeHostToGuests(
       await mediaService.getProvider();
 
     /*
-     * Cloudflare's current Connection API uses:
+     * SINGLE-PHASE SUBSCRIBE — matches the browser exactly.
      *
-     *   POST /sessions/new
-     *       -> create the session only
+     * connectViewer() on the client builds ONE RTCPeerConnection,
+     * reserves all its recvonly transceivers up front, creates exactly
+     * ONE SDP offer, and makes exactly ONE call to this endpoint. It
+     * never performs a second negotiation round to actually pull tracks.
      *
-     *   POST /sessions/:sessionId/tracks/new
-     *       -> send the browser SDP offer and the remote tracks
+     * This used to be split into two phases exactly like the host
+     * publish bug: the FIRST call created a Cloudflare session via
+     * /sessions/new (which, for a viewer, DOES return a usable SDP
+     * answer immediately — enough for the browser's PeerConnection to
+     * reach "connected"), and a SECOND call was required to actually
+     * subscribe to the host/speaker tracks via /tracks/new and flip
+     * the stored viewer status to "connected".
      *
-     * For a viewer, tracks/new may return either:
+     * Because the client only calls this once, that second phase never
+     * ran. The result was actively worse than the host bug: the
+     * viewer's PeerConnection genuinely reported "connected" (so the
+     * client logged "[WebRTC][VIEWER] initial session connected" and
+     * believed it was done), while zero real media tracks were ever
+     * bound - the viewer heard and saw nothing, and their Redis session
+     * stayed at status "connecting" forever, which is exactly what was
+     * observed: viewer entries permanently stuck at "connecting" with
+     * no way to recover short of a reload creating yet another stuck
+     * entry.
      *
-     *   - an SDP answer, completing negotiation immediately, or
-     *   - an SDP offer, which must be answered through
-     *     PUT /sessions/:sessionId/renegotiate.
+     * The fix is the same shape as publishHost(): do both Cloudflare
+     * calls (create-or-reuse the session, then subscribe it to the
+     * host + speaker tracks) inside this ONE request.
      */
     let session: MediaSession | null = null;
+    let createdNewSession = false;
 
     try {
       const existingViewer =
         state.viewers?.[userId];
 
-      const hasConnectingSession =
+      const hasReusableSession =
         existingViewer &&
-        existingViewer.status === "connecting" &&
-        existingViewer.sessionId;
+        existingViewer.userId === userId &&
+        (existingViewer.status === "connecting" ||
+          existingViewer.status === "connected" ||
+          existingViewer.status === "reconnecting");
 
-      if (!hasConnectingSession) {
+      if (!hasReusableSession) {
         /*
-         * FIRST call: create the Cloudflare session only,
-         * exactly like the host flow. Do NOT subscribe to
-         * remote tracks yet — the browser must apply this
-         * answer and reach PeerConnection "connected" before
-         * Cloudflare will accept /tracks/new for this session.
+         * Create the Cloudflare session only - no SDP yet. The actual
+         * browser offer (with its already-assigned transceiver mids)
+         * is sent below, in the same request, via subscribeTracks().
          */
-        const sessionResult =
-          await provider.createSession({
-            roomId,
-            userId,
-            role: "viewer",
-            generation,
-            offerSdp,
-          });
+        const sessionResult = await provider.createSessionOnly({
+          roomId,
+          userId,
+          role: "viewer",
+          generation,
+        });
 
         session = sessionResult.session;
+        createdNewSession = true;
 
-        await mediaService.saveViewerSession(
-          session,
-        );
-
-        return {
-          session,
-          answerSdp:
-            sessionResult.sessionDescription?.sdp,
-          offerSdp: undefined,
-          tracks: [],
-          requiresRenegotiation: false,
+        await mediaService.saveViewerSession(session);
+      } else {
+        /*
+         * Reuse the existing session instead of creating a new one -
+         * e.g. a previous attempt already created a Cloudflare session
+         * for this viewer and got interrupted before it could
+         * subscribe tracks. Issuing a second /sessions/new here would
+         * negotiate against a session the browser never applied.
+         */
+        session = {
+          sessionId: existingViewer.sessionId,
+          roomId,
+          userId: existingViewer.userId,
+          role: "viewer",
+          generation: existingViewer.generation,
+          status: existingViewer.status,
+          createdAt: existingViewer.joinedAt,
+          lastHeartbeatAt: existingViewer.lastHeartbeatAt,
         };
       }
-
-      /*
-       * SECOND call: the PeerConnection is already connected.
-       * Reuse the existing Cloudflare session instead of
-       * creating a brand new one — the browser's
-       * RTCPeerConnection is already bound to the first
-       * session's ICE/DTLS state, so issuing a second
-       * /sessions/new here would negotiate against a session
-       * the browser never applied.
-       */
-      session = {
-        sessionId: existingViewer.sessionId,
-        roomId,
-        userId: existingViewer.userId,
-        role: "viewer",
-        generation: existingViewer.generation,
-        status: existingViewer.status,
-        createdAt: existingViewer.joinedAt,
-        lastHeartbeatAt: existingViewer.lastHeartbeatAt,
-      };
 
       const negotiation =
         await provider.subscribeTracks({
           sessionId:
-            existingViewer.sessionId,
+            session.sessionId,
           offerSdp,
           tracks,
         });
@@ -1097,7 +1100,7 @@ async subscribeHostToGuests(
           true,
       };
     } catch (error) {
-      if (session) {
+      if (session && createdNewSession) {
         await provider
           .closeSession(
             session.sessionId,

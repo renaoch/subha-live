@@ -343,6 +343,8 @@ export function createMediaService(
           roomId,
         );
 
+      const staleViewerIds: string[] = [];
+
       for (const userId of viewerIds) {
         const value =
           await redis.hgetall(
@@ -353,6 +355,34 @@ export function createMediaService(
           );
 
         if (Object.keys(value).length === 0) {
+          continue;
+        }
+
+        const joinedAt =
+          Number(value.joinedAt ?? 0);
+
+        const status =
+          value.status as
+            NonNullable<
+              RoomMediaState["viewers"][string]
+            >["status"];
+
+        /*
+         * Same failure mode as the stale-speaker reaper above: a
+         * viewer can get permanently stuck in "connecting" if their
+         * PeerConnection never reaches "connected" (bad network, tab
+         * closed mid-negotiation, etc.) and nothing ever calls
+         * leaveViewer() to clean it up. Left alone, that entry sits
+         * in Redis forever, inflates viewerCount, and - now that
+         * createViewerSession() is single-phase - would otherwise
+         * block that same user from ever getting a fresh session on
+         * retry, since a "connecting" entry is treated as reusable.
+         */
+        if (
+          status === "connecting" &&
+          now() - joinedAt > mediaConfig.session.staleAfterMs
+        ) {
+          staleViewerIds.push(userId);
           continue;
         }
 
@@ -371,17 +401,9 @@ export function createMediaService(
                 0,
             ),
 
-          status:
-            value.status as
-              NonNullable<
-                RoomMediaState["viewers"][string]
-              >["status"],
+          status,
 
-          joinedAt:
-            Number(
-              value.joinedAt ??
-                0,
-            ),
+          joinedAt,
 
           lastHeartbeatAt:
             Number(
@@ -397,8 +419,36 @@ export function createMediaService(
         };
       }
 
+      if (staleViewerIds.length > 0) {
+        await Promise.all(
+          staleViewerIds.map(async (userId) => {
+            const raw = await redis.hgetall(
+              mediaKeys.viewer(roomId, userId),
+            );
+
+            await redis.srem(
+              mediaKeys.viewers(roomId),
+              userId,
+            );
+            await redis.del(
+              mediaKeys.viewer(roomId, userId),
+            );
+            await redis.del(
+              mediaKeys.lease(roomId, userId),
+            );
+
+            const sessionId = raw?.sessionId;
+            if (sessionId) {
+              await provider
+                .closeSession(sessionId)
+                .catch(() => {});
+            }
+          }),
+        );
+      }
+
       const viewerCount =
-        viewerIds.length;
+        Object.keys(viewers).length;
 
       return {
         roomId,
