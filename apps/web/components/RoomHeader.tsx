@@ -228,11 +228,7 @@ export function RoomHeader({
         {/* Right group: LIVE pill, viewer count, close */}
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-sm">
-            {isLive && (
-              <span className="flex items-center gap-1 rounded-full bg-[#FF3B5C] px-2 py-0.5 text-[10px] font-black leading-none text-white">
-             
-              </span>
-            )}
+          
 
             <span className="flex items-center gap-1 text-xs font-semibold leading-none text-white/90">
               <Users className="h-3.5 w-3.5" strokeWidth={2} />
