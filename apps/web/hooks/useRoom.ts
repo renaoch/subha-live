@@ -11,7 +11,7 @@ function createFallbackRoom(roomId: string): RoomRecord {
     category: "Community", cover: "/image.png", description: "This stream is awesome!",
     livekit_room_name: "demo-room", max_guest_slots: 3,
     host: { id: "demo-host", name: "Subha", handle: "subha", avatar: "/image.png", country_flag: null },
-    viewerCount: 1200, mediaType: "video",
+    viewerCount: 0, mediaType: "video",
   };
 }
 
