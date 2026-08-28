@@ -15,6 +15,35 @@ type CreateRoomInput = Pick<
 >;
 
 export const roomService = {
+  async listRooms(): Promise<Room[]> {
+    // Same host join as getRoomById, so list cards can show the host's
+    // avatar/name/badges without a second request per room. Excludes
+    // "ended" rooms — the frontend splits what's left into "live" vs
+    // "waiting" (created) client-side.
+    const { data, error } = await supabase
+      .from("rooms")
+      .select(
+        `*, host:profiles!rooms_host_id_fkey (
+          id, name, handle, avatar, country_flag, role, is_admin, is_verified, level
+        )`,
+      )
+      .neq("status", "ended")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw new AppError(
+        500,
+        "Failed to list rooms",
+        {
+          code: "ROOM_LIST_FAILED",
+          details: error.message,
+        },
+      );
+    }
+
+    return (data ?? []) as unknown as Room[];
+  },
+
   async createRoom(input: CreateRoomInput): Promise<Room> {
     const { data, error } = await supabase
       .from("rooms")
