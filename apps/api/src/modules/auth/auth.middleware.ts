@@ -1,45 +1,49 @@
 // deploy/src/modules/auth/auth.middleware.ts
 //
 // FIX: The old version called `supabase.auth.getUser(token)` on EVERY
-// authenticated request. That is a network round-trip to Supabase's auth
-// server, on top of your own network hop from the client. It runs on
-// /join, /media/viewer/session, /media, literally everything — so it was
-// adding 100-400ms+ (more on slow networks) to every single step of the
-// viewer join sequence, compounding fast.
+// authenticated request — a network round-trip to Supabase's auth server
+// on every /join, /media/viewer/session, /media call, adding 100-400ms+
+// to every step of the viewer join sequence.
 //
-// FIX: Supabase access tokens are just signed JWTs. We can verify the
-// signature + expiry locally, instantly, with zero network calls. This is
-// Supabase's own recommended pattern for high-traffic backends.
+// UPDATE: this project has migrated to Supabase's new JWT Signing Keys,
+// which sign tokens asymmetrically (ES256) by default. A static HS256
+// secret can't verify those tokens, so instead we verify against
+// Supabase's JWKS (public key) endpoint. `jose`'s createRemoteJWKSet
+// caches the public key in memory after the first fetch, so this is
+// STILL zero network calls on every request after the first one — just
+// like the HS256 secret approach, but works with the new signing keys.
 //
 // SETUP REQUIRED:
-//   1. npm install jsonwebtoken @types/jsonwebtoken   (run inside /deploy)
-//   2. In Supabase dashboard: Project Settings -> API -> JWT Settings
-//      copy the "JWT Secret" (legacy HS256 projects) and set it as
-//      SUPABASE_JWT_SECRET in your deploy environment (.env / hosting secrets).
-//      If your project uses the newer asymmetric (ES256/JWKS) signing keys
-//      instead of a legacy HS256 secret, tell me and I'll give you the
-//      jose/JWKS version instead — the approach is the same, just the
-//      verify call differs.
+//   1. npm install jose   (run inside /deploy — you can remove
+//      jsonwebtoken / @types/jsonwebtoken if you'd already added them,
+//      jose replaces that approach here)
+//   2. Make sure SUPABASE_URL is set in your deploy environment (it's
+//      already required by deploy/src/lib/supabase.ts, so it should be
+//      present already — no new secret to copy for this one).
 
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { jwtVerify, createRemoteJWKSet } from "jose";
 import { AppError } from "../../errors/app-error";
 
-if (!process.env.SUPABASE_JWT_SECRET) {
-  throw new Error(
-    "SUPABASE_JWT_SECRET must be set in environment variables (Supabase dashboard -> Project Settings -> API -> JWT Settings)."
-  );
+if (!process.env.SUPABASE_URL) {
+  throw new Error("SUPABASE_URL must be set in environment variables.");
 }
 
-// Re-assigned to a `string`-typed const so TypeScript doesn't lose the
-// above null-check when this is read later inside authMiddleware().
-const SUPABASE_JWT_SECRET: string = process.env.SUPABASE_JWT_SECRET;
+const SUPABASE_URL: string = process.env.SUPABASE_URL;
+
+// Built once at startup, reused across every request. `jose` fetches and
+// caches Supabase's public signing keys internally and refreshes them in
+// the background, so this never hits the network per-request after the
+// first call.
+const JWKS = createRemoteJWKSet(
+  new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`)
+);
 
 interface SupabaseJwtPayload {
-  sub: string;
+  sub?: string;
   email?: string;
   role?: string;
-  aud?: string;
+  aud?: string | string[];
   exp?: number;
   [key: string]: unknown;
 }
@@ -77,11 +81,16 @@ export async function authMiddleware(
     let payload: SupabaseJwtPayload;
 
     try {
-      // Local, synchronous verification — no network call.
-      payload = jwt.verify(token, SUPABASE_JWT_SECRET, {
-        algorithms: ["HS256"],
-      }) as SupabaseJwtPayload;
+      // Local verification against Supabase's public keys — no network
+      // call once JWKS is warm.
+      const result = await jwtVerify(token, JWKS, {
+        audience: "authenticated",
+      });
+      payload = result.payload as SupabaseJwtPayload;
     } catch (err) {
+      // Keep this log until you've confirmed things are stable, then
+      // feel free to trim it down.
+      console.log("auth verify FAILED:", (err as Error).message);
       console.log(
         `auth (local verify, FAILED): ${(performance.now() - authStart).toFixed(2)}ms`
       );
@@ -91,7 +100,7 @@ export async function authMiddleware(
     }
 
     console.log(
-      `auth.verify (local): ${(performance.now() - authStart).toFixed(2)}ms`
+      `auth.verify (local JWKS): ${(performance.now() - authStart).toFixed(2)}ms`
     );
 
     if (!payload.sub) {
