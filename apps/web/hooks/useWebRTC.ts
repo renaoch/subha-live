@@ -52,6 +52,93 @@ function safeClosePeer(peer: RTCPeerConnection | null) {
 }
 
 /**
+ * Play a single remote audio track through its own dedicated <audio>
+ * element.
+ *
+ * WHY THIS EXISTS (do not "simplify" this back to one shared stream):
+ *
+ * Every audio track that arrives on a PeerConnection (host mic, and every
+ * approved speaker's mic) was previously being funneled into ONE shared
+ * MediaStream that was assigned to a single <video>/<audio> element's
+ * `srcObject` a single time, up front. That has two fatal problems:
+ *
+ * 1. Most browsers only ever bind/play the audio track(s) that existed on
+ *    the stream at the moment `srcObject` was assigned. Tracks added to
+ *    that same MediaStream object LATER via `stream.addTrack()` (which is
+ *    exactly what happens every time a viewer gets approved to speak and
+ *    the peer renegotiates) are not picked up by the already-attached
+ *    element. This is a long-standing WebRTC/Chromium quirk, not a config
+ *    bug - re-assigning `el.srcObject = stream` with the *same* object
+ *    reference is a no-op, so nothing forces the element to notice.
+ * 2. Even where multi-track playback back through one element does work,
+ *    it does not scale: one <video> element was never meant to mix N
+ *    independent speakers.
+ *
+ * Giving every remote audio track its own tiny hidden <audio autoplay>
+ * element sidesteps both problems entirely and scales to as many
+ * simultaneous speakers as the room allows.
+ */
+function playRemoteAudioTrack(
+  track: MediaStreamTrack,
+  registry: Map<string, HTMLAudioElement>,
+) {
+  if (registry.has(track.id)) {
+    return;
+  }
+
+  const audioEl = document.createElement("audio");
+  audioEl.autoplay = true;
+  audioEl.setAttribute("playsinline", "true");
+  audioEl.muted = false;
+  audioEl.style.display = "none";
+  audioEl.dataset.remoteTrackId = track.id;
+
+  const stream = new MediaStream([track]);
+  audioEl.srcObject = stream;
+
+  document.body.appendChild(audioEl);
+  registry.set(track.id, audioEl);
+
+  audioEl.play().catch(() => {
+    // Autoplay can be blocked until the user interacts with the page;
+    // the element stays attached and will play once that gesture happens.
+  });
+
+  const cleanup = () => {
+    removeRemoteAudioTrack(track.id, registry);
+  };
+
+  track.addEventListener("ended", cleanup, { once: true });
+}
+
+function removeRemoteAudioTrack(
+  trackId: string,
+  registry: Map<string, HTMLAudioElement>,
+) {
+  const audioEl = registry.get(trackId);
+
+  if (!audioEl) return;
+
+  try {
+    audioEl.pause();
+    audioEl.srcObject = null;
+    audioEl.remove();
+  } catch {
+    // Element may already be detached.
+  }
+
+  registry.delete(trackId);
+}
+
+function clearRemoteAudioRegistry(
+  registry: Map<string, HTMLAudioElement>,
+) {
+  for (const trackId of Array.from(registry.keys())) {
+    removeRemoteAudioTrack(trackId, registry);
+  }
+}
+
+/**
  * Serialize all SDP operations belonging to ONE PeerConnection.
  *
  * This is deliberately kept outside React state.
@@ -108,6 +195,18 @@ export function useWebRTC(
 
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const guestStreamRef = useRef<MediaStream | null>(null);
+
+  /**
+   * trackId -> the hidden <audio> element playing it back.
+   * See playRemoteAudioTrack() for why this exists instead of one shared
+   * MediaStream.
+   */
+  const hostRemoteAudioRef = useRef<Map<string, HTMLAudioElement>>(
+    new Map(),
+  );
+  const viewerRemoteAudioRef = useRef<Map<string, HTMLAudioElement>>(
+    new Map(),
+  );
 
   const hostSessionRef = useRef<SessionInfo | null>(null);
   const viewerSessionRef = useRef<SessionInfo | null>(null);
@@ -248,6 +347,8 @@ export function useWebRTC(
     hostSessionRef.current = null;
     hostSpeakerIdsRef.current.clear();
 
+    clearRemoteAudioRegistry(hostRemoteAudioRef.current);
+
     if (mountedRef.current) {
       setHostPublishing(false);
       setHostMediaReady(false);
@@ -262,6 +363,8 @@ export function useWebRTC(
     viewerSpeakerIdsRef.current.clear();
 
     remoteStreamRef.current = null;
+
+    clearRemoteAudioRegistry(viewerRemoteAudioRef.current);
 
     if (mountedRef.current) {
       setViewerConnected(false);
@@ -359,6 +462,29 @@ export function useWebRTC(
         });
 
         hostPeerRef.current = peer;
+
+        /**
+         * The host's PeerConnection is also used to PULL every approved
+         * speaker's audio back (see syncHostGuestAudio's recvonly
+         * transceivers below). Without this handler those inbound audio
+         * tracks arrive and are silently discarded - the host never hears
+         * anyone they approve to speak, even though the speaker's track is
+         * successfully flowing over the connection.
+         */
+        peer.ontrack = (event) => {
+          if (peer !== hostPeerRef.current) {
+            return;
+          }
+
+          if (event.track.kind !== "audio") {
+            return;
+          }
+
+          playRemoteAudioTrack(
+            event.track,
+            hostRemoteAudioRef.current,
+          );
+        };
 
         peer.onconnectionstatechange = () => {
           if (peer !== hostPeerRef.current) {
@@ -541,18 +667,36 @@ export function useWebRTC(
             return;
           }
 
-          const tracks =
-            event.streams[0]?.getTracks() ?? [event.track];
-
-          for (const track of tracks) {
+          /**
+           * Video (the host's camera) still goes through the shared
+           * `remoteStream` bound to the on-screen <video> element - there
+           * is only ever one video track to show, so a single element is
+           * fine.
+           *
+           * Audio (host mic + every approved speaker's mic) is routed
+           * through its own dedicated hidden <audio> element instead of
+           * being piled onto that same shared stream. See
+           * playRemoteAudioTrack() for why: tracks added to an
+           * already-attached MediaStream after the fact are not reliably
+           * played back by the browser, which is exactly what happens
+           * every time a new speaker gets approved and this peer
+           * renegotiates.
+           */
+          if (event.track.kind === "video") {
             if (
               !remoteStream
                 .getTracks()
-                .some((existing) => existing.id === track.id)
+                .some((existing) => existing.id === event.track.id)
             ) {
-              remoteStream.addTrack(track);
+              remoteStream.addTrack(event.track);
             }
+            return;
           }
+
+          playRemoteAudioTrack(
+            event.track,
+            viewerRemoteAudioRef.current,
+          );
         };
 
         peer.onconnectionstatechange = () => {
@@ -1854,6 +1998,9 @@ if (signalingState !== "stable") {
       localStreamRef.current = null;
       guestStreamRef.current = null;
       remoteStreamRef.current = null;
+
+      clearRemoteAudioRegistry(hostRemoteAudioRef.current);
+      clearRemoteAudioRegistry(viewerRemoteAudioRef.current);
 
       hostSessionRef.current = null;
       viewerSessionRef.current = null;
