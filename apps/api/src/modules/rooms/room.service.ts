@@ -14,7 +14,67 @@ type CreateRoomInput = Pick<
   | "max_guest_slots"
 >;
 
+export interface RoomAuthorization {
+  canAccess: boolean;
+  isHost: boolean;
+  isMember: boolean;
+  isModerator: boolean;
+  isMuted: boolean;
+  isBanned: boolean;
+}
+
 export const roomService = {
+  /**
+   * Resolve a user's authorization to chat in a room. This is the contract
+   * the live-room realtime service (apps/chat-room/realtime) depends on via
+   * `CORE_API_AUTH_ENDPOINT` — it owns no membership data and asks the Core
+   * API instead.
+   *
+   * Room-level mute/ban is not modeled yet (the app has user-level mute/block
+   * for DMs, not room chat), so those are reported as `false` until such a
+   * system exists. The realtime service treats `isBanned` as "deny access".
+   */
+  async authorize(roomId: string, userId: string): Promise<RoomAuthorization> {
+    const { data: room, error: roomError } = await supabase
+      .from("rooms")
+      .select("id, host_id, status")
+      .eq("id", roomId)
+      .maybeSingle();
+
+    if (roomError) {
+      throw new AppError(500, "Failed to fetch room", {
+        code: "ROOM_FETCH_FAILED",
+        details: roomError.message,
+      });
+    }
+
+    if (!room) {
+      throw new AppError(404, "Room not found", { code: "ROOM_NOT_FOUND" });
+    }
+
+    const isHost = room.host_id === userId;
+
+    const { data: participant } = await supabase
+      .from("room_participants")
+      .select("role")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const isMember = isHost || !!participant;
+    const isModerator = participant?.role === "moderator";
+
+    return {
+      // Chat is available in waiting + live rooms; an ended room closes chat.
+      canAccess: room.status !== "ended",
+      isHost,
+      isMember,
+      isModerator,
+      isMuted: false,
+      isBanned: false,
+    };
+  },
+
   async listRooms(): Promise<Room[]> {
     // Same host join as getRoomById, so list cards can show the host's
     // avatar/name/badges without a second request per room. Excludes

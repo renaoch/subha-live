@@ -6,6 +6,7 @@ import {
   updateMyProfile,
   getUserFollowers,
   getUserFollowing,
+  getUserChatProfile,
 } from "./users.controller";
 
 const router = Router();
@@ -14,6 +15,7 @@ router.get("/me", authMiddleware, getMyProfile);
 router.patch("/me", authMiddleware, updateMyProfile);
 router.get("/:id/followers", getUserFollowers);
 router.get("/:id/following", getUserFollowing);
+router.get("/:id/profile", getUserChatProfile);
 router.get("/:id", getPublicProfile);
 
 

@@ -174,3 +174,90 @@ Don't claim a specific scale is supported until a load test has actually demonst
 - **WebSocket authorization ordering**: the socket is registered to receive room broadcasts only after Supabase JWT authentication and Core API authorization both succeed. It also does not receive `chat_message` input handling until that point, so the server sends an explicit `{"type":"connected"}` acknowledgment the client should wait for before sending its first message.
 - **No duplicate tables**: the only Chat-owned table is `chat_messages`. Everything about users, rooms, membership, and permissions is resolved from Core API through the adapter and cached briefly (default 30s, configurable) in Redis.
 - **Gift events**: `src/chat/moderation/gift.ts` only recognizes and can route an externally-produced `gift_event` payload for future compatibility with an Economy service. No coins, wallets, purchases, or balance changes are implemented or touched anywhere in this service.
+
+## Deploying to Heroku
+
+The service is a standalone Heroku app, separate from `apps/web` and `apps/api`. It
+builds with TypeScript (during the Heroku build phase, devDependencies are installed
+so `tsc` is available) and starts the compiled `dist/server.js` in production.
+
+### 1. Create the app and point it at this subdirectory
+
+From the repo root, push only this folder via `git subtree`:
+
+```bash
+heroku create <your-app-name> --region us
+heroku buildpacks:set heroku/nodejs -a <your-app-name>
+git subtree push --prefix apps/chat-room/realtime heroku main
+```
+
+Heroku's Node.js buildpack runs `npm ci` (a committed `package-lock.json` is present)
+and then runs the `build` script (`tsc -p tsconfig.json`) automatically. The `Procfile`
+starts the compiled output:
+
+```
+web: npm start          # -> node dist/server.js
+```
+
+The server reads `$PORT` from the environment and binds to `0.0.0.0`, so no port/host
+changes are needed. WebSocket (`/ws/rooms/:roomId/chat` and `/ws/rooms/:roomId/task`)
+work through Heroku's HTTPS/WSS router as-is (`trustProxy` is enabled in `server.ts`).
+
+### 2. Set config vars
+
+```bash
+heroku config:set -a <your-app-name> \
+  DATABASE_URL="postgres://..." \
+  REDIS_URL="redis://..." \
+  SUPABASE_URL="https://<project>.supabase.co" \
+  CORE_API_BASE_URL="https://api.example.com" \
+  CORE_API_AUTH_ENDPOINT="/api/v1/rooms/:roomId/authorize" \
+  CORE_API_PROFILE_ENDPOINT="/api/v1/users/:userId/profile"
+```
+
+Optional (only if your Supabase project still uses a legacy HS256 signing secret):
+
+```bash
+heroku config:set -a <your-app-name> SUPABASE_JWT_SECRET="..."
+```
+
+All chat tunables (message length, rate limits, history limits, Redis retention, etc.)
+have defaults in `src/infrastructure/config.ts` and can be overridden with config vars —
+see `.env.example` for the full list.
+
+### 3. Run the migration (one-off)
+
+```bash
+heroku run npm run migrate -a <your-app-name>
+```
+
+This runs `node migrations/migrate.mjs`, which only needs `DATABASE_URL` (it enables
+Postgres SSL automatically when `NODE_ENV=production`). It creates `chat_messages` and
+tracks applied migrations in `schema_migrations`. Re-running is safe (idempotent).
+
+Optionally add a `release` phase so migrations run automatically on every deploy:
+
+```bash
+echo "release: npm run migrate" >> Procfile
+```
+
+### 4. Verify
+
+```bash
+heroku logs --tail -a <your-app-name>
+curl -i https://<your-app-name>.herokuapp.com/health
+```
+
+Then point the web app's `NEXT_PUBLIC_REALTIME_WS_URL` at
+`wss://<your-app-name>.herokuapp.com` so the live-room chat/task clients connect here.
+
+### Local production dry-run
+
+```bash
+npm ci
+npm run build
+PORT=3002 DATABASE_URL=... REDIS_URL=... SUPABASE_URL=... CORE_API_BASE_URL=... npm start
+```
+
+`.env` and other secrets are gitignored (`apps/chat-room/realtime/.gitignore`) — never
+commit them; use Heroku config vars.

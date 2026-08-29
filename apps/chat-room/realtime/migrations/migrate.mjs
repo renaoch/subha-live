@@ -2,17 +2,28 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
-import { loadConfig } from '../src/infrastructure/config.js'
+
+// Self-contained production migration runner (plain ESM, no TypeScript, no
+// tsx/devDependencies) so it can be run on Heroku as a one-off command:
+//   heroku run npm run migrate
+// It only needs DATABASE_URL (+ NODE_ENV to decide on SSL).
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-async function main() {
-  const config = loadConfig()
-  const pool = new pg.Pool({
-    connectionString: config.DATABASE_URL,
-    ssl: config.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
-  })
+const DATABASE_URL = process.env.DATABASE_URL
+const NODE_ENV = process.env.NODE_ENV || 'development'
 
+if (!DATABASE_URL) {
+  console.error('DATABASE_URL is required to run migrations')
+  process.exit(1)
+}
+
+const pool = new pg.Pool({
+  connectionString: DATABASE_URL,
+  ssl: NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
+})
+
+async function main() {
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (

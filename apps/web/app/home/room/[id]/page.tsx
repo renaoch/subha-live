@@ -36,6 +36,10 @@ import { HostControls } from '@/components/HostControls';
 
 import { HostTaskManageSheet } from '@/components/HostTaskManageSheet';
 
+import { RoomChat } from '@/components/RoomChat';
+
+import { useRoomChat } from '@/hooks/useRoomChat';
+
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
@@ -156,6 +160,10 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
   // Accrue streaming/watch hours toward the active host task.
   useRoomHeartbeat(room?.id ?? '', room?.status);
+
+  // Live room chat over the realtime service.
+  const { messages: chatMessages, state: chatState, selfUserId, send: sendChat } =
+    useRoomChat(room?.id ?? '', room?.status);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
 
 
@@ -561,6 +569,18 @@ useEffect(() => {
         {/* Bottom bar */}
 
         <BottomBar isHost={isHost} onOpenGift={() => setGiftSheetOpen(true)} />
+
+        {/* Live room chat (message stream + input) */}
+
+        {(isLive || isWaiting) && (
+          <RoomChat
+            messages={chatMessages}
+            selfUserId={selfUserId}
+            connected={chatState === 'connected'}
+            isHost={isHost}
+            onSend={sendChat}
+          />
+        )}
 
 
 

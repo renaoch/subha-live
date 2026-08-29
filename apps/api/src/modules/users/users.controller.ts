@@ -7,6 +7,7 @@ import {
   recordProfileVisit,
   getFollowers,
   getFollowing,
+  getChatProfile,
 } from "./users.service";
 
 import {
@@ -131,6 +132,29 @@ export async function updateMyProfile(
     };
 
     return res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// GET /api/v1/users/:id/profile
+// Chat display name for the live-room realtime service (flat `username`).
+
+export async function getUserChatProfile(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, "User ID is required", {
+        code: "USER_ID_REQUIRED",
+      });
+    }
+
+    const profile = await getChatProfile(id);
+    return res.status(200).json(profile);
   } catch (error) {
     next(error);
   }

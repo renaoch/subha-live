@@ -2,7 +2,7 @@ import { Router } from "express";
 import roomMediaRoutes from "./room-media.routes";
 import roomTaskRoutes from "../room-tasks/room-task.routes";
 import { authMiddleware } from "../auth/auth.middleware";
-import { listRooms, createRoom, getRoom, startRoom, endRoom } from "./room.controller";
+import { listRooms, createRoom, getRoom, startRoom, endRoom, authorizeRoom } from "./room.controller";
 import { joinRoom, leaveRoom } from "./room-participant.controller";
 import {
   createSpeakerRequest,
@@ -20,6 +20,7 @@ const router = Router();
 router.get("/", authMiddleware, listRooms);
 router.post("/", authMiddleware, createRoom);
 router.get("/:id", authMiddleware, getRoom);
+router.get("/:id/authorize", authMiddleware, authorizeRoom);
 router.post("/:id/start", authMiddleware, startRoom);
 router.post("/:id/end", authMiddleware, endRoom);
 

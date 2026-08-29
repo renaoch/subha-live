@@ -387,6 +387,33 @@ export async function getUserById(
 }
 
 // -----------------------------------------------------------------------------
+// Get a user's chat display name
+// GET /api/v1/users/:id/profile
+//
+// The live-room realtime service resolves the `username` it stamps onto chat
+// messages from this endpoint (`CORE_API_PROFILE_ENDPOINT`). It expects a flat
+// `username` field on the response body.
+// -----------------------------------------------------------------------------
+
+export async function getChatProfile(
+  userId: UserId,
+): Promise<{ username: string }> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("name, handle")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to fetch chat profile:", error);
+    return { username: "Guest" };
+  }
+
+  const username = data?.name ?? data?.handle ?? "Guest";
+  return { username };
+}
+
+// -----------------------------------------------------------------------------
 // Update current authenticated user's profile
 // PATCH /api/v1/users/me
 // -----------------------------------------------------------------------------

@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "migrate": "tsx migrations/migrate.ts",
+    "migrate": "node migrations/migrate.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "load-test": "node load-test/loadtest.mjs"

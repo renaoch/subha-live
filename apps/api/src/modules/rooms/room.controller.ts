@@ -63,6 +63,33 @@ export async function getRoom(
   }
 }
 
+/**
+ * GET /api/v1/rooms/:id/authorize
+ *
+ * Resolves a user's room access/roles for the live-room realtime service.
+ * Returns a flat authorization object (not wrapped in `data`) to match the
+ * realtime adapter's expectations: it reads `canAccess`, `isHost`, etc.
+ * directly off the response body.
+ */
+export async function authorizeRoom(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.user) {
+      throw new AppError(401, "Authentication required", {
+        code: "AUTHENTICATION_REQUIRED",
+      });
+    }
+
+    const authorization = await roomService.authorize(req.params.id, req.user.id);
+    res.status(200).json(authorization);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function startRoom(
   req: Request<{ id: string }>,
   res: Response,

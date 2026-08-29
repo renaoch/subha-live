@@ -15,6 +15,10 @@ import { ChatPersistenceWorker } from './workers/chat-persistence.worker.js'
 async function main() {
   const app = Fastify({
     logger: false,
+    // The app sits behind Heroku's router (TLS termination + proxy). Trusting
+    // the proxy is what makes request.ip / X-Forwarded-* correct and lets
+    // WebSocket upgrades flow through Heroku's WSS routing unchanged.
+    trustProxy: true,
     // Message-size validation happens in Zod, but Fastify's own body limit is
     // a hard backstop against arbitrarily large payloads for HTTP routes.
     bodyLimit: 16 * 1024,

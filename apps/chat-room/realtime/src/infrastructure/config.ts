@@ -15,8 +15,8 @@ const envSchema = z.object({
   SUPABASE_JWT_AUDIENCE: z.string().default('authenticated'),
 
   CORE_API_BASE_URL: z.string().url(),
-  CORE_API_AUTH_ENDPOINT: z.string().default('/api/rooms/:roomId/authorize'),
-  CORE_API_PROFILE_ENDPOINT: z.string().default('/api/users/:userId/profile'),
+  CORE_API_AUTH_ENDPOINT: z.string().default('/api/v1/rooms/:roomId/authorize'),
+  CORE_API_PROFILE_ENDPOINT: z.string().default('/api/v1/users/:userId/profile'),
   CORE_API_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
 
   CHAT_MAX_MESSAGE_LENGTH: z.coerce.number().int().positive().default(500),
