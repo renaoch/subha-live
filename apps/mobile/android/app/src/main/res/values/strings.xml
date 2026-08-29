@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Subha</string>
+    <string name="title_activity_main">Subha</string>
+    <string name="package_name">fun.subha.app</string>
+    <string name="custom_url_scheme">fun.subha.app</string>
+</resources>

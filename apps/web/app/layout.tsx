@@ -3,6 +3,7 @@ import { Space_Grotesk, Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { AuthListener } from "@/components/providers/auth-listener";
+import { NativeBridge } from "@/components/providers/native-bridge";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -39,6 +40,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <QueryProvider>
             <AuthListener />
+            <NativeBridge />
             {children}
           </QueryProvider>
           <Toaster

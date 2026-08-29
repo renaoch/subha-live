@@ -1,0 +1,30 @@
+{
+  "name": "mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Subha native app shell (Capacitor)",
+  "scripts": {
+    "sync": "cap sync",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios",
+    "add:android": "cap add android",
+    "add:ios": "cap add ios",
+    "update": "cap update"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/app": "^7.1.1",
+    "@capacitor/browser": "^7.0.4",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/ios": "^7.4.4",
+    "@capacitor/keyboard": "^7.0.4",
+    "@capacitor/preferences": "^7.0.4",
+    "@capacitor/push-notifications": "^7.0.4",
+    "@capacitor/splash-screen": "^7.0.4",
+    "@capacitor/status-bar": "^7.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.4.4"
+  }
+}

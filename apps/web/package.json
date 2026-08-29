@@ -10,6 +10,10 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor/app": "^7.1.1",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/splash-screen": "^7.0.4",
+    "@capacitor/status-bar": "^7.0.4",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
     "@tanstack/react-query": "^5.62.7",
