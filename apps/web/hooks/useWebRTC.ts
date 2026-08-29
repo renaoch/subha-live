@@ -449,8 +449,18 @@ export function useWebRTC(
       },
       video: {
         facingMode: "user",
-        width: { ideal: 1080 },
-        height: { ideal: 1920 },
+        width: { ideal: 720 },
+        height: { ideal: 1280 },
+        aspectRatio: { ideal: 9 / 16 },
+        // "crop-and-scale" (the default) tells the browser it's allowed to
+        // digitally crop into the sensor to force the exact aspect ratio
+        // above, which is what was causing the zoomed-in look. "none" uses
+        // the camera's native field of view instead; CSS object-cover on
+        // <video> still fills the frame, it just isn't the sensor itself
+        // cropping first.
+        // Cast needed: `resizeMode` is part of the MediaTrackConstraints
+        // spec but isn't in the currently installed TS DOM lib typings.
+        ...({ resizeMode: "none" } as MediaTrackConstraints),
       },
     });
 
