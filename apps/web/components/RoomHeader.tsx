@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { usersApi } from "@/lib/api/users";
+import { RoomTaskBar } from "@/components/RoomTaskBar";
+import type { RoomTask } from "@/lib/api/room-tasks";
 import {
   BadgeCheck,
   Crown,
@@ -32,6 +34,8 @@ interface RoomHeaderProps {
   onLeave: () => void;
   /** Currently logged-in user, so we can hide Follow on your own room. */
   currentUserId?: string | null;
+  /** Host's live goal/task, if one is active or was just completed. */
+  task?: RoomTask | null;
 }
 
 type Tag = {
@@ -166,6 +170,7 @@ export function RoomHeader({
   isLive,
   onLeave,
   currentUserId,
+  task,
 }: RoomHeaderProps) {
   const hostName = host?.name || "Host";
   const avatarUrl = host?.avatar || undefined;
@@ -249,6 +254,10 @@ export function RoomHeader({
           </button>
         </div>
       </div>
+
+      {/* Live goal — sits right below the viewer row, transparent glass
+          so it reads as part of the header rather than a new block. */}
+      <RoomTaskBar task={task ?? null} />
     </div>
   );
 }
