@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -710,6 +710,7 @@ export type Database = {
           gift_name: string
           id: string
           recipient_id: string
+          room_id: string | null
           sender_id: string
           stream_id: string | null
           value: number
@@ -720,6 +721,7 @@ export type Database = {
           gift_name: string
           id?: string
           recipient_id: string
+          room_id?: string | null
           sender_id: string
           stream_id?: string | null
           value: number
@@ -730,6 +732,7 @@ export type Database = {
           gift_name?: string
           id?: string
           recipient_id?: string
+          room_id?: string | null
           sender_id?: string
           stream_id?: string | null
           value?: number
@@ -740,6 +743,13 @@ export type Database = {
             columns: ["recipient_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gifts_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
             referencedColumns: ["id"]
           },
           {
@@ -1262,6 +1272,60 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          current_value: number
+          host_id: string
+          id: string
+          room_id: string
+          status: string
+          target_value: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          current_value?: number
+          host_id: string
+          id?: string
+          room_id: string
+          status?: string
+          target_value: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          current_value?: number
+          host_id?: string
+          id?: string
+          room_id?: string
+          status?: string
+          target_value?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_tasks_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_tasks_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
             referencedColumns: ["id"]
           },
         ]

@@ -32,7 +32,7 @@ import { BottomBar } from '@/components/BottomBar';
 
 import { HostControls } from '@/components/HostControls';
 
-import { TaskManagerModal } from '@/components/TaskmanagerModal';
+import { TaskManagerModal } from '@/components/TaskManagerModal';
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
