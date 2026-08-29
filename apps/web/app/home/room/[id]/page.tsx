@@ -20,6 +20,8 @@ import { useWebRTC } from '@/hooks/useWebRTC';
 
 import { useSpeakerRequests } from '@/hooks/useSpeakerRequests';
 
+import { useRoomTask } from '@/hooks/useRoomTask';
+
 import { useViewerRequestStatus } from '@/hooks/useViewerRequestStatus';
 
 import { RoomHeader } from '@/components/RoomHeader';
@@ -29,6 +31,10 @@ import { LiveVideo } from '@/components/LiveVideo';
 import { BottomBar } from '@/components/BottomBar';
 
 import { HostControls } from '@/components/HostControls';
+
+import { TaskManagerModal } from '@/components/TaskmanagerModal';
+
+import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
 import { AudioStageModal } from '@/components/AudioStageModal';
 
@@ -137,6 +143,13 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
     reject,
 
 } = useSpeakerRequests(room?.id ?? '', isHost, room?.status);
+
+  const { task, saving: taskSaving, setTask, cancelTask } = useRoomTask(
+    room?.id ?? '',
+    room?.status,
+  );
+  const [taskModalOpen, setTaskModalOpen] = useState(false);
+  const [giftSheetOpen, setGiftSheetOpen] = useState(false);
 
 
 
@@ -448,6 +461,8 @@ useEffect(() => {
 
           currentUserId={userId}
 
+          task={task}
+
         />
 
 
@@ -528,7 +543,7 @@ useEffect(() => {
 
         {/* Bottom bar */}
 
-        <BottomBar isHost={isHost} />
+        <BottomBar isHost={isHost} onOpenGift={() => setGiftSheetOpen(true)} />
 
 
 
@@ -555,6 +570,50 @@ useEffect(() => {
             actionLoading={actionLoading}
 
             localStreamReady={!!localStreamRef.current}
+
+            onOpenTask={() => setTaskModalOpen(true)}
+
+            taskActive={task?.status === 'active'}
+
+          />
+
+        )}
+
+
+
+        {/* Room goal manager (host) */}
+
+        {isHost && taskModalOpen && (
+
+          <TaskManagerModal
+
+            task={task}
+
+            saving={taskSaving}
+
+            onClose={() => setTaskModalOpen(false)}
+
+            onSetTask={setTask}
+
+            onCancelTask={cancelTask}
+
+          />
+
+        )}
+
+
+
+        {/* Gift picker (viewers) */}
+
+        {!isHost && giftSheetOpen && room.host?.id && (
+
+          <GiftPickerSheet
+
+            roomId={room.id}
+
+            hostId={room.host.id}
+
+            onClose={() => setGiftSheetOpen(false)}
 
           />
 

@@ -15,7 +15,13 @@ export const sendGiftSchema = z.object({
   giftName: z.string().min(1).max(100),
   giftIcon: z.string().min(1).max(50).default("gift"),
   value: z.coerce.number().int().positive(),
+  // Legacy: ties a gift to the old `streams` table (text id).
   streamId: z.string().optional(),
+  // New: ties a gift to a live room (uuid, `rooms` table). When set and
+  // that room has an active task/goal, the gift's value is added to it
+  // automatically. Separate column from streamId — different table,
+  // different id type, don't conflate them.
+  roomId: z.string().uuid().optional(),
 });
 
 export type SendGiftInput = z.infer<typeof sendGiftSchema>;

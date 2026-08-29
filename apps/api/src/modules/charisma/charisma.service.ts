@@ -12,6 +12,8 @@ import type {
 
 import type { GiftListQuery, SendGiftInput } from "./charisma.schema";
 
+import { roomTaskService } from "../room-tasks/room-task.service";
+
 function toNumber(value: number | null): number {
   return value ?? 0;
 }
@@ -284,7 +286,11 @@ export async function sendGift(
       gift_icon: input.giftIcon,
       value: input.value,
       stream_id: input.streamId ?? null,
-    })
+      // TODO: remove this cast once database.types.ts is regenerated
+      // after running 20260829_room_tasks.sql (adds gifts.room_id) —
+      // the generated Insert type doesn't know about the column yet.
+      room_id: input.roomId ?? null,
+    } as never)
     .select(
       `
         id,
@@ -379,6 +385,15 @@ export async function sendGift(
 
   const sender: any = (gift as any).sender;
   const recipient: any = (gift as any).recipient;
+
+  // Best-effort: if this gift was sent inside a room that has a live
+  // task/goal running, count its value toward that goal. Never let a
+  // task-progress hiccup fail the gift itself.
+  if (input.roomId) {
+    roomTaskService.bumpProgress(input.roomId, input.value).catch((err) => {
+      console.error("[sendGift] failed to bump room task progress:", err);
+    });
+  }
 
   return {
     id: gift.id,

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import roomMediaRoutes from "./room-media.routes";
+import roomTaskRoutes from "../room-tasks/room-task.routes";
 import { authMiddleware } from "../auth/auth.middleware";
 import { listRooms, createRoom, getRoom, startRoom, endRoom } from "./room.controller";
 import { joinRoom, leaveRoom } from "./room-participant.controller";
@@ -51,6 +52,7 @@ router.delete(
 );
 
 router.use("/", roomMediaRoutes);
+router.use("/", roomTaskRoutes);
 
 // Backward-compatible endpoints.
 router.post("/:id/audio-request", authMiddleware, createSpeakerRequest);

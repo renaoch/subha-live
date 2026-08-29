@@ -104,7 +104,10 @@ export const charismaApi = {
     giftName: string;
     giftIcon?: string;
     value: number;
+    /** Legacy `streams` table id — leave unset for room-based gifts. */
     streamId?: string;
+    /** The live room (`rooms` table, uuid) this gift was sent from. */
+    roomId?: string;
   }): Promise<CharismaGiftItem> {
     const response = await apiFetch<SendGiftResponse>(
       "/api/v1/charisma/send",

@@ -1,0 +1,5 @@
+import type { ReactNode } from "react";
+
+interface StatTileProps { label:string; value:string; icon?:ReactNode; detail?:string; tone?:"purple"|"gold"|"green"|"blue"; }
+const tones={purple:"text-violet-300 bg-violet-400/10 border-violet-300/10",gold:"text-amber-200 bg-amber-400/10 border-amber-300/10",green:"text-emerald-300 bg-emerald-400/10 border-emerald-300/10",blue:"text-sky-300 bg-sky-400/10 border-sky-300/10"};
+export function StatTile({label,value,icon,detail,tone="purple"}:StatTileProps){return <div className="group rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4 transition hover:border-white/[0.11] hover:bg-white/[0.04]"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/30">{label}</p><p className="mt-2 text-xl font-black tracking-tight text-white">{value}</p>{detail&&<p className="mt-1 text-[11px] text-white/25">{detail}</p>}</div>{icon&&<span className={`flex h-9 w-9 items-center justify-center rounded-xl border ${tones[tone]}`}>{icon}</span>}</div></div>}
