@@ -18,6 +18,7 @@ export default function AdminHostTaskPage() {
 
   const [title, setTitle] = useState("");
   const [targetValue, setTargetValue] = useState("");
+  const [rewardCoins, setRewardCoins] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export default function AdminHostTaskPage() {
       setTaskState(null);
       setTitle("");
       setTargetValue("");
+      setRewardCoins("");
       return;
     }
     let cancelled = false;
@@ -56,6 +58,7 @@ export default function AdminHostTaskPage() {
           setTaskState(result);
           setTitle(result?.title ?? "");
           setTargetValue(result?.targetValue ? String(result.targetValue) : "");
+          setRewardCoins(result?.rewardCoins ? String(result.rewardCoins) : "");
         }
       } catch (e) {
         if (!cancelled) {
@@ -77,6 +80,7 @@ export default function AdminHostTaskPage() {
     if (!selectedRoomId) return;
     const trimmedTitle = title.trim();
     const numericTarget = Number(targetValue);
+    const numericReward = rewardCoins.trim() === "" ? 0 : Number(rewardCoins);
 
     if (!trimmedTitle) {
       setError("Give the goal a title");
@@ -86,6 +90,10 @@ export default function AdminHostTaskPage() {
       setError("Enter a target greater than 0");
       return;
     }
+    if (!Number.isFinite(numericReward) || numericReward < 0) {
+      setError("Reward coins must be 0 or greater");
+      return;
+    }
 
     setError(null);
     setSaving(true);
@@ -93,6 +101,7 @@ export default function AdminHostTaskPage() {
       const created = await roomTasksApi.setTask(selectedRoomId, {
         title: trimmedTitle,
         targetValue: Math.round(numericTarget),
+        rewardCoins: Math.round(numericReward),
       });
       setTaskState(created);
       toast.success("Task is live for viewers");
@@ -111,6 +120,7 @@ export default function AdminHostTaskPage() {
       setTaskState(null);
       setTitle("");
       setTargetValue("");
+      setRewardCoins("");
       toast.success("Task ended");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to cancel task");
@@ -164,7 +174,8 @@ export default function AdminHostTaskPage() {
             <>
               {hasActiveTask && (
                 <p className="mb-3 text-[12px] text-[#9088A0]">
-                  Live now — {task?.currentValue ?? 0}/{task?.targetValue ?? 0}.
+                  Live now — {task?.currentValue ?? 0}/{task?.targetValue ?? 0}
+                  {task?.rewardCoins ? ` · +${task.rewardCoins} coins on claim` : ""}.
                   Saving below replaces it with a new goal.
                 </p>
               )}
@@ -197,6 +208,24 @@ export default function AdminHostTaskPage() {
                     placeholder="5000"
                     className="w-full rounded-xl border border-[#2A2238] bg-[#17131F] px-3.5 py-2.5 text-[14px] text-[#F3ECE0] placeholder:text-[#5E5570] focus:border-[#CBA35C]/50 focus:outline-none"
                   />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-[#9088A0]">
+                    Reward (coins per viewer, optional)
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={rewardCoins}
+                    onChange={(e) => setRewardCoins(e.target.value)}
+                    placeholder="0"
+                    className="w-full rounded-xl border border-[#2A2238] bg-[#17131F] px-3.5 py-2.5 text-[14px] text-[#F3ECE0] placeholder:text-[#5E5570] focus:border-[#CBA35C]/50 focus:outline-none"
+                  />
+                  <p className="mt-1 text-[11px] text-[#5E5570]">
+                    Leave 0 for a progress-only goal with no per-viewer claim.
+                  </p>
                 </div>
 
                 {error && <p className="text-[12px] text-red-400">{error}</p>}

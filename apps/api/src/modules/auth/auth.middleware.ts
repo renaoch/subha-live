@@ -124,3 +124,45 @@ export async function authMiddleware(
     next(error);
   }
 }
+
+/**
+ * Same verification as `authMiddleware`, but never rejects the request.
+ * Attaches `req.user` when a valid bearer token is present; otherwise
+ * leaves it undefined and continues.
+ *
+ * For endpoints that must stay public (e.g. viewers reading room task
+ * state before they've necessarily authenticated) but want to
+ * personalize the response (e.g. "did *this* user already claim the
+ * reward") when a token happens to be present.
+ */
+export async function optionalAuthMiddleware(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return next();
+  }
+
+  const token = authHeader.substring(7).trim();
+  if (!token) return next();
+
+  try {
+    const result = await jwtVerify(token, JWKS, { audience: "authenticated" });
+    const payload = result.payload as SupabaseJwtPayload;
+    if (payload.sub) {
+      req.user = {
+        id: payload.sub,
+        email: payload.email,
+        role: payload.role,
+      } as Request["user"];
+    }
+  } catch {
+    // Invalid/expired token on a public route — just proceed unauthenticated
+    // rather than failing the request.
+  }
+
+  next();
+}

@@ -1276,6 +1276,48 @@ export type Database = {
           },
         ]
       }
+      room_task_claims: {
+        Row: {
+          claimed_at: string
+          id: string
+          reward_coins: number
+          room_task_id: string
+          user_id: string
+          wallet_transaction_id: string | null
+        }
+        Insert: {
+          claimed_at?: string
+          id?: string
+          reward_coins: number
+          room_task_id: string
+          user_id: string
+          wallet_transaction_id?: string | null
+        }
+        Update: {
+          claimed_at?: string
+          id?: string
+          reward_coins?: number
+          room_task_id?: string
+          user_id?: string
+          wallet_transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_task_claims_room_task_id_fkey"
+            columns: ["room_task_id"]
+            isOneToOne: false
+            referencedRelation: "room_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_task_claims_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_tasks: {
         Row: {
           completed_at: string | null
@@ -1283,6 +1325,7 @@ export type Database = {
           current_value: number
           host_id: string
           id: string
+          reward_coins: number
           room_id: string
           status: string
           target_value: number
@@ -1295,6 +1338,7 @@ export type Database = {
           current_value?: number
           host_id: string
           id?: string
+          reward_coins?: number
           room_id: string
           status?: string
           target_value: number
@@ -1307,6 +1351,7 @@ export type Database = {
           current_value?: number
           host_id?: string
           id?: string
+          reward_coins?: number
           room_id?: string
           status?: string
           target_value?: number
@@ -2045,6 +2090,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      claim_room_task_reward: {
+        Args: { p_room_task_id: string; p_user_id: string }
+        Returns: {
+          claim_id: string
+          claimed_at: string
+          new_coins: number
+          reward_coins: number
+        }[]
       }
       claim_task_reward: {
         Args: { p_task_id: string; p_user_id: string }

@@ -143,7 +143,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
 } = useSpeakerRequests(room?.id ?? '', isHost, room?.status);
 
-  const { task } = useRoomTask(
+  const { task, claim, claiming } = useRoomTask(
     room?.id ?? '',
     room?.status,
   );
@@ -460,6 +460,10 @@ useEffect(() => {
           currentUserId={userId}
 
           task={task}
+
+          onClaimTask={isHost ? undefined : claim}
+
+          claimingTask={claiming}
 
         />
 

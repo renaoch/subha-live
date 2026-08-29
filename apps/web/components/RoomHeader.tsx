@@ -36,6 +36,9 @@ interface RoomHeaderProps {
   currentUserId?: string | null;
   /** Host's live goal/task, if one is active or was just completed. */
   task?: RoomTask | null;
+  /** Viewer taps CLAIM on a completed task's reward. Omit to hide the button (e.g. host's own view). */
+  onClaimTask?: () => void;
+  claimingTask?: boolean;
 }
 
 type Tag = {
@@ -171,6 +174,8 @@ export function RoomHeader({
   onLeave,
   currentUserId,
   task,
+  onClaimTask,
+  claimingTask,
 }: RoomHeaderProps) {
   const hostName = host?.name || "Host";
   const avatarUrl = host?.avatar || undefined;
@@ -257,7 +262,7 @@ export function RoomHeader({
 
       {/* Live goal — sits right below the viewer row, transparent glass
           so it reads as part of the header rather than a new block. */}
-      <RoomTaskBar task={task ?? null} />
+      <RoomTaskBar task={task ?? null} onClaim={onClaimTask} claiming={claimingTask} />
     </div>
   );
 }

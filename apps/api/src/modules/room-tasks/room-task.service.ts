@@ -1,7 +1,13 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import type { SetRoomTaskInput } from "./room-task.schema";
-import { toRoomTask, type RoomTask, type RoomTaskRow } from "./room-task.types";
+import {
+  toRoomTask,
+  type RoomTask,
+  type RoomTaskRow,
+  type ClaimRoomTaskResult,
+  type ClaimRoomTaskResultRow,
+} from "./room-task.types";
 
 async function assertIsAdmin(userId: string): Promise<void> {
   const { data, error } = await supabase
@@ -25,13 +31,25 @@ async function assertIsAdmin(userId: string): Promise<void> {
 }
 
 export const roomTaskService = {
-  /** Public read — viewers and the host both poll this for the live progress bar. */
-  async getActiveTask(roomId: string): Promise<RoomTask | null> {
+  /**
+   * Public read — viewers and the host both poll this for the live progress
+   * bar. Also returns the most recently completed/cancelled task briefly so
+   * a viewer who just finished it sees the CLAIM state instead of the card
+   * disappearing, so we look up "active" first, then fall back to the most
+   * recent "completed" one within the room.
+   *
+   * When `userId` is passed, includes whether *that* user has already
+   * claimed the reward, so the frontend can render CLAIMED vs CLAIMABLE
+   * without a second round trip.
+   */
+  async getActiveTask(roomId: string, userId?: string): Promise<RoomTask | null> {
     const { data, error } = await supabase
       .from("room_tasks")
       .select("*")
       .eq("room_id", roomId)
-      .eq("status", "active")
+      .in("status", ["active", "completed"])
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) {
@@ -41,7 +59,29 @@ export const roomTaskService = {
       });
     }
 
-    return data ? toRoomTask(data as RoomTaskRow) : null;
+    if (!data) return null;
+
+    const row = data as RoomTaskRow;
+
+    if (!userId || row.reward_coins <= 0) {
+      return toRoomTask(row);
+    }
+
+    const { data: claim, error: claimError } = await supabase
+      .from("room_task_claims")
+      .select("claimed_at")
+      .eq("room_task_id", row.id)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (claimError) {
+      throw new AppError(500, "Failed to load claim status", {
+        code: "ROOM_TASK_CLAIM_LOOKUP_FAILED",
+        details: claimError.message,
+      });
+    }
+
+    return toRoomTask(row, claim ?? null);
   },
 
   /** Admin sets a new goal for the room. Replaces (cancels) any currently active task. */
@@ -89,6 +129,7 @@ export const roomTaskService = {
         host_id: room.host_id,
         title: input.title,
         target_value: input.targetValue,
+        reward_coins: input.rewardCoins ?? 0,
         current_value: 0,
         status: "active",
       })
@@ -169,5 +210,72 @@ export const roomTaskService = {
     }
 
     return toRoomTask(data as RoomTaskRow);
+  },
+
+  /**
+   * Claim the coin reward for a completed room task.
+   *
+   * All correctness lives in the `claim_room_task_reward` SQL function
+   * (see supabase/migrations/20260829120000_room_task_rewards.sql):
+   * it locks the task row, verifies status = 'completed', inserts the
+   * claim under a UNIQUE(room_task_id, user_id) constraint, and credits
+   * `profiles.coins` — all in one transaction. That means this call is
+   * safe to fire from double-clicks, multiple tabs, or racing retries;
+   * at most one of them will ever succeed in crediting coins, and the
+   * rest will fail with ROOM_TASK_ALREADY_CLAIMED.
+   */
+  async claimReward(roomTaskId: string, userId: string): Promise<ClaimRoomTaskResult> {
+    const { data, error } = await supabase.rpc("claim_room_task_reward", {
+      p_room_task_id: roomTaskId,
+      p_user_id: userId,
+    });
+
+    if (error) {
+      const message = error.message ?? "";
+
+      if (message.includes("ROOM_TASK_NOT_FOUND")) {
+        throw new AppError(404, "Task not found", { code: "ROOM_TASK_NOT_FOUND" });
+      }
+      if (message.includes("ROOM_TASK_NOT_COMPLETED")) {
+        throw new AppError(400, "Task has not been completed yet", {
+          code: "ROOM_TASK_NOT_COMPLETED",
+        });
+      }
+      if (message.includes("ROOM_TASK_NO_REWARD")) {
+        throw new AppError(400, "This task has no reward to claim", {
+          code: "ROOM_TASK_NO_REWARD",
+        });
+      }
+      if (message.includes("ROOM_TASK_ALREADY_CLAIMED")) {
+        throw new AppError(409, "Reward already claimed", {
+          code: "ROOM_TASK_ALREADY_CLAIMED",
+        });
+      }
+      if (message.includes("USER_NOT_FOUND")) {
+        throw new AppError(404, "User not found", { code: "USER_NOT_FOUND" });
+      }
+
+      throw new AppError(500, "Failed to claim task reward", {
+        code: "ROOM_TASK_CLAIM_FAILED",
+        details: message,
+      });
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | ClaimRoomTaskResultRow
+      | undefined;
+
+    if (!row) {
+      throw new AppError(500, "Claim did not return a result", {
+        code: "ROOM_TASK_CLAIM_FAILED",
+      });
+    }
+
+    return {
+      taskId: roomTaskId,
+      rewardCoins: row.reward_coins,
+      newCoins: row.new_coins,
+      claimedAt: row.claimed_at,
+    };
   },
 };

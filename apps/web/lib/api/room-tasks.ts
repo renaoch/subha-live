@@ -13,15 +13,27 @@ export interface RoomTask {
   targetValue: number;
   currentValue: number;
   progress: number; // 0-100
+  rewardCoins: number;
   status: "active" | "completed" | "cancelled";
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  /** Only present when the caller was authenticated. */
+  isClaimed?: boolean;
+  claimedAt?: string | null;
 }
 
 export interface SetRoomTaskInput {
   title: string;
   targetValue: number;
+  rewardCoins?: number;
+}
+
+export interface ClaimRoomTaskResult {
+  taskId: string;
+  rewardCoins: number;
+  newCoins: number;
+  claimedAt: string;
 }
 
 export const roomTasksApi = {
@@ -45,5 +57,12 @@ export const roomTasksApi = {
     return apiFetch<RoomTaskEnvelope<null>>(`/api/v1/rooms/${roomId}/task`, {
       method: "DELETE",
     });
+  },
+
+  claim(roomId: string) {
+    return apiFetch<RoomTaskEnvelope<ClaimRoomTaskResult>>(
+      `/api/v1/rooms/${roomId}/task/claim`,
+      { method: "POST" },
+    ).then((r) => r.data);
   },
 };
