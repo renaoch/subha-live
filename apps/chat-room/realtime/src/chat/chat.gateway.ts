@@ -8,6 +8,7 @@ import type { Config } from '../infrastructure/config.js'
 import type { SupabaseTokenVerifier } from '../infrastructure/supabaseAuth.js'
 import { extractToken } from '../infrastructure/supabaseAuth.js'
 import { handleConnection, type RoomRegistry } from './websocket/connection.js'
+import { handleTaskConnection } from './websocket/taskConnection.js'
 import { subscribeToAllRooms } from './redis/pubsub.js'
 import { metricsSnapshot } from '../infrastructure/metrics.js'
 
@@ -68,6 +69,20 @@ export async function registerChatGateway(app: FastifyInstance, deps: GatewayDep
   app.get('/ws/rooms/:roomId/chat', { websocket: true }, (socket, request) => {
     const { roomId } = request.params as { roomId: string }
     void handleConnection(socket, roomId, request as { headers: { authorization?: string }; url?: string }, {
+      config,
+      verifier,
+      chatService,
+      rooms,
+      connectionCount,
+    })
+  })
+
+  // Host-task realtime: server -> client push only. Reuses the same auth /
+  // authorization / room registry, so task events published onto
+  // `pubsub:room:*:task` reach every task socket in the room.
+  app.get('/ws/rooms/:roomId/task', { websocket: true }, (socket, request) => {
+    const { roomId } = request.params as { roomId: string }
+    void handleTaskConnection(socket, roomId, request as { headers: { authorization?: string }; url?: string }, {
       config,
       verifier,
       chatService,

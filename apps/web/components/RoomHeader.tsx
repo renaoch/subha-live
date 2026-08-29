@@ -6,8 +6,8 @@ import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { usersApi } from "@/lib/api/users";
-import { RoomTaskBar } from "@/components/RoomTaskBar";
-import type { RoomTask } from "@/lib/api/room-tasks";
+import { HostTaskCard } from "@/components/HostTaskCard";
+import type { HostTaskStats, ViewerHostTask } from "@/lib/api/host-task";
 import {
   BadgeCheck,
   Crown,
@@ -34,11 +34,17 @@ interface RoomHeaderProps {
   onLeave: () => void;
   /** Currently logged-in user, so we can hide Follow on your own room. */
   currentUserId?: string | null;
-  /** Host's live goal/task, if one is active or was just completed. */
-  task?: RoomTask | null;
+  /** Host's live task/reward, if one is active for this user. */
+  task?: ViewerHostTask | null;
+  /** Whether the current user is the room host (shows stats + Manage instead of CLAIM). */
+  isHost?: boolean;
   /** Viewer taps CLAIM on a completed task's reward. Omit to hide the button (e.g. host's own view). */
   onClaimTask?: () => void;
   claimingTask?: boolean;
+  /** Host taps "Manage" to open task management. */
+  onManageTask?: () => void;
+  /** Host-only rollup stats for the active task. */
+  taskStats?: HostTaskStats | null;
 }
 
 type Tag = {
@@ -174,8 +180,11 @@ export function RoomHeader({
   onLeave,
   currentUserId,
   task,
+  isHost,
   onClaimTask,
   claimingTask,
+  onManageTask,
+  taskStats,
 }: RoomHeaderProps) {
   const hostName = host?.name || "Host";
   const avatarUrl = host?.avatar || undefined;
@@ -260,9 +269,16 @@ export function RoomHeader({
         </div>
       </div>
 
-      {/* Live goal — sits right below the viewer row, transparent glass
+      {/* Live task — sits right below the viewer row, transparent glass
           so it reads as part of the header rather than a new block. */}
-      <RoomTaskBar task={task ?? null} onClaim={onClaimTask} claiming={claimingTask} />
+      <HostTaskCard
+        task={task ?? null}
+        isHost={isHost}
+        onClaim={onClaimTask}
+        claiming={claimingTask}
+        onManage={onManageTask}
+        stats={taskStats}
+      />
     </div>
   );
 }

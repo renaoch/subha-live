@@ -13,6 +13,7 @@ import type {
 import type { GiftListQuery, SendGiftInput } from "./charisma.schema";
 
 import { roomTaskService } from "../room-tasks/room-task.service";
+import { hostTaskService } from "../host-task/host-task.service";
 
 function toNumber(value: number | null): number {
   return value ?? 0;
@@ -392,6 +393,13 @@ export async function sendGift(
   if (input.roomId) {
     roomTaskService.bumpProgress(input.roomId, input.value).catch((err) => {
       console.error("[sendGift] failed to bump room task progress:", err);
+    });
+
+    // Per-user "coins earned from this room" progress: the gift's recipient
+    // (typically the host) earns coin-progress toward any active eligible
+    // host task in the room.
+    hostTaskService.recordCoinProgress(input.roomId, input.recipientId, input.value).catch((err) => {
+      console.error("[sendGift] failed to record host-task coin progress:", err);
     });
   }
 

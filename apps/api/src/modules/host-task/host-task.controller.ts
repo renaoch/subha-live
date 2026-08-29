@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../../errors/app-error";
 import { hostTaskService } from "./host-task.service";
-import { createHostTaskSchema, heartbeatSchema, updateHostTaskSchema } from "./host-task.schema";
+import { createHostTaskSchema, heartbeatSchema, setStatusSchema, updateHostTaskSchema } from "./host-task.schema";
 
 function requireUser(req: Request) {
   if (!req.user) {
@@ -68,6 +68,23 @@ export async function deleteRoomTask(req: Request<{ taskId: string }>, res: Resp
     const user = requireUser(req);
     await hostTaskService.deleteTask(req.params.taskId, user.id);
     res.status(200).json({ success: true, data: null });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function setRoomTaskStatus(req: Request<{ taskId: string }>, res: Response, next: NextFunction) {
+  try {
+    const user = requireUser(req);
+    const result = setStatusSchema.safeParse(req.body);
+    if (!result.success) {
+      throw new AppError(400, "Invalid status payload", {
+        code: "INVALID_HOST_TASK_PAYLOAD",
+        details: result.error.flatten().fieldErrors,
+      });
+    }
+    const task = await hostTaskService.setStatus(req.params.taskId, user.id, result.data.status);
+    res.status(200).json({ success: true, data: task });
   } catch (error) {
     next(error);
   }

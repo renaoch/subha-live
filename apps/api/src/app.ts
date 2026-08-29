@@ -18,6 +18,7 @@ import express from "express";
     import mediaTestRoutes from "./modules/media/media-test.routes";
 import turnRoutes from "./modules/media/turn.routes";
 import charismaRoutes from "./modules/charisma/charisma.routes";
+import hostTaskRoutes from "./modules/host-task/host-task.routes";
     import { errorMiddleware } from "./middleware/error.middleware";
 
 
@@ -65,6 +66,7 @@ import charismaRoutes from "./modules/charisma/charisma.routes";
     app.use("/api/v1/offline-recharge", offlineRechargeRoutes);
     app.use("/api/v1/wallet", walletRoutes);
     app.use("/api/v1/charisma", charismaRoutes);
+    app.use("/api/v1", hostTaskRoutes);
     app.use(
   "/api/v1/media/test",
   mediaTestRoutes,

@@ -3,13 +3,23 @@ import { AppError } from "../../errors/app-error";
 import type { CreateHostTaskInput, UpdateHostTaskInput } from "./host-task.schema";
 import {
   toHostTaskConfig,
+  type ClaimHostTaskResult,
   type HostTaskConfig,
   type HostTaskProgressRow,
   type HostTaskRow,
   type HostTaskWithStats,
   type ViewerHostTask,
-  type ViewerTaskState,
 } from "./host-task.types";
+import {
+  computeTaskPercent,
+  deriveViewerState,
+  isTaskExpired,
+  isTaskNotStarted,
+  meetsTaskTarget,
+  remainingMs,
+  resolveEligibility,
+} from "./host-task.logic";
+import { publishHostTaskEvent } from "./host-task.realtime";
 
 // `host_tasks` / `host_task_progress` aren't in the generated Database
 // type yet (see the note in host-task.types.ts), so the typed `supabase`
@@ -69,42 +79,21 @@ async function assertCanManage(roomId: string, userId: string) {
   return room;
 }
 
-function isExpired(task: Pick<HostTaskRow, "expires_at">): boolean {
-  return !!task.expires_at && new Date(task.expires_at) <= new Date();
-}
-
-async function isEligible(task: HostTaskRow, userId: string): Promise<boolean> {
-  if (task.audience === "all") return true;
-
-  const { data: profile, error } = await supabase
+async function getProfileCreatedAt(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
     .from("profiles")
     .select("created_at")
     .eq("id", userId)
     .maybeSingle();
 
-  if (error || !profile?.created_at) return task.audience === "existing_users";
-
-  const ageMs = Date.now() - new Date(profile.created_at).getTime();
-  const windowMs = task.new_user_window_days * 24 * 60 * 60 * 1000;
-  const isNew = ageMs <= windowMs;
-
-  return task.audience === "new_users" ? isNew : !isNew;
+  if (error || !data?.created_at) return null;
+  return data.created_at;
 }
 
-function computePercent(task: HostTaskRow, progress: { hours_progress: number; coins_progress: number }) {
-  const parts: number[] = [];
-  if (task.target_hours) parts.push(Math.min(100, (progress.hours_progress / task.target_hours) * 100));
-  if (task.target_coins) parts.push(Math.min(100, (progress.coins_progress / task.target_coins) * 100));
-  if (parts.length === 0) return 0;
-  // A task can require *both* hours and coins — only "done" once every
-  // configured target is met, so use the minimum of the two percentages.
-  return Number(Math.min(...parts).toFixed(2));
-}
-
-function meetsTarget(task: HostTaskRow, progress: { hours_progress: number; coins_progress: number }) {
-  if (task.target_hours != null && progress.hours_progress < task.target_hours) return false;
-  if (task.target_coins != null && progress.coins_progress < task.target_coins) return false;
-  return true;
+async function isEligible(task: HostTaskRow, userId: string): Promise<boolean> {
+  if (task.audience === "all") return true;
+  const createdAt = await getProfileCreatedAt(userId);
+  return resolveEligibility(task.audience, createdAt, task.new_user_window_days);
 }
 
 async function getOrCreateProgress(
@@ -204,7 +193,9 @@ export const hostTaskService = {
       });
     }
 
-    return toHostTaskConfig(data as HostTaskRow);
+    const task = toHostTaskConfig(data as HostTaskRow);
+    await publishHostTaskEvent(roomId, { type: "task.created", taskId: task.id });
+    return task;
   },
 
   async updateTask(taskId: string, userId: string, input: UpdateHostTaskInput): Promise<HostTaskConfig> {
@@ -238,10 +229,21 @@ export const hostTaskService = {
       });
     }
 
-    return toHostTaskConfig(data as HostTaskRow);
+    const updated = toHostTaskConfig(data as HostTaskRow);
+
+    const eventType: "task.enabled" | "task.disabled" | "task.updated" =
+      input.status === "active"
+        ? "task.enabled"
+        : input.status === "inactive" || input.status === "ended"
+          ? "task.disabled"
+          : "task.updated";
+
+    await publishHostTaskEvent(updated.roomId, { type: eventType, taskId: updated.id });
+    return updated;
   },
 
   async setStatus(taskId: string, userId: string, status: "active" | "inactive" | "ended"): Promise<HostTaskConfig> {
+    // updateTask publishes the correct task.enabled / task.disabled event.
     return this.updateTask(taskId, userId, { status } as UpdateHostTaskInput);
   },
 
@@ -257,6 +259,8 @@ export const hostTaskService = {
         details: error.message,
       });
     }
+
+    await publishHostTaskEvent(task.room_id, { type: "task.deleted", taskId });
   },
 
   async getTaskOrThrow(taskId: string): Promise<HostTaskRow> {
@@ -310,18 +314,9 @@ export const hostTaskService = {
       });
     }
 
-    const stats = new Map<string, { eligibleUsers: number; completedUsers: number; claimedUsers: number }>();
-    for (const row of (progressRows ?? []) as Array<{ task_id: string; status: string }>) {
-      const s = stats.get(row.task_id) ?? { eligibleUsers: 0, completedUsers: 0, claimedUsers: 0 };
-      s.eligibleUsers += 1;
-      if (row.status === "completed" || row.status === "claimed") s.completedUsers += 1;
-      if (row.status === "claimed") s.claimedUsers += 1;
-      stats.set(row.task_id, s);
-    }
-
     return rows.map((row) => ({
       ...toHostTaskConfig(row),
-      stats: stats.get(row.id) ?? { eligibleUsers: 0, completedUsers: 0, claimedUsers: 0 },
+      stats: rollupStats(row.id, progressRows as Array<{ task_id: string; status: string }> | null),
     }));
   },
 
@@ -352,18 +347,9 @@ export const hostTaskService = {
       .select("task_id, status")
       .in("task_id", taskIds);
 
-    const stats = new Map<string, { eligibleUsers: number; completedUsers: number; claimedUsers: number }>();
-    for (const row of (progressRows ?? []) as Array<{ task_id: string; status: string }>) {
-      const s = stats.get(row.task_id) ?? { eligibleUsers: 0, completedUsers: 0, claimedUsers: 0 };
-      s.eligibleUsers += 1;
-      if (row.status === "completed" || row.status === "claimed") s.completedUsers += 1;
-      if (row.status === "claimed") s.claimedUsers += 1;
-      stats.set(row.task_id, s);
-    }
-
     return rows.map((row) => ({
       ...toHostTaskConfig(row),
-      stats: stats.get(row.id) ?? { eligibleUsers: 0, completedUsers: 0, claimedUsers: 0 },
+      stats: rollupStats(row.id, progressRows as Array<{ task_id: string; status: string }> | null),
     }));
   },
 
@@ -392,21 +378,50 @@ export const hostTaskService = {
 
     const task = data as HostTaskRow;
     const config = toHostTaskConfig(task);
-    const remainingMs = task.expires_at
-      ? Math.max(0, new Date(task.expires_at).getTime() - Date.now())
-      : null;
+    const remaining = remainingMs(task.expires_at);
 
-    if (isExpired(task)) {
-      return { ...config, state: "expired", progress: { hours: 0, coins: 0, percent: 0 }, remainingMs: 0 };
+    if (isTaskExpired(task.expires_at)) {
+      // Best-effort realtime signal so connected clients can hide the card
+      // immediately rather than waiting for their next poll.
+      await publishHostTaskEvent(roomId, { type: "task.expired", taskId: task.id });
+      return {
+        ...config,
+        state: "expired",
+        progress: { hours: 0, coins: 0, percent: 0 },
+        remainingMs: 0,
+        claimedAt: null,
+      };
+    }
+
+    if (isTaskNotStarted(task.starts_at)) {
+      return {
+        ...config,
+        state: "active",
+        progress: { hours: 0, coins: 0, percent: 0 },
+        remainingMs: remaining,
+        claimedAt: null,
+      };
     }
 
     if (!userId) {
-      return { ...config, state: "active", progress: { hours: 0, coins: 0, percent: 0 }, remainingMs };
+      return {
+        ...config,
+        state: "active",
+        progress: { hours: 0, coins: 0, percent: 0 },
+        remainingMs: remaining,
+        claimedAt: null,
+      };
     }
 
     const eligible = await isEligible(task, userId);
     if (!eligible) {
-      return { ...config, state: "not_eligible", progress: { hours: 0, coins: 0, percent: 0 }, remainingMs };
+      return {
+        ...config,
+        state: "not_eligible",
+        progress: { hours: 0, coins: 0, percent: 0 },
+        remainingMs: remaining,
+        claimedAt: null,
+      };
     }
 
     const { data: progressRow } = await db
@@ -420,26 +435,30 @@ export const hostTaskService = {
       hours_progress: 0,
       coins_progress: 0,
       status: "in_progress" as const,
+      claimed_at: null,
     };
 
-    const state: ViewerTaskState =
-      progress.status === "claimed"
-        ? "claimed"
-        : progress.status === "completed"
-          ? "completed"
-          : progress.hours_progress > 0 || progress.coins_progress > 0
-            ? "in_progress"
-            : "active";
+    const state = deriveViewerState(
+      progress.status,
+      progress.hours_progress ?? 0,
+      progress.coins_progress ?? 0,
+    );
 
     return {
       ...config,
       state,
       progress: {
-        hours: progress.hours_progress,
-        coins: progress.coins_progress,
-        percent: computePercent(task, progress),
+        hours: progress.hours_progress ?? 0,
+        coins: progress.coins_progress ?? 0,
+        percent: computeTaskPercent(
+          task.target_hours,
+          task.target_coins,
+          progress.hours_progress ?? 0,
+          progress.coins_progress ?? 0,
+        ),
       },
-      remainingMs,
+      remainingMs: remaining,
+      claimedAt: progress.claimed_at ?? null,
     };
   },
 
@@ -459,7 +478,7 @@ export const hostTaskService = {
     if (error) throw error;
 
     for (const row of (tasks ?? []) as HostTaskRow[]) {
-      if (isExpired(row)) continue;
+      if (isTaskExpired(row.expires_at)) continue;
       if (!(await isEligible(row, userId))) continue;
       await this.bumpUserProgress(row, userId, { coins: coinsEarned });
     }
@@ -482,7 +501,7 @@ export const hostTaskService = {
     if (error) throw error;
 
     for (const row of (tasks ?? []) as HostTaskRow[]) {
-      if (isExpired(row)) continue;
+      if (isTaskExpired(row.expires_at)) continue;
       if (!(await isEligible(row, userId))) continue;
       await this.bumpUserProgress(row, userId, { hours: hoursDelta });
     }
@@ -496,9 +515,9 @@ export const hostTaskService = {
     const progress = await getOrCreateProgress(task.id, userId, task.room_id);
     if (progress.status === "completed" || progress.status === "claimed") return;
 
-    const nextHours = progress.hours_progress + (delta.hours ?? 0);
-    const nextCoins = progress.coins_progress + (delta.coins ?? 0);
-    const done = meetsTarget(task, { hours_progress: nextHours, coins_progress: nextCoins });
+    const nextHours = (progress.hours_progress ?? 0) + (delta.hours ?? 0);
+    const nextCoins = (progress.coins_progress ?? 0) + (delta.coins ?? 0);
+    const done = meetsTaskTarget(task.target_hours, task.target_coins, nextHours, nextCoins);
 
     const { error } = await db
       .from("host_task_progress")
@@ -516,6 +535,14 @@ export const hostTaskService = {
         details: error.message,
       });
     }
+
+    const percent = computeTaskPercent(task.target_hours, task.target_coins, nextHours, nextCoins);
+    await publishHostTaskEvent(task.room_id, {
+      type: done ? "task.completed" : "task.progress.updated",
+      taskId: task.id,
+      userId,
+      data: { percent, hours: nextHours, coins: nextCoins },
+    });
   },
 
   /**
@@ -524,7 +551,9 @@ export const hostTaskService = {
    * function under row locks — the frontend's view of "COMPLETED" is
    * only ever a hint, never trusted here.
    */
-  async claim(taskId: string, userId: string): Promise<{ rewardAmount: number; newCoins: number }> {
+  async claim(taskId: string, userId: string): Promise<ClaimHostTaskResult> {
+    const task = await this.getTaskOrThrow(taskId);
+
     const { data, error } = await db.rpc("claim_host_task_reward", {
       p_task_id: taskId,
       p_user_id: userId,
@@ -537,11 +566,15 @@ export const hostTaskService = {
           ? "HOST_TASK_NOT_ACTIVE"
           : error.message?.includes("TASK_EXPIRED")
             ? "HOST_TASK_EXPIRED"
-            : error.message?.includes("TASK_CLAIM_LIMIT_REACHED")
-              ? "HOST_TASK_CLAIM_LIMIT_REACHED"
-              : error.message?.includes("TASK_NOT_COMPLETED")
-                ? "HOST_TASK_NOT_COMPLETED"
-                : "HOST_TASK_CLAIM_FAILED";
+            : error.message?.includes("TASK_NOT_STARTED")
+              ? "HOST_TASK_NOT_STARTED"
+              : error.message?.includes("TASK_CLAIM_LIMIT_REACHED")
+                ? "HOST_TASK_CLAIM_LIMIT_REACHED"
+                : error.message?.includes("TASK_NOT_ELIGIBLE")
+                  ? "HOST_TASK_NOT_ELIGIBLE"
+                  : error.message?.includes("TASK_NOT_COMPLETED")
+                    ? "HOST_TASK_NOT_COMPLETED"
+                    : "HOST_TASK_CLAIM_FAILED";
 
       const status = code === "HOST_TASK_CLAIM_FAILED" ? 500 : 400;
 
@@ -553,6 +586,35 @@ export const hostTaskService = {
       throw new AppError(500, "Claim did not return a result", { code: "HOST_TASK_CLAIM_FAILED" });
     }
 
-    return { rewardAmount: row.reward_amount, newCoins: row.new_coins };
+    await publishHostTaskEvent(task.room_id, {
+      type: "task.claimed",
+      taskId,
+      userId,
+      data: { rewardAmount: row.reward_amount },
+    });
+
+    return {
+      rewardAmount: row.reward_amount,
+      newCoins: row.new_coins,
+      claimedAt: row.claimed_at,
+    };
   },
 };
+
+function rollupStats(
+  taskId: string,
+  progressRows: Array<{ task_id: string; status: string }> | null,
+): { eligibleUsers: number; completedUsers: number; claimedUsers: number } {
+  let eligibleUsers = 0;
+  let completedUsers = 0;
+  let claimedUsers = 0;
+
+  for (const row of progressRows ?? []) {
+    if (row.task_id !== taskId) continue;
+    eligibleUsers += 1;
+    if (row.status === "completed" || row.status === "claimed") completedUsers += 1;
+    if (row.status === "claimed") claimedUsers += 1;
+  }
+
+  return { eligibleUsers, completedUsers, claimedUsers };
+}

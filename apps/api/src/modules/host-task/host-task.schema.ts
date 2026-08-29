@@ -17,7 +17,16 @@ export const createHostTaskSchema = z.object({
   startsAt: z.coerce.date().optional(),
   expiresAt: z.coerce.date().optional(),
   maxClaims: z.coerce.number().int().positive().max(1_000_000).optional(),
-});
+})
+  // At least one requirement must be configured.
+  .refine((v) => v.targetHours != null || v.targetCoins != null, {
+    message: "A task needs at least one target (hours or coins)",
+    path: ["targetHours"],
+  })
+  .refine((v) => !v.startsAt || !v.expiresAt || v.expiresAt > v.startsAt, {
+    message: "Expiration must be after the start time",
+    path: ["expiresAt"],
+  });
 
 export type CreateHostTaskInput = z.infer<typeof createHostTaskSchema>;
 
@@ -42,3 +51,9 @@ export const heartbeatSchema = z.object({
 });
 
 export type HeartbeatInput = z.infer<typeof heartbeatSchema>;
+
+export const setStatusSchema = z.object({
+  status: statusSchema,
+});
+
+export type SetStatusInput = z.infer<typeof setStatusSchema>;

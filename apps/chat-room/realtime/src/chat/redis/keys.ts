@@ -35,6 +35,10 @@ export const redisKeys = {
   pubsubRoom: (roomId: string) => `pubsub:room:${roomId}:chat`,
   pubsubRoomPattern: 'pubsub:room:*:chat',
 
+  /** Host-task fanout channel (server-published task events). */
+  pubsubTaskRoom: (roomId: string) => `pubsub:room:${roomId}:task`,
+  pubsubTaskRoomPattern: 'pubsub:room:*:task',
+
   /** Asynchronous durability pipeline: chat messages awaiting Postgres persistence. */
   persistenceStream: 'chat:persistence:stream',
   persistenceConsumerGroup: 'chat:persistence:workers',

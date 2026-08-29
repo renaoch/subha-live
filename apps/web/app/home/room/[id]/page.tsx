@@ -20,7 +20,9 @@ import { useWebRTC } from '@/hooks/useWebRTC';
 
 import { useSpeakerRequests } from '@/hooks/useSpeakerRequests';
 
-import { useRoomTask } from '@/hooks/useRoomTask';
+import { useHostTask } from '@/hooks/useHostTask';
+
+import { useRoomHeartbeat } from '@/hooks/useRoomHeartbeat';
 
 import { useViewerRequestStatus } from '@/hooks/useViewerRequestStatus';
 
@@ -31,6 +33,8 @@ import { LiveVideo } from '@/components/LiveVideo';
 import { BottomBar } from '@/components/BottomBar';
 
 import { HostControls } from '@/components/HostControls';
+
+import { HostTaskManageSheet } from '@/components/HostTaskManageSheet';
 
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
@@ -143,10 +147,15 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
 } = useSpeakerRequests(room?.id ?? '', isHost, room?.status);
 
-  const { task, claim, claiming } = useRoomTask(
+  const { task, stats, claim, claiming, refetch: refetchTask } = useHostTask(
     room?.id ?? '',
     room?.status,
+    isHost,
   );
+  const [taskManageOpen, setTaskManageOpen] = useState(false);
+
+  // Accrue streaming/watch hours toward the active host task.
+  useRoomHeartbeat(room?.id ?? '', room?.status);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
 
 
@@ -461,9 +470,15 @@ useEffect(() => {
 
           task={task}
 
+          isHost={isHost}
+
           onClaimTask={isHost ? undefined : claim}
 
           claimingTask={claiming}
+
+          onManageTask={isHost ? () => setTaskManageOpen(true) : undefined}
+
+          taskStats={stats}
 
         />
 
@@ -754,6 +769,24 @@ useEffect(() => {
             onClose={() => setSpeakerPanelOpen(false)}
 
             hostName={room.host?.name || 'Host'}
+
+          />
+
+        )}
+
+        {/* Host task management sheet */}
+
+        {isHost && taskManageOpen && room && (
+
+          <HostTaskManageSheet
+
+            roomId={room.id}
+
+            task={task}
+
+            onClose={() => setTaskManageOpen(false)}
+
+            onChanged={refetchTask}
 
           />
 

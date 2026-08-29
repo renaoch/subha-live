@@ -36,6 +36,7 @@ export interface HostTaskProgressRow {
   coins_progress: number;
   status: HostTaskProgressStatus;
   completed_at: string | null;
+  claimed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -85,6 +86,13 @@ export interface ViewerHostTask extends HostTaskConfig {
     percent: number;
   };
   remainingMs: number | null;
+  claimedAt: string | null;
+}
+
+export interface ClaimHostTaskResult {
+  rewardAmount: number;
+  newCoins: number;
+  claimedAt: string;
 }
 
 export function toHostTaskConfig(row: HostTaskRow): HostTaskConfig {

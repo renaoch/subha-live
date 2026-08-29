@@ -116,13 +116,13 @@ export async function handleConnection(socket: WebSocket, roomId: string, reques
   })
 }
 
-function registerSocket(rooms: RoomRegistry, roomId: string, socket: WebSocket): void {
+export function registerSocket(rooms: RoomRegistry, roomId: string, socket: WebSocket): void {
   const set = rooms.get(roomId) ?? new Set<WebSocket>()
   set.add(socket)
   rooms.set(roomId, set)
 }
 
-function unregisterSocket(rooms: RoomRegistry, roomId: string, socket: WebSocket): void {
+export function unregisterSocket(rooms: RoomRegistry, roomId: string, socket: WebSocket): void {
   const set = rooms.get(roomId)
   if (!set) return
   set.delete(socket)
