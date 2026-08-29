@@ -50,6 +50,32 @@ export async function setRoomTask(
   }
 }
 
+export async function claimRoomTask(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.user) {
+      throw new AppError(401, "Authentication required", {
+        code: "AUTHENTICATION_REQUIRED",
+      });
+    }
+
+    const task = await roomTaskService.getActiveTask(req.params.id, req.user.id);
+
+    if (!task) {
+      throw new AppError(404, "Task not found", { code: "ROOM_TASK_NOT_FOUND" });
+    }
+
+    const result = await roomTaskService.claimReward(task.id, req.user.id);
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function cancelRoomTask(
   req: Request<{ id: string }>,
   res: Response,

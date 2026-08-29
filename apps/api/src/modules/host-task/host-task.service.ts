@@ -11,6 +11,17 @@ import {
   type ViewerTaskState,
 } from "./host-task.types";
 
+// `host_tasks` / `host_task_progress` aren't in the generated Database
+// type yet (see the note in host-task.types.ts), so the typed `supabase`
+// client's `.from()` overloads reject their table names outright. Route
+// just those calls through an untyped view of the same client — every
+// row is still cast back to its real shape (HostTaskRow /
+// HostTaskProgressRow) right where it's read.
+const db = supabase as unknown as {
+  from: (table: "host_tasks" | "host_task_progress") => any;
+  rpc: (fn: "claim_host_task_reward", args: Record<string, unknown>) => any;
+};
+
 async function getRoomOrThrow(roomId: string) {
   const { data: room, error } = await supabase
     .from("rooms")
@@ -101,7 +112,7 @@ async function getOrCreateProgress(
   userId: string,
   roomId: string,
 ): Promise<HostTaskProgressRow> {
-  const { data: existing, error: fetchError } = await supabase
+  const { data: existing, error: fetchError } = await db
     .from("host_task_progress")
     .select("*")
     .eq("task_id", taskId)
@@ -117,7 +128,7 @@ async function getOrCreateProgress(
 
   if (existing) return existing as HostTaskProgressRow;
 
-  const { data: created, error: createError } = await supabase
+  const { data: created, error: createError } = await db
     .from("host_task_progress")
     .insert({ task_id: taskId, user_id: userId, room_id: roomId })
     .select("*")
@@ -126,7 +137,7 @@ async function getOrCreateProgress(
   if (createError) {
     // Concurrent first-progress-event race: someone else inserted it
     // first (unique task_id+user_id). Just re-read.
-    const { data: reread } = await supabase
+    const { data: reread } = await db
       .from("host_task_progress")
       .select("*")
       .eq("task_id", taskId)
@@ -167,7 +178,7 @@ export const hostTaskService = {
   async createTask(roomId: string, userId: string, input: CreateHostTaskInput): Promise<HostTaskConfig> {
     await assertCanManage(roomId, userId);
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("host_tasks")
       .insert({
         room_id: roomId,
@@ -213,7 +224,7 @@ export const hostTaskService = {
     if (input.maxClaims !== undefined) patch.max_claims = input.maxClaims;
     if (input.status !== undefined) patch.status = input.status;
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("host_tasks")
       .update(patch as never)
       .eq("id", taskId)
@@ -238,7 +249,7 @@ export const hostTaskService = {
     const task = await this.getTaskOrThrow(taskId);
     await assertCanManage(task.room_id, userId);
 
-    const { error } = await supabase.from("host_tasks").delete().eq("id", taskId);
+    const { error } = await db.from("host_tasks").delete().eq("id", taskId);
 
     if (error) {
       throw new AppError(500, "Failed to delete task", {
@@ -249,7 +260,7 @@ export const hostTaskService = {
   },
 
   async getTaskOrThrow(taskId: string): Promise<HostTaskRow> {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("host_tasks")
       .select("*")
       .eq("id", taskId)
@@ -270,7 +281,7 @@ export const hostTaskService = {
   async listForRoom(roomId: string, userId: string): Promise<HostTaskWithStats[]> {
     await assertCanManage(roomId, userId);
 
-    const { data: tasks, error } = await supabase
+    const { data: tasks, error } = await db
       .from("host_tasks")
       .select("*")
       .eq("room_id", roomId)
@@ -287,7 +298,7 @@ export const hostTaskService = {
     if (rows.length === 0) return [];
 
     const taskIds = rows.map((t) => t.id);
-    const { data: progressRows, error: progressError } = await supabase
+    const { data: progressRows, error: progressError } = await db
       .from("host_task_progress")
       .select("task_id, status")
       .in("task_id", taskIds);
@@ -320,7 +331,7 @@ export const hostTaskService = {
    * already be verified as an admin).
    */
   async listAll(): Promise<HostTaskWithStats[]> {
-    const { data: tasks, error } = await supabase
+    const { data: tasks, error } = await db
       .from("host_tasks")
       .select("*")
       .order("created_at", { ascending: false });
@@ -336,7 +347,7 @@ export const hostTaskService = {
     if (rows.length === 0) return [];
 
     const taskIds = rows.map((t) => t.id);
-    const { data: progressRows } = await supabase
+    const { data: progressRows } = await db
       .from("host_task_progress")
       .select("task_id, status")
       .in("task_id", taskIds);
@@ -362,7 +373,7 @@ export const hostTaskService = {
    * personalized when `userId` is provided.
    */
   async getActiveTaskForViewer(roomId: string, userId: string | null): Promise<ViewerHostTask | null> {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("host_tasks")
       .select("*")
       .eq("room_id", roomId)
@@ -398,7 +409,7 @@ export const hostTaskService = {
       return { ...config, state: "not_eligible", progress: { hours: 0, coins: 0, percent: 0 }, remainingMs };
     }
 
-    const { data: progressRow } = await supabase
+    const { data: progressRow } = await db
       .from("host_task_progress")
       .select("*")
       .eq("task_id", task.id)
@@ -438,7 +449,7 @@ export const hostTaskService = {
   async recordCoinProgress(roomId: string, userId: string, coinsEarned: number): Promise<void> {
     if (coinsEarned <= 0) return;
 
-    const { data: tasks, error } = await supabase
+    const { data: tasks, error } = await db
       .from("host_tasks")
       .select("*")
       .eq("room_id", roomId)
@@ -461,7 +472,7 @@ export const hostTaskService = {
   async recordHeartbeat(roomId: string, userId: string, hoursDelta: number): Promise<void> {
     if (hoursDelta <= 0) return;
 
-    const { data: tasks, error } = await supabase
+    const { data: tasks, error } = await db
       .from("host_tasks")
       .select("*")
       .eq("room_id", roomId)
@@ -489,7 +500,7 @@ export const hostTaskService = {
     const nextCoins = progress.coins_progress + (delta.coins ?? 0);
     const done = meetsTarget(task, { hours_progress: nextHours, coins_progress: nextCoins });
 
-    const { error } = await supabase
+    const { error } = await db
       .from("host_task_progress")
       .update({
         hours_progress: nextHours,
@@ -514,7 +525,7 @@ export const hostTaskService = {
    * only ever a hint, never trusted here.
    */
   async claim(taskId: string, userId: string): Promise<{ rewardAmount: number; newCoins: number }> {
-    const { data, error } = await supabase.rpc("claim_host_task_reward", {
+    const { data, error } = await db.rpc("claim_host_task_reward", {
       p_task_id: taskId,
       p_user_id: userId,
     });
