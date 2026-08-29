@@ -1,5 +1,5 @@
 // components/HostControls.tsx
-import { Mic, MicOff, SlidersHorizontal, Play, Loader2, Target } from 'lucide-react';
+import { Mic, MicOff, SlidersHorizontal, Play, Loader2 } from 'lucide-react';
 
 interface HostControlsProps {
   isWaiting: boolean;
@@ -11,8 +11,6 @@ interface HostControlsProps {
   onStart: () => void;
   actionLoading: boolean;
   localStreamReady: boolean;
-  onOpenTask?: () => void;
-  taskActive?: boolean;
 }
 
 export function HostControls({
@@ -25,8 +23,6 @@ export function HostControls({
   onStart,
   actionLoading,
   localStreamReady,
-  onOpenTask,
-  taskActive,
 }: HostControlsProps) {
   return (
     <div className="absolute left-1/2 bottom-[43px] z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/60 p-1.5 shadow-2xl backdrop-blur-2xl">
@@ -51,22 +47,6 @@ export function HostControls({
       >
         <SlidersHorizontal className="h-[18px] w-[18px]" />
       </button>
-
-      {onOpenTask && (
-        <button
-          type="button"
-          onClick={onOpenTask}
-          className={`relative flex h-[34px] w-[34px] items-center justify-center rounded-full transition ${
-            taskActive ? 'bg-white text-black' : 'text-white hover:bg-white/10'
-          }`}
-          aria-label={taskActive ? 'Manage room goal' : 'Set a room goal'}
-        >
-          <Target className="h-[18px] w-[18px]" />
-          {taskActive && (
-            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[#FF3B5C] ring-2 ring-black" />
-          )}
-        </button>
-      )}
 
       {isWaiting && (
         <button

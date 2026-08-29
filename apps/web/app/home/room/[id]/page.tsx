@@ -32,7 +32,6 @@ import { BottomBar } from '@/components/BottomBar';
 
 import { HostControls } from '@/components/HostControls';
 
-import { TaskManagerModal } from '@/components/TaskManagerModal';
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
@@ -144,11 +143,10 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
 } = useSpeakerRequests(room?.id ?? '', isHost, room?.status);
 
-  const { task, saving: taskSaving, setTask, cancelTask } = useRoomTask(
+  const { task } = useRoomTask(
     room?.id ?? '',
     room?.status,
   );
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
 
 
@@ -570,32 +568,6 @@ useEffect(() => {
             actionLoading={actionLoading}
 
             localStreamReady={!!localStreamRef.current}
-
-            onOpenTask={() => setTaskModalOpen(true)}
-
-            taskActive={task?.status === 'active'}
-
-          />
-
-        )}
-
-
-
-        {/* Room goal manager (host) */}
-
-        {isHost && taskModalOpen && (
-
-          <TaskManagerModal
-
-            task={task}
-
-            saving={taskSaving}
-
-            onClose={() => setTaskModalOpen(false)}
-
-            onSetTask={setTask}
-
-            onCancelTask={cancelTask}
 
           />
 

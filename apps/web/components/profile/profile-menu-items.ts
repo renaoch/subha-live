@@ -66,12 +66,6 @@ export const profileMenuItems = [
     Icon: GiftIcon,
   },
   {
-    id: "host-center",
-    label: "Host Center",
-    href: "/host-center",
-    Icon: HeadsetIcon,
-  },
-  {
     id: "my-videos",
     label: "My Videos",
     href: "/videos",

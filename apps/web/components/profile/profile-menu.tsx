@@ -45,16 +45,6 @@ export function ProfileMenu() {
       return true;
     }
 
-    // Host Center – hosts, agency staff, or admins
-    if (item.id === "host-center") {
-      return (
-        role === "agency_owner" ||
-        role === "agency_admin" ||
-        role === "agency_agent" ||
-        isAdmin
-      );
-    }
-
     // BD Center – agency owners or admins
     if (item.id === "bd-center") {
       return role === "agency_owner" || isAdmin;
