@@ -3,27 +3,23 @@ import { AppError } from "../../errors/app-error";
 import type { SetRoomTaskInput } from "./room-task.schema";
 import { toRoomTask, type RoomTask, type RoomTaskRow } from "./room-task.types";
 
-async function assertIsHost(roomId: string, userId: string): Promise<void> {
-  const { data: room, error } = await supabase
-    .from("rooms")
-    .select("id, host_id")
-    .eq("id", roomId)
+async function assertIsAdmin(userId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
     .maybeSingle();
 
   if (error) {
-    throw new AppError(500, "Failed to look up room", {
-      code: "ROOM_LOOKUP_FAILED",
+    throw new AppError(500, "Failed to verify admin permission", {
+      code: "ADMIN_CHECK_FAILED",
       details: error.message,
     });
   }
 
-  if (!room) {
-    throw new AppError(404, "Room not found", { code: "ROOM_NOT_FOUND" });
-  }
-
-  if (room.host_id !== userId) {
-    throw new AppError(403, "Only the host can manage this room's task", {
-      code: "NOT_ROOM_HOST",
+  if (!data?.is_admin) {
+    throw new AppError(403, "Only an admin can manage this room's task", {
+      code: "ADMIN_REQUIRED",
     });
   }
 }
@@ -48,13 +44,30 @@ export const roomTaskService = {
     return data ? toRoomTask(data as RoomTaskRow) : null;
   },
 
-  /** Host sets a new goal. Replaces (cancels) any currently active task. */
+  /** Admin sets a new goal for the room. Replaces (cancels) any currently active task. */
   async setTask(
     roomId: string,
-    hostId: string,
+    adminId: string,
     input: SetRoomTaskInput,
   ): Promise<RoomTask> {
-    await assertIsHost(roomId, hostId);
+    await assertIsAdmin(adminId);
+
+    const { data: room, error: roomError } = await supabase
+      .from("rooms")
+      .select("id, host_id")
+      .eq("id", roomId)
+      .maybeSingle();
+
+    if (roomError) {
+      throw new AppError(500, "Failed to look up room", {
+        code: "ROOM_LOOKUP_FAILED",
+        details: roomError.message,
+      });
+    }
+
+    if (!room) {
+      throw new AppError(404, "Room not found", { code: "ROOM_NOT_FOUND" });
+    }
 
     const { error: cancelError } = await supabase
       .from("room_tasks")
@@ -73,7 +86,7 @@ export const roomTaskService = {
       .from("room_tasks")
       .insert({
         room_id: roomId,
-        host_id: hostId,
+        host_id: room.host_id,
         title: input.title,
         target_value: input.targetValue,
         current_value: 0,
@@ -92,9 +105,9 @@ export const roomTaskService = {
     return toRoomTask(data as RoomTaskRow);
   },
 
-  /** Host cancels the current goal early. */
-  async cancelTask(roomId: string, hostId: string): Promise<void> {
-    await assertIsHost(roomId, hostId);
+  /** Admin cancels the current goal early. */
+  async cancelTask(roomId: string, adminId: string): Promise<void> {
+    await assertIsAdmin(adminId);
 
     const { error } = await supabase
       .from("room_tasks")

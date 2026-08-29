@@ -1,0 +1,5 @@
+process.env.REDIS_URL ??= 'redis://localhost:6379'
+process.env.DATABASE_URL ??= 'postgresql://user:pass@localhost:5432/test'
+process.env.SUPABASE_URL ??= 'https://example.supabase.co'
+process.env.CORE_API_BASE_URL ??= 'http://localhost:3001'
+process.env.NODE_ENV = 'test'
