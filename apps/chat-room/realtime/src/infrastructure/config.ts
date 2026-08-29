@@ -6,6 +6,10 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default('info'),
   WEBSOCKET_MAX_CONNECTIONS: z.coerce.number().int().positive().default(10000),
 
+  // Comma-separated allowed origins for the HTTP endpoints (chat history).
+  // Empty = reflect any origin (the service is JWT-authenticated, no cookies).
+  CORS_ORIGINS: z.string().optional().default(''),
+
   REDIS_URL: z.string().min(1),
   DATABASE_URL: z.string().min(1),
 

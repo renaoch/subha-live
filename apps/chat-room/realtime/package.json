@@ -17,6 +17,7 @@
     "load-test": "node load-test/loadtest.mjs"
   },
   "dependencies": {
+    "@fastify/cors": "^10.1.0",
     "@fastify/websocket": "^11.2.0",
     "fastify": "^5.6.1",
     "ioredis": "^6.0.0",

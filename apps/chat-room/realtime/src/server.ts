@@ -1,5 +1,6 @@
 import Fastify from 'fastify'
 import websocket from '@fastify/websocket'
+import cors from '@fastify/cors'
 import { config } from './infrastructure/config.js'
 import { logger } from './infrastructure/logger.js'
 import { createRedisClients, closeRedisClients } from './infrastructure/redis.js'
@@ -36,6 +37,19 @@ async function main() {
     // Also cap the WebSocket payload size so large frames are rejected before
     // they ever reach Zod validation.
     options: { maxPayload: 32 * 1024 },
+  })
+
+  // CORS for the HTTP endpoints (chat history / health / ready). The WebSocket
+  // upgrade is not subject to CORS, but the browser's history `fetch` is.
+  // The service authenticates via a Bearer JWT (no cookies), so reflecting the
+  // request origin is safe; a fixed allow-list can be set with CORS_ORIGINS.
+  const corsOrigins = config.CORS_ORIGINS
+    ? config.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+    : true
+  await app.register(cors, {
+    origin: corsOrigins,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 
   const { rooms } = await registerChatGateway(app, { config, redis, pool, verifier, chatService })
