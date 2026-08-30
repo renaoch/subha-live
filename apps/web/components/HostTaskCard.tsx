@@ -29,11 +29,12 @@ function formatRemaining(ms: number | null): string | null {
 
 interface HostTaskCardProps {
   task: ViewerHostTask | null;
-  /** Host sees stats + a Manage action instead of the CLAIM button. */
+  /** Host sees rollup stats instead of the CLAIM button — tasks targeting
+      the host are configured from the admin console, not from inside the
+      room, so there is no in-room "Manage" action here. */
   isHost?: boolean;
   onClaim?: () => void;
   claiming?: boolean;
-  onManage?: () => void;
   stats?: HostTaskStats | null;
 }
 
@@ -62,7 +63,7 @@ function progressLabel(task: ViewerHostTask): { value: string; target: string } 
  * expired / not_eligible. The backend is the source of truth for completion;
  * the CLAIM button only appears once the server reports `completed`.
  */
-export function HostTaskCard({ task, isHost, onClaim, claiming, onManage, stats }: HostTaskCardProps) {
+export function HostTaskCard({ task, isHost, onClaim, claiming, stats }: HostTaskCardProps) {
   if (!task) return null;
 
   const state = task.state;
@@ -205,22 +206,11 @@ export function HostTaskCard({ task, isHost, onClaim, claiming, onManage, stats 
           </div>
 
           {isHost ? (
-            <div className="flex shrink-0 items-center gap-2">
-              {stats && (
-                <span className="text-[10px] font-medium text-white/45">
-                  {stats.eligibleUsers} joined · {stats.completedUsers} done · {stats.claimedUsers} claimed
-                </span>
-              )}
-              {onManage && (
-                <button
-                  type="button"
-                  onClick={onManage}
-                  className="shrink-0 rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-[11px] font-bold text-white/85 transition hover:bg-white/10"
-                >
-                  Manage
-                </button>
-              )}
-            </div>
+            stats && (
+              <span className="shrink-0 text-[10px] font-medium text-white/45">
+                {stats.eligibleUsers} joined · {stats.completedUsers} done · {stats.claimedUsers} claimed
+              </span>
+            )
           ) : claimable ? (
             <button
               type="button"

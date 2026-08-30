@@ -36,13 +36,11 @@ interface RoomHeaderProps {
   currentUserId?: string | null;
   /** Host's live task/reward, if one is active for this user. */
   task?: ViewerHostTask | null;
-  /** Whether the current user is the room host (shows stats + Manage instead of CLAIM). */
+  /** Whether the current user is the room host (shows rollup stats instead of CLAIM). */
   isHost?: boolean;
   /** Viewer taps CLAIM on a completed task's reward. Omit to hide the button (e.g. host's own view). */
   onClaimTask?: () => void;
   claimingTask?: boolean;
-  /** Host taps "Manage" to open task management. */
-  onManageTask?: () => void;
   /** Host-only rollup stats for the active task. */
   taskStats?: HostTaskStats | null;
 }
@@ -183,7 +181,6 @@ export function RoomHeader({
   isHost,
   onClaimTask,
   claimingTask,
-  onManageTask,
   taskStats,
 }: RoomHeaderProps) {
   const hostName = host?.name || "Host";
@@ -276,7 +273,6 @@ export function RoomHeader({
         isHost={isHost}
         onClaim={onClaimTask}
         claiming={claimingTask}
-        onManage={onManageTask}
         stats={taskStats}
       />
     </div>

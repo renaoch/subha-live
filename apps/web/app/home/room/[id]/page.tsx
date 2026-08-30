@@ -34,8 +34,6 @@ import { BottomBar } from '@/components/BottomBar';
 
 import { HostControls } from '@/components/HostControls';
 
-import { HostTaskManageSheet } from '@/components/HostTaskManageSheet';
-
 import { RoomChat } from '@/components/RoomChat';
 
 import { RoomJoinFeed, type RoomJoinEvent } from '@/components/RoomJoinFeed';
@@ -153,12 +151,11 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
 } = useSpeakerRequests(room?.id ?? '', isHost, room?.status);
 
-  const { task, stats, claim, claiming, refetch: refetchTask } = useHostTask(
+  const { task, stats, claim, claiming } = useHostTask(
     room?.id ?? '',
     room?.status,
     isHost,
   );
-  const [taskManageOpen, setTaskManageOpen] = useState(false);
 
   // Accrue streaming/watch hours toward the active host task.
   useRoomHeartbeat(room?.id ?? '', room?.status);
@@ -511,8 +508,6 @@ useEffect(() => {
 
           claimingTask={claiming}
 
-          onManageTask={isHost ? () => setTaskManageOpen(true) : undefined}
-
           taskStats={stats}
 
         />
@@ -820,24 +815,6 @@ useEffect(() => {
             onClose={() => setSpeakerPanelOpen(false)}
 
             hostName={room.host?.name || 'Host'}
-
-          />
-
-        )}
-
-        {/* Host task management sheet */}
-
-        {isHost && taskManageOpen && room && (
-
-          <HostTaskManageSheet
-
-            roomId={room.id}
-
-            task={task}
-
-            onClose={() => setTaskManageOpen(false)}
-
-            onChanged={refetchTask}
 
           />
 
