@@ -595,10 +595,10 @@ useEffect(() => {
           open={moreOpen}
           onClose={() => setMoreOpen(false)}
           isHost={isHost}
-          micEnabled={micEnabled}
-          onToggleMic={() => setMicEnabled((v) => !v)}
           cameraEnabled={cameraEnabled}
           onToggleCamera={() => setCameraEnabled((v) => !v)}
+          filterOpen={filterOpen}
+          onToggleFilter={() => setFilterOpen((v) => !v)}
           onShare={() => {
             const url = typeof window !== 'undefined' ? window.location.href : '';
             if (navigator.share) {
@@ -626,6 +626,8 @@ useEffect(() => {
             onSend={sendChat}
             onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
             onOpenMore={() => setMoreOpen(true)}
+            micEnabled={micEnabled}
+            onToggleMic={isHost ? () => setMicEnabled((v) => !v) : undefined}
           />
         )}
 
@@ -633,21 +635,13 @@ useEffect(() => {
 
         {/* Host controls */}
 
-        {isHost && (isWaiting || isLive) && (
+        {isHost && isWaiting && (
 
           <HostControls
 
             isWaiting={isWaiting}
 
             isLive={isLive}
-
-            micEnabled={micEnabled}
-
-            onToggleMic={() => setMicEnabled((v) => !v)}
-
-            filterOpen={filterOpen}
-
-            onToggleFilter={() => setFilterOpen((v) => !v)}
 
             onStart={handleStart}
 

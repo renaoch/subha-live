@@ -3,10 +3,9 @@
 
 import { useEffect } from "react";
 import {
-  Mic,
-  MicOff,
   Video,
   VideoOff,
+  SlidersHorizontal,
   Link2,
   Menu,
   ThumbsUp,
@@ -29,10 +28,10 @@ interface RoomMoreActionsProps {
   open: boolean;
   onClose: () => void;
   isHost: boolean;
-  micEnabled?: boolean;
-  onToggleMic?: () => void;
   cameraEnabled?: boolean;
   onToggleCamera?: () => void;
+  filterOpen?: boolean;
+  onToggleFilter?: () => void;
   onShare?: () => void;
   onOpenMenu?: () => void;
   onLike?: () => void;
@@ -48,10 +47,10 @@ export function RoomMoreActions({
   open,
   onClose,
   isHost,
-  micEnabled = true,
-  onToggleMic,
   cameraEnabled = true,
   onToggleCamera,
+  filterOpen = false,
+  onToggleFilter,
   onShare,
   onOpenMenu,
   onLike,
@@ -71,18 +70,18 @@ export function RoomMoreActions({
     ...(isHost
       ? [
           {
-            key: "mic",
-            label: micEnabled ? "Mute" : "Unmute",
-            icon: micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />,
-            onClick: onToggleMic,
-            active: !micEnabled,
-          },
-          {
             key: "camera",
             label: cameraEnabled ? "Hide video" : "Show video",
             icon: cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />,
             onClick: onToggleCamera,
             active: !cameraEnabled,
+          },
+          {
+            key: "filters",
+            label: "Filters",
+            icon: <SlidersHorizontal className="h-5 w-5" />,
+            onClick: onToggleFilter,
+            active: filterOpen,
           },
         ]
       : []),
@@ -158,7 +157,6 @@ export function RoomMoreActions({
               onClick={() => {
                 if (a.comingSoon) return;
                 a.onClick?.();
-                onClose();
               }}
               disabled={a.disabled}
               className="flex flex-col items-center gap-1.5 disabled:opacity-40"

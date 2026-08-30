@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SendHorizonal, Gift, Plus } from "lucide-react";
+import { SendHorizonal, Gift, Plus, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RoomChatMessage } from "@/lib/api/chat";
 
@@ -15,8 +15,11 @@ interface RoomChatProps {
   onSend: (text: string) => boolean;
   /** Opens the gift sheet. Omit to hide the gift button (e.g. for hosts). */
   onOpenGift?: () => void;
-  /** Opens the "more actions" sheet (mic, camera, share, PK, etc). */
+  /** Opens the "more actions" sheet (camera, filters, share, PK, etc). */
   onOpenMore?: () => void;
+  /** Host-only mic toggle, shown between the more-actions and send buttons. */
+  micEnabled?: boolean;
+  onToggleMic?: () => void;
 }
 
 // YouTube-live-style username colors: bright, legible against video, no two
@@ -61,6 +64,8 @@ export function RoomChat({
   onSend,
   onOpenGift,
   onOpenMore,
+  micEnabled = true,
+  onToggleMic,
 }: RoomChatProps) {
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
@@ -155,6 +160,20 @@ export function RoomChat({
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/70 transition-all duration-150 hover:bg-white/10 hover:text-white active:scale-90"
             >
               <Plus className="h-4 w-4" strokeWidth={2} />
+            </button>
+          )}
+
+          {onToggleMic && (
+            <button
+              type="button"
+              onClick={onToggleMic}
+              aria-label={micEnabled ? "Mute microphone" : "Unmute microphone"}
+              className={cn(
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-150 active:scale-90",
+                micEnabled ? "text-white/70 hover:bg-white/10 hover:text-white" : "bg-white text-black",
+              )}
+            >
+              {micEnabled ? <Mic className="h-4 w-4" strokeWidth={2} /> : <MicOff className="h-4 w-4" strokeWidth={2} />}
             </button>
           )}
 
