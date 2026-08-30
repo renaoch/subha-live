@@ -45,6 +45,7 @@ export class HttpCoreApiAdapter implements CoreApiAdapter {
 
     const authorization: Authorization = {
       username: typeof profile.username === 'string' ? profile.username : '',
+      avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
       canAccess: auth.canAccess === true || auth.allowed === true,
       isMember: auth.isMember === true,
       isHost: auth.isHost === true,

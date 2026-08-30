@@ -3,12 +3,14 @@ export type ChatMessage = {
   roomId: string
   userId: string
   username: string
+  avatar: string | null
   message: string
   createdAt: number
 }
 
 export type Authorization = {
   username: string
+  avatar: string | null
   canAccess: boolean
   isMember?: boolean
   isHost?: boolean

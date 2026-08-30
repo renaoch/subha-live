@@ -5,6 +5,7 @@ export interface RoomChatMessage {
   roomId: string;
   userId: string;
   username: string;
+  avatar: string | null;
   message: string;
   createdAt: number;
 }

@@ -76,6 +76,7 @@ export class ChatService {
       roomId,
       userId: context.userId,
       username: context.username,
+      avatar: context.avatar,
       message: text,
       createdAt: Date.now(),
     }

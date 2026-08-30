@@ -14,7 +14,7 @@ export class ChatRepository {
       where += ' AND (created_at, id) < ($3, $4)'
     }
     const result = await this.pool.query(
-      `SELECT id, room_id AS "roomId", user_id AS "userId", username, message,
+      `SELECT id, room_id AS "roomId", user_id AS "userId", username, avatar, message,
               EXTRACT(EPOCH FROM created_at) * 1000 AS "createdAt"
        FROM chat_messages
        WHERE ${where}
@@ -28,7 +28,7 @@ export class ChatRepository {
 
   async range(roomId: string, startMs: number, endMs: number): Promise<ChatMessage[]> {
     const result = await this.pool.query(
-      `SELECT id, room_id AS "roomId", user_id AS "userId", username, message,
+      `SELECT id, room_id AS "roomId", user_id AS "userId", username, avatar, message,
               EXTRACT(EPOCH FROM created_at) * 1000 AS "createdAt"
        FROM chat_messages
        WHERE room_id = $1 AND created_at >= to_timestamp($2 / 1000.0) AND created_at <= to_timestamp($3 / 1000.0)
@@ -48,12 +48,14 @@ export class ChatRepository {
       const values: string[] = []
       const params: unknown[] = []
       messages.forEach((message, index) => {
-        const offset = index * 6
-        values.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, to_timestamp($${offset + 6} / 1000.0))`)
-        params.push(message.id, message.roomId, message.userId, message.username, message.message, message.createdAt)
+        const offset = index * 7
+        values.push(
+          `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, to_timestamp($${offset + 7} / 1000.0))`
+        )
+        params.push(message.id, message.roomId, message.userId, message.username, message.avatar, message.message, message.createdAt)
       })
       await client.query(
-        `INSERT INTO chat_messages (id, room_id, user_id, username, message, created_at)
+        `INSERT INTO chat_messages (id, room_id, user_id, username, avatar, message, created_at)
          VALUES ${values.join(', ')}
          ON CONFLICT (id) DO NOTHING`,
         params

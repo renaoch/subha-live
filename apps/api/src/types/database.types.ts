@@ -458,6 +458,36 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_messages: {
+        Row: {
+          avatar: string | null
+          created_at: string
+          id: string
+          message: string
+          room_id: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          avatar?: string | null
+          created_at: string
+          id: string
+          message: string
+          room_id: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          avatar?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          room_id?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
       cp_partnerships: {
         Row: {
           anniversary_date: string | null

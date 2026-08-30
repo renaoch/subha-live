@@ -15,21 +15,27 @@ interface RoomChatProps {
   onSend: (text: string) => boolean;
 }
 
-// A small, fixed palette of avatar colors so each username gets a stable,
-// pleasant color without needing a design token per user.
-const AVATAR_COLORS = [
-  "linear-gradient(135deg,#FF8A65,#FF3B5C)",
-  "linear-gradient(135deg,#7C7CFF,#4E4EE0)",
-  "linear-gradient(135deg,#34D0BA,#149E8C)",
-  "linear-gradient(135deg,#FFC24B,#FF8A00)",
-  "linear-gradient(135deg,#FF7AC6,#C63BAA)",
-  "linear-gradient(135deg,#5CC8FF,#2E8FE0)",
+// YouTube-live-style username colors: bright, legible against video, no two
+// adjacent hues too close together.
+const NAME_COLORS = [
+  "#FF6B81", // rose
+  "#6FCF97", // mint
+  "#5CC8FF", // sky
+  "#FFC24B", // amber
+  "#C48BFF", // violet
+  "#FF9662", // coral
+  "#4FE0C6", // teal
 ];
 
-function avatarColor(seed: string) {
+function colorFor(seed: string) {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  return NAME_COLORS[hash % NAME_COLORS.length];
+}
+
+function avatarGradient(seed: string) {
+  const c = colorFor(seed);
+  return `linear-gradient(135deg, ${c}, rgba(0,0,0,0.55))`;
 }
 
 function initials(name: string) {
@@ -37,14 +43,14 @@ function initials(name: string) {
 }
 
 /**
- * Live room chat overlay: a translucent, auto-scrolling message stream plus a
- * compact input, anchored above the bottom action bar so it never covers the
- * video. Matches the room's glass aesthetic, styled like a real chat thread
- * with avatars, tailed bubbles, and a soft entrance animation per message.
+ * Live room chat overlay, styled like a live-stream chat feed (YouTube /
+ * TikTok live): a flat, borderless scroll of "avatar — colored name —
+ * message" rows sitting directly over the video with a bottom scrim for
+ * legibility. No message bubbles, no per-row background — the video stays
+ * the star. New rows slide up from the bottom as they arrive.
  */
 export function RoomChat({ messages, selfUserId, connected, isHost, onSend }: RoomChatProps) {
   const [draft, setDraft] = useState("");
-  const [justSent, setJustSent] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to the newest message (unless the user scrolled up to read).
@@ -59,62 +65,55 @@ export function RoomChat({ messages, selfUserId, connected, isHost, onSend }: Ro
     e.preventDefault();
     const text = draft.trim();
     if (!text) return;
-    if (onSend(text)) {
-      setDraft("");
-      setJustSent(true);
-      window.setTimeout(() => setJustSent(false), 220);
-    }
+    if (onSend(text)) setDraft("");
   }
 
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-0 z-30 flex flex-col justify-end px-4",
+        "pointer-events-none absolute inset-x-0 z-30 flex flex-col justify-end",
         isHost ? "bottom-[96px]" : "bottom-[52px]",
       )}
     >
-      {/* Message stream */}
+      {/* Bottom scrim so text stays legible over any video content */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[230px] bg-gradient-to-t from-black/55 via-black/20 to-transparent" />
+
+      {/* Message stream: flat rows, no bubbles, YouTube-live style */}
       <div
         ref={listRef}
-        className="pointer-events-auto mb-2 flex max-h-[220px] flex-col gap-1.5 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        style={{ maskImage: "linear-gradient(to bottom, transparent, black 24px)" }}
+        className="pointer-events-auto relative z-10 mb-2 flex max-h-[210px] flex-col gap-2.5 overflow-y-auto overscroll-contain px-4 pt-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ maskImage: "linear-gradient(to bottom, transparent, black 28px)" }}
       >
         {messages.length === 0 ? (
-          <p className="w-fit animate-pop-in rounded-2xl bg-black/30 px-3 py-2 text-[11px] font-medium text-white/45 backdrop-blur-sm">
+          <p className="text-[12px] font-medium text-white/50 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">
             Say hi to the room 👋
           </p>
         ) : (
           messages.map((m) => {
             const mine = !!selfUserId && m.userId === selfUserId;
+            const nameColor = mine ? "#FF3B5C" : colorFor(m.username);
             return (
-              <div
-                key={m.id}
-                className={cn(
-                  "flex items-end gap-1.5",
-                  mine ? "animate-chat-in-right justify-end" : "animate-chat-in-left justify-start",
-                )}
-              >
-                {!mine && (
+              <div key={m.id} className="chat-row flex items-start gap-2">
+                {m.avatar ? (
+                  <img
+                    src={m.avatar}
+                    alt=""
+                    className="mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-white/25"
+                  />
+                ) : (
                   <div
-                    className="mb-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white shadow-sm ring-1 ring-white/20"
-                    style={{ background: avatarColor(m.username) }}
+                    className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ring-1 ring-white/25"
+                    style={{ background: avatarGradient(m.username) }}
                   >
                     {initials(m.username)}
                   </div>
                 )}
-                <div
-                  className={cn(
-                    "max-w-[78%] rounded-2xl px-3 py-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.25)] backdrop-blur-sm transition-transform",
-                    mine
-                      ? "rounded-br-md bg-gradient-to-br from-[#FF5A75] to-[#E8264A] text-white"
-                      : "rounded-bl-md bg-black/45 text-white ring-1 ring-white/[0.06]",
-                  )}
-                >
-                  {!mine && (
-                    <span className="mr-1.5 text-[10px] font-bold text-[#FFB4C4]">{m.username}</span>
-                  )}
-                  <span className="text-[12px] leading-snug">{m.message}</span>
-                </div>
+                <p className="min-w-0 flex-1 text-[12.5px] leading-snug [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]">
+                  <span className="mr-1.5 font-bold" style={{ color: nameColor }}>
+                    {mine ? "You" : m.username}
+                  </span>
+                  <span className="break-words text-white/95">{m.message}</span>
+                </p>
               </div>
             );
           })
@@ -124,7 +123,7 @@ export function RoomChat({ messages, selfUserId, connected, isHost, onSend }: Ro
       {/* Input */}
       <form
         onSubmit={submit}
-        className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 backdrop-blur-xl transition-shadow duration-200 focus-within:border-white/20 focus-within:shadow-[0_0_0_3px_rgba(255,59,92,0.18)]"
+        className="pointer-events-auto relative z-10 mx-4 flex items-center gap-2 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 backdrop-blur-xl transition-shadow duration-200 focus-within:border-white/20 focus-within:shadow-[0_0_0_3px_rgba(255,59,92,0.18)]"
       >
         <input
           value={draft}
@@ -138,14 +137,27 @@ export function RoomChat({ messages, selfUserId, connected, isHost, onSend }: Ro
           type="submit"
           disabled={!connected || !draft.trim()}
           aria-label="Send message"
-          className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FF3B5C] text-white transition-all duration-150 hover:brightness-110 active:scale-90 disabled:opacity-40",
-            justSent && "animate-pop-in",
-          )}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FF3B5C] text-white transition-all duration-150 hover:brightness-110 active:scale-90 disabled:opacity-40"
         >
           <SendHorizonal className="h-3.5 w-3.5" strokeWidth={2} />
         </button>
       </form>
+
+      <style jsx>{`
+        .chat-row {
+          animation: chat-row-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+        @keyframes chat-row-in {
+          0% {
+            opacity: 0;
+            transform: translateY(14px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

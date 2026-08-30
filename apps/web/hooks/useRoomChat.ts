@@ -69,6 +69,7 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
               roomId: msg.roomId,
               userId: msg.userId,
               username: msg.username,
+              avatar: typeof msg.avatar === "string" ? msg.avatar : null,
               message: msg.message,
               createdAt: msg.createdAt,
             },
