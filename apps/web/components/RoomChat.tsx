@@ -12,6 +12,10 @@ interface RoomChatProps {
   /** Hosts have their own controls (HostControls) above the bottom bar, so the
       chat input sits a little higher to avoid overlapping them. */
   isHost?: boolean;
+  /** True while the host's "Start Live" pill is still showing above the bar —
+      keeps the chat bar raised so it doesn't overlap. Once it goes away
+      (stream goes live), the bar animates down to the bottom. */
+  raised?: boolean;
   onSend: (text: string) => boolean;
   /** Opens the gift sheet. Omit to hide the gift button (e.g. for hosts). */
   onOpenGift?: () => void;
@@ -61,6 +65,7 @@ export function RoomChat({
   selfUserId,
   connected,
   isHost,
+  raised,
   onSend,
   onOpenGift,
   onOpenMore,
@@ -88,8 +93,8 @@ export function RoomChat({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-0 z-30 flex flex-col justify-end",
-        isHost ? "bottom-[96px]" : "bottom-[52px]",
+        "pointer-events-none absolute inset-x-0 z-30 flex flex-col justify-end transition-[bottom] duration-500 ease-out",
+        raised ? "bottom-[96px]" : "bottom-[52px]",
       )}
     >
       {/* Bottom scrim so text stays legible over any video content */}

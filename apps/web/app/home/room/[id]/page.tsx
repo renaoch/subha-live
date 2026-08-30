@@ -623,6 +623,7 @@ useEffect(() => {
             selfUserId={selfUserId}
             connected={chatState === 'connected'}
             isHost={isHost}
+            raised={isHost && isWaiting}
             onSend={sendChat}
             onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
             onOpenMore={() => setMoreOpen(true)}
