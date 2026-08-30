@@ -2,7 +2,7 @@
 
 
 
-import { use, useState, useEffect, useMemo, useCallback } from 'react';
+import { use, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -37,6 +37,8 @@ import { HostControls } from '@/components/HostControls';
 import { HostTaskManageSheet } from '@/components/HostTaskManageSheet';
 
 import { RoomChat } from '@/components/RoomChat';
+
+import { RoomJoinFeed, type RoomJoinEvent } from '@/components/RoomJoinFeed';
 
 import { useRoomChat } from '@/hooks/useRoomChat';
 
@@ -165,6 +167,31 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const { messages: chatMessages, state: chatState, selfUserId, send: sendChat } =
     useRoomChat(room?.id ?? '', room?.status);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
+
+  // "Someone joined" pulses for RoomJoinFeed. The realtime service doesn't
+  // currently emit a per-user join event with a username (only the polled
+  // aggregate viewerCount on the room record), so each detected increase in
+  // viewerCount fires one generic pulse. Swap this for a real presence/WS
+  // event (with username + avatar) as soon as the backend exposes one —
+  // RoomJoinFeed already accepts that richer shape via RoomJoinEvent.
+  const [joinEvents, setJoinEvents] = useState<RoomJoinEvent[]>([]);
+  const lastViewerCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const count = room?.viewerCount;
+    if (typeof count !== 'number') return;
+    const prev = lastViewerCountRef.current;
+    lastViewerCountRef.current = count;
+    if (prev === null || count <= prev) return;
+    const gained = Math.min(count - prev, 3); // cap so a big jump doesn't spam the feed
+    setJoinEvents((existing) => [
+      ...existing,
+      ...Array.from({ length: gained }).map((_, i) => ({
+        id: `join-${Date.now()}-${i}`,
+        username: 'New viewer',
+        subtitle: 'joined the room',
+      })),
+    ].slice(-20));
+  }, [room?.viewerCount]);
 
 
 
@@ -569,6 +596,10 @@ useEffect(() => {
         {/* Bottom bar */}
 
         <BottomBar isHost={isHost} onOpenGift={() => setGiftSheetOpen(true)} />
+
+        {/* "X joined" pulses, top-left, above the chat stream */}
+
+        {(isLive || isWaiting) && <RoomJoinFeed events={joinEvents} />}
 
         {/* Live room chat (message stream + input) */}
 
