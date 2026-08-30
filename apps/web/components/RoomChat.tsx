@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SendHorizonal } from "lucide-react";
+import { SendHorizonal, Gift, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RoomChatMessage } from "@/lib/api/chat";
 
@@ -13,6 +13,10 @@ interface RoomChatProps {
       chat input sits a little higher to avoid overlapping them. */
   isHost?: boolean;
   onSend: (text: string) => boolean;
+  /** Opens the gift sheet. Omit to hide the gift button (e.g. for hosts). */
+  onOpenGift?: () => void;
+  /** Opens the "more actions" sheet (mic, camera, share, PK, etc). */
+  onOpenMore?: () => void;
 }
 
 // YouTube-live-style username colors: bright, legible against video, no two
@@ -49,7 +53,15 @@ function initials(name: string) {
  * legibility. No message bubbles, no per-row background — the video stays
  * the star. New rows slide up from the bottom as they arrive.
  */
-export function RoomChat({ messages, selfUserId, connected, isHost, onSend }: RoomChatProps) {
+export function RoomChat({
+  messages,
+  selfUserId,
+  connected,
+  isHost,
+  onSend,
+  onOpenGift,
+  onOpenMore,
+}: RoomChatProps) {
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -120,28 +132,53 @@ export function RoomChat({ messages, selfUserId, connected, isHost, onSend }: Ro
         )}
       </div>
 
-      {/* Input */}
-      <form
-        onSubmit={submit}
-        className="pointer-events-auto relative z-10 mx-4 flex items-center gap-2 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 backdrop-blur-xl transition-shadow duration-200 focus-within:border-white/20 focus-within:shadow-[0_0_0_3px_rgba(255,59,92,0.18)]"
-      >
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={connected ? "Say something…" : "Connecting…"}
-          disabled={!connected}
-          maxLength={500}
-          className="min-w-0 flex-1 bg-transparent px-1 text-[13px] text-white placeholder:text-white/40 focus:outline-none disabled:opacity-60"
-        />
-        <button
-          type="submit"
-          disabled={!connected || !draft.trim()}
-          aria-label="Send message"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FF3B5C] text-white transition-all duration-150 hover:brightness-110 active:scale-90 disabled:opacity-40"
+      {/* Input row: text field, more-actions, send, and (viewer-only) gift */}
+      <div className="pointer-events-auto relative z-10 mx-4 flex items-center gap-2">
+        <form
+          onSubmit={submit}
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full border border-white/10 bg-black/45 py-1.5 pl-3 pr-1.5 backdrop-blur-xl transition-shadow duration-200 focus-within:border-white/20 focus-within:shadow-[0_0_0_3px_rgba(255,59,92,0.18)]"
         >
-          <SendHorizonal className="h-3.5 w-3.5" strokeWidth={2} />
-        </button>
-      </form>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={connected ? "Say something…" : "Connecting…"}
+            disabled={!connected}
+            maxLength={500}
+            className="min-w-0 flex-1 bg-transparent px-1 text-[13px] text-white placeholder:text-white/40 focus:outline-none disabled:opacity-60"
+          />
+
+          {onOpenMore && (
+            <button
+              type="button"
+              onClick={onOpenMore}
+              aria-label="More actions"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/70 transition-all duration-150 hover:bg-white/10 hover:text-white active:scale-90"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} />
+            </button>
+          )}
+
+          <button
+            type="submit"
+            disabled={!connected || !draft.trim()}
+            aria-label="Send message"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#FF3B5C] text-white transition-all duration-150 hover:brightness-110 active:scale-90 disabled:opacity-40"
+          >
+            <SendHorizonal className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        </form>
+
+        {onOpenGift && (
+          <button
+            type="button"
+            onClick={onOpenGift}
+            aria-label="Send a gift"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#FF3B5C]/40 bg-gradient-to-b from-[#FF3B5C]/25 to-black/45 text-[#FF3B5C] shadow-[0_0_0_1px_rgba(255,59,92,0.08)] backdrop-blur-xl transition-transform duration-150 active:scale-90"
+          >
+            <Gift className="h-4 w-4" strokeWidth={2} />
+          </button>
+        )}
+      </div>
 
       <style jsx>{`
         .chat-row {

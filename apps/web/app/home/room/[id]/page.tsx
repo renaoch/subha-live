@@ -30,7 +30,7 @@ import { RoomHeader } from '@/components/RoomHeader';
 
 import { LiveVideo } from '@/components/LiveVideo';
 
-import { BottomBar } from '@/components/BottomBar';
+import { RoomMoreActions } from '@/components/RoomMoreActions';
 
 import { HostControls } from '@/components/HostControls';
 
@@ -202,6 +202,7 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
   // ---- UI state ----
 
   const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const [micEnabled, setMicEnabled] = useState(true);
 
@@ -588,9 +589,27 @@ useEffect(() => {
 
 
 
-        {/* Bottom bar */}
-
-        <BottomBar isHost={isHost} onOpenGift={() => setGiftSheetOpen(true)} />
+        {/* Secondary actions live in a "more" sheet, opened from the chat bar,
+            so the bottom edge stays to one clean row (chat + gift). */}
+        <RoomMoreActions
+          open={moreOpen}
+          onClose={() => setMoreOpen(false)}
+          isHost={isHost}
+          micEnabled={micEnabled}
+          onToggleMic={() => setMicEnabled((v) => !v)}
+          cameraEnabled={cameraEnabled}
+          onToggleCamera={() => setCameraEnabled((v) => !v)}
+          onShare={() => {
+            const url = typeof window !== 'undefined' ? window.location.href : '';
+            if (navigator.share) {
+              navigator.share({ url }).catch(() => {});
+            } else {
+              navigator.clipboard?.writeText(url);
+              toast.success('Room link copied');
+            }
+          }}
+          onLike={() => toast.success('❤️')}
+        />
 
         {/* "X joined" pulses, top-left, above the chat stream */}
 
@@ -605,6 +624,8 @@ useEffect(() => {
             connected={chatState === 'connected'}
             isHost={isHost}
             onSend={sendChat}
+            onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
+            onOpenMore={() => setMoreOpen(true)}
           />
         )}
 
