@@ -115,7 +115,13 @@ export function RoomChat({
             const mine = !!selfUserId && m.userId === selfUserId;
             const nameColor = mine ? "#FF3B5C" : colorFor(m.username);
             return (
-              <div key={m.id} className="chat-row flex items-start gap-2">
+              <div
+                key={m.id}
+                className={cn(
+                  "chat-row flex items-start gap-2 transition-opacity duration-300",
+                  m.pending && "opacity-50",
+                )}
+              >
                 {m.avatar ? (
                   <img
                     src={m.avatar}

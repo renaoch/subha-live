@@ -8,6 +8,9 @@ export interface RoomChatMessage {
   avatar: string | null;
   message: string;
   createdAt: number;
+  /** Client-only: true while this message is optimistically shown before the
+      server has echoed it back. Never set by the API. */
+  pending?: boolean;
 }
 
 export interface ChatHistoryPage {
