@@ -37,6 +37,26 @@ export interface TasksResult {
   tasks: TaskItem[];
 }
 
+export interface AdminTaskItem {
+  id: string;
+  title: string;
+  description: string | null;
+  durationType: string;
+  icon: string | null;
+  targetCount: number;
+  targetGender: string;
+  status: string;
+  expiryDate: string | null;
+  reward: TaskReward;
+  createdAt: string;
+  updatedAt: string;
+  stats: {
+    assignedUsers: number;
+    completedUsers: number;
+    claimedUsers: number;
+  };
+}
+
 export interface ClaimTaskResult {
   taskId: string;
 

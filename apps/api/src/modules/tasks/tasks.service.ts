@@ -7,7 +7,12 @@ import type {
   TasksResult,
   ClaimTaskResult,
   TaskReward,
+  AdminTaskItem,
 } from "./tasks.types";
+import type {
+  AdminCreateTaskInput,
+  AdminUpdateTaskInput,
+} from "./tasks.schema";
 
 type TaskRow = {
   id: string;
@@ -563,4 +568,236 @@ export async function claimTask(
     newCoins,
     newDiamonds,
   };
+}
+
+// --- Admin (global user-task management) ---
+
+/**
+ * Verify the given user is a platform admin. Throws otherwise.
+ */
+export async function assertIsPlatformAdmin(
+  userId: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(500, "Failed to verify admin permission", {
+      code: "ADMIN_CHECK_FAILED",
+      details: error.message,
+    });
+  }
+
+  if (!data?.is_admin) {
+    throw new AppError(403, "Admin access required", {
+      code: "ADMIN_REQUIRED",
+    });
+  }
+}
+
+function toAdminTaskItem(
+  row: TaskRow & { created_at: string; updated_at: string },
+  stats: { assignedUsers: number; completedUsers: number; claimedUsers: number },
+): AdminTaskItem {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    durationType: row.duration_type,
+    icon: row.icon_url,
+    targetCount: row.target_count,
+    targetGender: row.target_gender,
+    status: row.status,
+    expiryDate: row.expiry_date,
+    reward: toTaskReward(row),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    stats,
+  };
+}
+
+/**
+ * List every task (any status) with lightweight completion stats, for the
+ * admin "User Tasks" panel.
+ */
+export async function adminListTasks(): Promise<AdminTaskItem[]> {
+  const { data: tasks, error } = await supabase
+    .from("tasks")
+    .select(
+      `id, title, description, duration_type, expiry_date, icon_url,
+       reward_coins, reward_diamonds, reward_exp, status, target_count,
+       target_gender, created_at, updated_at`,
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (tasks ?? []) as (TaskRow & {
+    created_at: string;
+    updated_at: string;
+  })[];
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const { data: userTasks, error: userTasksError } = await supabase
+    .from("user_tasks")
+    .select("task_id, completed, claimed")
+    .in(
+      "task_id",
+      rows.map((r) => r.id),
+    );
+
+  if (userTasksError) {
+    throw userTasksError;
+  }
+
+  const statsByTaskId = new Map<
+    string,
+    { assignedUsers: number; completedUsers: number; claimedUsers: number }
+  >();
+
+  for (const ut of (userTasks ?? []) as {
+    task_id: string;
+    completed: boolean;
+    claimed: boolean;
+  }[]) {
+    const existing = statsByTaskId.get(ut.task_id) ?? {
+      assignedUsers: 0,
+      completedUsers: 0,
+      claimedUsers: 0,
+    };
+    existing.assignedUsers += 1;
+    if (ut.completed) existing.completedUsers += 1;
+    if (ut.claimed) existing.claimedUsers += 1;
+    statsByTaskId.set(ut.task_id, existing);
+  }
+
+  return rows.map((row) =>
+    toAdminTaskItem(
+      row,
+      statsByTaskId.get(row.id) ?? {
+        assignedUsers: 0,
+        completedUsers: 0,
+        claimedUsers: 0,
+      },
+    ),
+  );
+}
+
+/**
+ * Create a new (global) user task.
+ */
+export async function adminCreateTask(
+  input: AdminCreateTaskInput,
+): Promise<AdminTaskItem> {
+  const { data, error } = await supabase
+    .from("tasks")
+    .insert({
+      title: input.title,
+      description: input.description ?? null,
+      duration_type: input.durationType,
+      icon_url: input.iconUrl ?? null,
+      target_count: input.targetCount,
+      reward_coins: input.rewardCoins,
+      reward_diamonds: input.rewardDiamonds,
+      reward_exp: input.rewardExp,
+      target_gender: input.targetGender,
+      status: input.status,
+      expiry_date: input.expiryDate ?? null,
+    })
+    .select(
+      `id, title, description, duration_type, expiry_date, icon_url,
+       reward_coins, reward_diamonds, reward_exp, status, target_count,
+       target_gender, created_at, updated_at`,
+    )
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return toAdminTaskItem(
+    data as TaskRow & { created_at: string; updated_at: string },
+    { assignedUsers: 0, completedUsers: 0, claimedUsers: 0 },
+  );
+}
+
+/**
+ * Update an existing user task.
+ */
+export async function adminUpdateTask(
+  taskId: string,
+  input: AdminUpdateTaskInput,
+): Promise<AdminTaskItem> {
+  type TaskUpdatePatch = {
+    title?: string;
+    description?: string | null;
+    duration_type?: string;
+    icon_url?: string | null;
+    target_count?: number;
+    reward_coins?: number;
+    reward_diamonds?: number;
+    reward_exp?: number;
+    target_gender?: string;
+    status?: string;
+    expiry_date?: string | null;
+    updated_at?: string;
+  };
+
+  const patch: TaskUpdatePatch = {};
+
+  if (input.title !== undefined) patch.title = input.title;
+  if (input.description !== undefined) patch.description = input.description;
+  if (input.durationType !== undefined) patch.duration_type = input.durationType;
+  if (input.iconUrl !== undefined) patch.icon_url = input.iconUrl;
+  if (input.targetCount !== undefined) patch.target_count = input.targetCount;
+  if (input.rewardCoins !== undefined) patch.reward_coins = input.rewardCoins;
+  if (input.rewardDiamonds !== undefined) patch.reward_diamonds = input.rewardDiamonds;
+  if (input.rewardExp !== undefined) patch.reward_exp = input.rewardExp;
+  if (input.targetGender !== undefined) patch.target_gender = input.targetGender;
+  if (input.status !== undefined) patch.status = input.status;
+  if (input.expiryDate !== undefined) patch.expiry_date = input.expiryDate;
+
+  patch.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("tasks")
+    .update(patch)
+    .eq("id", taskId)
+    .select(
+      `id, title, description, duration_type, expiry_date, icon_url,
+       reward_coins, reward_diamonds, reward_exp, status, target_count,
+       target_gender, created_at, updated_at`,
+    )
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      throw new AppError(404, "Task not found", { code: "TASK_NOT_FOUND" });
+    }
+    throw error;
+  }
+
+  return toAdminTaskItem(
+    data as TaskRow & { created_at: string; updated_at: string },
+    { assignedUsers: 0, completedUsers: 0, claimedUsers: 0 },
+  );
+}
+
+/**
+ * Delete a user task.
+ */
+export async function adminDeleteTask(taskId: string): Promise<void> {
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+
+  if (error) {
+    throw error;
+  }
 }

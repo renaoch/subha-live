@@ -7,7 +7,8 @@ import express from "express";
     import socialRoutes from "./modules/social/social.routes";
     import levelRoutes from "./modules/levels/levels.routes";
     import roomRoutes from "./modules/rooms/room.routes";
-    import tasksRoutes from "./modules/tasks/tasks.routes";
+    import tasksRoutes from "./modules/tasks/tasks.admin.routes";
+    import adminTasksRoutes from "./modules/tasks/tasks.admin.routes";
     import vipRoutes from "./modules/vip/vip.routes";
     import familyRoutes from "./modules/family/family.routes";
     import cpRoutes from "./modules/cp/cp.routes";
@@ -52,6 +53,7 @@ import hostTaskRoutes from "./modules/host-task/host-task.routes";
     app.use("/api/v1/rooms", roomRoutes);
     app.use("/api/v1/levels", levelRoutes);
     app.use("/api/v1/tasks", tasksRoutes);
+    app.use("/api/v1/admin/tasks", adminTasksRoutes);
     app.use("/api/v1/agency", agencyRoutes);
     app.use(
     "/api/v1/family",
