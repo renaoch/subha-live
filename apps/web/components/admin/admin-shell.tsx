@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   LayoutGrid,
   Target,
@@ -67,9 +67,11 @@ function isActive(pathname: string | null, href: string) {
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [roomPickerOpen, setRoomPickerOpen] = useState(false);
-  const [selectedRoomId, setSelectedRoomId] = useState<string>("");
+
+  const selectedRoomId = searchParams.get("room") ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -96,8 +98,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       Object.keys(SECTION_TITLES)
         .sort((a, b) => b.length - a.length)
         .find((href) => isActive(pathname, href)) ?? "/admin";
-    return SECTION_TITLES[match];
-  }, [pathname]);
+    const base = SECTION_TITLES[match];
+    if (match === "/admin" && selectedRoomId) {
+      const room = rooms.find((r) => r.id === selectedRoomId);
+      if (room) return { title: room.title, crumb: "Rooms" };
+    }
+    return base;
+  }, [pathname, selectedRoomId, rooms]);
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId) ?? null;
 
@@ -216,9 +223,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                       key={room.id}
                       type="button"
                       onClick={() => {
-                        setSelectedRoomId(room.id);
                         setRoomPickerOpen(false);
-                        router.push(`/home/room/${room.id}`);
+                        router.push(`/admin?room=${room.id}`);
                       }}
                       className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/5"
                     >
