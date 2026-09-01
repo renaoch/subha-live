@@ -70,14 +70,6 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
       .catch(() => setRooms([]));
   }, [open, isHost, myUserId]);
 
-  if (!open) return null;
-
-  const nameOf = (id: string, fallback = "Host") => liveHosts.get(id)?.name ?? fallback;
-  const avatarOf = (id: string) => liveHosts.get(id)?.avatar ?? undefined;
-  const state: PkState | null = pk.state;
-  const active = !!state && state.status === "ACTIVE";
-  const finished = !!state && (state.status === "FINISHED" || state.status === "FINALIZING");
-
   const filteredRooms = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rooms;
@@ -88,6 +80,14 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
       return name.includes(q) || handle.includes(q) || title.includes(q);
     });
   }, [rooms, query]);
+
+  if (!open) return null;
+
+  const nameOf = (id: string, fallback = "Host") => liveHosts.get(id)?.name ?? fallback;
+  const avatarOf = (id: string) => liveHosts.get(id)?.avatar ?? undefined;
+  const state: PkState | null = pk.state;
+  const active = !!state && state.status === "ACTIVE";
+  const finished = !!state && (state.status === "FINISHED" || state.status === "FINALIZING");
 
   const resetAndClose = () => {
     pk.reset();
