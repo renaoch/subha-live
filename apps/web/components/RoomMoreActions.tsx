@@ -9,7 +9,8 @@ import {
   Link2,
   Menu,
   ThumbsUp,
-  Swords,
+  Mic,
+  MicOff,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,16 +33,17 @@ interface RoomMoreActionsProps {
   onToggleCamera?: () => void;
   filterOpen?: boolean;
   onToggleFilter?: () => void;
+  micEnabled?: boolean;
+  onToggleMic?: () => void;
   onShare?: () => void;
   onOpenMenu?: () => void;
   onLike?: () => void;
-  onOpenPk?: () => void;
 }
 
 /**
- * Bottom sheet of secondary room actions (mic, camera, share, menu, like,
- * PK battles). Keeps the primary chat bar uncluttered — this is where
- * everything that isn't "type a message" or "send a gift" lives.
+ * Bottom sheet of secondary room actions (mic, camera, share, menu, like).
+ * Keeps the primary chat bar uncluttered — PK/Games/Gift/Filters live in the
+ * main action row now.
  */
 export function RoomMoreActions({
   open,
@@ -51,10 +53,11 @@ export function RoomMoreActions({
   onToggleCamera,
   filterOpen = false,
   onToggleFilter,
+  micEnabled = true,
+  onToggleMic,
   onShare,
   onOpenMenu,
   onLike,
-  onOpenPk,
 }: RoomMoreActionsProps) {
   // Lock body scroll while open
   useEffect(() => {
@@ -69,6 +72,13 @@ export function RoomMoreActions({
   const actions: RoomAction[] = [
     ...(isHost
       ? [
+          {
+            key: "mic",
+            label: micEnabled ? "Mute mic" : "Unmute mic",
+            icon: micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />,
+            onClick: onToggleMic,
+            active: !micEnabled,
+          },
           {
             key: "camera",
             label: cameraEnabled ? "Hide video" : "Show video",
@@ -85,13 +95,6 @@ export function RoomMoreActions({
           },
         ]
       : []),
-    {
-      key: "pk",
-      label: "PK Battle",
-      icon: <Swords className="h-5 w-5" />,
-      onClick: onOpenPk,
-      comingSoon: !onOpenPk,
-    },
     {
       key: "share",
       label: "Share link",

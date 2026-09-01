@@ -19,6 +19,7 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
   const [messages, setMessages] = useState<RoomChatMessage[]>([]);
   const [state, setState] = useState<ConnectionState>("idle");
   const [selfUserId, setSelfUserId] = useState<string | null>(null);
+  const [canChat, setCanChat] = useState(true);
 
   const socketRef = useRef<WebSocket | null>(null);
   // Map for dedupe across live + history (a message can arrive on both).
@@ -60,6 +61,7 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
         if (msg && msg.type === "connected") {
           setSelfUserId(msg.userId ?? null);
           selfUserIdRef.current = msg.userId ?? null;
+          setCanChat(msg.canChat !== false);
           return;
         }
         if (msg && msg.type === "error") {
@@ -171,5 +173,5 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
     [roomId, upsert],
   );
 
-  return { messages, state, selfUserId, send };
+  return { messages, state, selfUserId, canChat, send };
 }

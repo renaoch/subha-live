@@ -70,6 +70,7 @@ export class ChatService {
    */
   async submitMessage(context: AuthorizedContext, roomId: string, text: string): Promise<ChatMessage> {
     if (context.isMuted) throw new ChatError('CHAT_MUTED', 'You are muted in this room')
+    if (context.canChat === false) throw new ChatError('CHAT_FRIENDS_ONLY', 'Only friends of the host can chat in this room')
 
     const message: ChatMessage = {
       id: messageId(),

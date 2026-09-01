@@ -21,6 +21,20 @@ export interface RoomAuthorization {
   isModerator: boolean;
   isMuted: boolean;
   isBanned: boolean;
+  /** Whether this user may SEND chat messages (host + mutual friends only). */
+  canChat: boolean;
+}
+
+/** True when userA and userB follow each other (mutual friends). */
+async function areFriends(userA: string, userB: string): Promise<boolean> {
+  if (!userA || !userB || userA === userB) return true;
+  const { data, error } = await supabase
+    .from("follows")
+    .select("follower_id")
+    .or(
+      `and(follower_id.eq.${userA},following_id.eq.${userB}),and(follower_id.eq.${userB},following_id.eq.${userA})`,
+    );
+  return !error && (data?.length ?? 0) >= 2;
 }
 
 export const roomService = {
@@ -63,6 +77,7 @@ export const roomService = {
 
     const isMember = isHost || !!participant;
     const isModerator = participant?.role === "moderator";
+    const canChat = isHost || (await areFriends(userId, room.host_id));
 
     return {
       // Chat is available in waiting + live rooms; an ended room closes chat.
@@ -72,6 +87,7 @@ export const roomService = {
       isModerator,
       isMuted: false,
       isBanned: false,
+      canChat,
     };
   },
 

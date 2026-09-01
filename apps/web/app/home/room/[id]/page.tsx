@@ -171,7 +171,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   useRoomHeartbeat(room?.id ?? '', room?.status);
 
   // Live room chat over the realtime service.
-  const { messages: chatMessages, state: chatState, selfUserId, send: sendChat } =
+  const { messages: chatMessages, state: chatState, selfUserId, canChat, send: sendChat } =
     useRoomChat(room?.id ?? '', room?.status);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
 
@@ -632,6 +632,8 @@ useEffect(() => {
           onToggleCamera={() => setCameraEnabled((v) => !v)}
           filterOpen={filterOpen}
           onToggleFilter={() => setFilterOpen((v) => !v)}
+          micEnabled={micEnabled}
+          onToggleMic={isHost ? () => setMicEnabled((v) => !v) : undefined}
           onShare={() => {
             const url = typeof window !== 'undefined' ? window.location.href : '';
             if (navigator.share) {
@@ -642,7 +644,6 @@ useEffect(() => {
             }
           }}
           onLike={() => toast.success('❤️')}
-          onOpenPk={() => setPkOpen(true)}
         />
 
         {/* PK battle bar (score + timer, active/finished) */}
@@ -660,13 +661,16 @@ useEffect(() => {
             messages={chatMessages}
             selfUserId={selfUserId}
             connected={chatState === 'connected'}
+            canChat={canChat}
             isHost={isHost}
             raised={isHost && isWaiting}
             onSend={sendChat}
             onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
             onOpenMore={() => setMoreOpen(true)}
-            micEnabled={micEnabled}
-            onToggleMic={isHost ? () => setMicEnabled((v) => !v) : undefined}
+            onOpenPk={() => setPkOpen(true)}
+            onOpenGames={() => toast.info('Games coming soon 🎮')}
+            onToggleFilter={isHost ? () => setFilterOpen((v) => !v) : undefined}
+            filterOpen={filterOpen}
           />
         )}
 

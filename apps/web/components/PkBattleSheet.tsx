@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Loader2, Swords, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -125,6 +126,7 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
               <BattleSide
                 name={state.hostA === myUserId ? `${hostName} (you)` : nameOf(state.hostA)}
                 avatar={state.hostA === myUserId ? undefined : avatarOf(state.hostA)}
+                userId={state.hostA}
                 score={state.scoreA}
                 winner={finished && state.winner === "A"}
                 align="left"
@@ -135,6 +137,7 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
               <BattleSide
                 name={state.hostB === myUserId ? `${nameOf(state.hostB)} (you)` : nameOf(state.hostB)}
                 avatar={state.hostB === myUserId ? undefined : avatarOf(state.hostB)}
+                userId={state.hostB}
                 score={state.scoreB}
                 winner={finished && state.winner === "B"}
                 align="right"
@@ -177,12 +180,13 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
         ) : isHost && pk.incomingInvite ? (
           /* Incoming invite (host B) */
           <div className="space-y-4 text-center">
-            <Avatar
-              name={nameOf(pk.incomingInvite.fromHostId)}
-              src={avatarOf(pk.incomingInvite.fromHostId)}
-              size="lg"
-              className="mx-auto"
-            />
+            <Link href={`/user/${pk.incomingInvite.fromHostId}`} className="mx-auto block w-fit">
+              <Avatar
+                name={nameOf(pk.incomingInvite.fromHostId)}
+                src={avatarOf(pk.incomingInvite.fromHostId)}
+                size="lg"
+              />
+            </Link>
             <p className="text-[14px] font-semibold text-[#F3ECE0]">
               {nameOf(pk.incomingInvite.fromHostId)} challenges you
             </p>
@@ -261,20 +265,26 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
                 const h = r.host;
                 const name = h?.name || h?.handle || "Host";
                 return (
-                  <button
+                  <div
                     key={r.id}
-                    type="button"
-                    onClick={() => handleInvite(h!.id)}
-                    disabled={pk.busy}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-[#2A2238] bg-[#17131F] px-3 py-3 transition hover:bg-white/5 disabled:opacity-50"
+                    className="flex w-full items-center gap-3 rounded-2xl border border-[#2A2238] bg-[#17131F] px-3 py-3"
                   >
-                    <Avatar name={name} src={h?.avatar ?? undefined} size="sm" />
-                    <div className="min-w-0 flex-1 text-left">
-                      <p className="truncate text-[13px] font-semibold text-[#F3ECE0]">{name}</p>
-                      <p className="truncate text-[11px] text-white/40">{r.title}</p>
-                    </div>
-                    <span className="shrink-0 text-[11px] font-bold text-[#F5B93F]">Challenge</span>
-                  </button>
+                    <Link href={`/user/${h!.id}`} className="flex min-w-0 flex-1 items-center gap-3 active:opacity-70">
+                      <Avatar name={name} src={h?.avatar ?? undefined} size="sm" />
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="block truncate text-[13px] font-semibold text-[#F3ECE0]">{name}</span>
+                        <span className="block truncate text-[11px] text-white/40">{r.title}</span>
+                      </span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleInvite(h!.id)}
+                      disabled={pk.busy}
+                      className="shrink-0 rounded-full bg-[#F5B93F]/15 px-3 py-1.5 text-[11px] font-bold text-[#F5B93F] transition hover:bg-[#F5B93F]/25 disabled:opacity-50"
+                    >
+                      Challenge
+                    </button>
+                  </div>
                 );
               })
             )}
@@ -296,19 +306,30 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
 function BattleSide({
   name,
   avatar,
+  userId,
   score,
   winner,
   align,
 }: {
   name: string;
   avatar?: string;
+  userId?: string;
   score: number;
   winner: boolean;
   align: "left" | "right";
 }) {
+  const avatarEl = (
+    <Avatar name={name} src={avatar} size="sm" className={cn("h-10 w-10", winner && "ring-2 ring-[#F5B93F]")} />
+  );
   return (
     <div className={cn("flex flex-col items-center gap-1", align === "left" ? "text-left" : "text-right")}>
-      <Avatar name={name} src={avatar} size="sm" className={cn("h-10 w-10", winner && "ring-2 ring-[#F5B93F]")} />
+      {userId ? (
+        <Link href={`/user/${userId}`} className="active:opacity-70">
+          {avatarEl}
+        </Link>
+      ) : (
+        avatarEl
+      )}
       <span
         className={cn(
           "max-w-[110px] truncate text-[12px] font-semibold text-white/80",

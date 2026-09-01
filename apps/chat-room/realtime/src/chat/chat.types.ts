@@ -17,6 +17,8 @@ export type Authorization = {
   isModerator?: boolean
   isMuted?: boolean
   isBanned?: boolean
+  /** Whether this user may SEND messages (host + mutual friends only). */
+  canChat?: boolean
 }
 
 export type AuthorizedContext = Authorization & { userId: string }

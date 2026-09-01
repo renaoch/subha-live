@@ -50,7 +50,7 @@ describe('handleConnection - authorization ordering', () => {
 
     expect(chatService.authorizeRoom).toHaveBeenCalled()
     expect(rooms.get('room1')?.has(socket)).toBe(true)
-    expect(JSON.parse(socket.sent[0])).toEqual({ type: 'connected', userId: 'user1', username: 'Renao' })
+    expect(JSON.parse(socket.sent[0])).toEqual({ type: 'connected', userId: 'user1', username: 'Renao', canChat: true })
   })
 
   it('never registers the socket when room authorization is denied', async () => {

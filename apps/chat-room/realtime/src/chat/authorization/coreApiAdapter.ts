@@ -52,6 +52,7 @@ export class HttpCoreApiAdapter implements CoreApiAdapter {
       isModerator: auth.isModerator === true,
       isMuted: auth.isMuted === true,
       isBanned: auth.isBanned === true,
+      canChat: auth.canChat !== false,
     }
 
     // Banned or unauthenticated-per-Core-API users cannot access the room at

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, BadgeCheck, Users } from "lucide-react";
 
@@ -119,41 +120,43 @@ export function ConnectionsPage({ initialTab }: ConnectionsPageProps) {
           {!loading && !error && entries.length > 0 && (
             <ul className="space-y-2">
               {entries.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex items-center gap-3 rounded-xl border border-[#2A2238] bg-[#1D1829]/40 p-3"
-                >
-                  {entry.avatar ? (
-                    <img
-                      src={entry.avatar}
-                      alt={entry.name || "User"}
-                      className="h-11 w-11 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#2A2238] text-sm font-black text-[#F3ECE0]">
-                      {(entry.name || "?").charAt(0).toUpperCase()}
-                    </div>
-                  )}
+                <li key={entry.id}>
+                  <Link
+                    href={`/user/${entry.id}`}
+                    className="flex items-center gap-3 rounded-xl border border-[#2A2238] bg-[#1D1829]/40 p-3 transition hover:bg-[#1D1829]/80 active:opacity-70"
+                  >
+                    {entry.avatar ? (
+                      <img
+                        src={entry.avatar}
+                        alt={entry.name || "User"}
+                        className="h-11 w-11 shrink-0 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#2A2238] text-sm font-black text-[#F3ECE0]">
+                        {(entry.name || "?").charAt(0).toUpperCase()}
+                      </div>
+                    )}
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1">
-                      <p className="truncate text-sm font-bold text-[#F3ECE0]">
-                        {entry.name || "User"}
-                      </p>
-                      {entry.is_verified && (
-                        <BadgeCheck className="h-3.5 w-3.5 shrink-0 fill-[#CBA35C] text-[#17131F]" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <p className="truncate text-sm font-bold text-[#F3ECE0]">
+                          {entry.name || "User"}
+                        </p>
+                        {entry.is_verified && (
+                          <BadgeCheck className="h-3.5 w-3.5 shrink-0 fill-[#CBA35C] text-[#17131F]" />
+                        )}
+                      </div>
+                      {entry.handle && (
+                        <p className="truncate text-xs text-[#9088A0]">
+                          @{entry.handle}
+                        </p>
                       )}
                     </div>
-                    {entry.handle && (
-                      <p className="truncate text-xs text-[#9088A0]">
-                        @{entry.handle}
-                      </p>
-                    )}
-                  </div>
 
-                  <span className="shrink-0 rounded-full bg-[#2A2238] px-2 py-1 text-[10px] font-bold text-[#9088A0]">
-                    Lv.{entry.level}
-                  </span>
+                    <span className="shrink-0 rounded-full bg-[#2A2238] px-2 py-1 text-[10px] font-bold text-[#9088A0]">
+                      Lv.{entry.level}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>

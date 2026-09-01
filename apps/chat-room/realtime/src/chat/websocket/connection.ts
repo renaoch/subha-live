@@ -81,7 +81,7 @@ export async function handleConnection(socket: WebSocket, roomId: string, reques
   // messages. Without this, a fast client sending immediately on `open`
   // could have its first message dropped, since the `message` listener is
   // only attached after the async authenticate -> authorize chain resolves.
-  socket.send(JSON.stringify({ type: 'connected', userId: context.userId, username: context.username }))
+  socket.send(JSON.stringify({ type: 'connected', userId: context.userId, username: context.username, canChat: context.canChat !== false }))
 
   const inputSchema = chatMessageInputSchema(config)
 

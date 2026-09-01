@@ -81,4 +81,17 @@ describe('ChatService.submitMessage', () => {
     const context = { userId: 'user1', username: 'Renao', canAccess: true, isMuted: true }
     await expect(service.submitMessage(context, 'room1', 'hello')).rejects.toMatchObject({ code: 'CHAT_MUTED' })
   })
+
+  it('rejects a message from a non-friend (canChat false)', async () => {
+    const { service } = buildService(cacheReturning({ username: 'Renao', canAccess: true, canChat: false }))
+    const context = { userId: 'user1', username: 'Renao', canAccess: true, canChat: false }
+    await expect(service.submitMessage(context, 'room1', 'hello')).rejects.toMatchObject({ code: 'CHAT_FRIENDS_ONLY' })
+  })
+
+  it('allows a message from a friend (canChat true)', async () => {
+    const { service } = buildService(cacheReturning({ username: 'Renao', canAccess: true, canChat: true }))
+    const context = { userId: 'user1', username: 'Renao', canAccess: true, canChat: true }
+    const message = await service.submitMessage(context, 'room1', 'hi')
+    expect(message.message).toBe('hi')
+  })
 })
