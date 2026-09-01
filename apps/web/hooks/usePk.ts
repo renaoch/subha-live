@@ -90,7 +90,9 @@ export function usePk(
                 ? { ...prev, status: "ACTIVE", startedAt: msg.startedAt, endsAt: msg.endsAt }
                 : prev,
             );
-          } else if (msg?.type === "PK_RESULT") {
+          } else if (msg?.type === "PK_ENDING") {
+            setState((prev) => (prev ? { ...prev, status: "FINALIZING" } : prev));
+          } else if (msg?.type === "PK_RESULT" || msg?.type === "PK_ENDED") {
             setState((prev) =>
               prev
                 ? {

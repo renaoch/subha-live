@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Swords, X, Crown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, Swords, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { roomsApi, type RoomRecord } from "@/lib/api/rooms";
 import type { PkState } from "@/lib/api/pk";
 import type { usePk } from "@/hooks/usePk";
+import { Avatar } from "@/components/ui/avatar";
 
 function formatCoins(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -36,6 +37,7 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
   const [liveHosts, setLiveHosts] = useState<Map<string, HostInfo>>(new Map());
   const [outgoing, setOutgoing] = useState<{ battleId: string; opponentHostId: string } | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -71,9 +73,21 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
   if (!open) return null;
 
   const nameOf = (id: string, fallback = "Host") => liveHosts.get(id)?.name ?? fallback;
+  const avatarOf = (id: string) => liveHosts.get(id)?.avatar ?? undefined;
   const state: PkState | null = pk.state;
   const active = !!state && state.status === "ACTIVE";
   const finished = !!state && (state.status === "FINISHED" || state.status === "FINALIZING");
+
+  const filteredRooms = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rooms;
+    return rooms.filter((r) => {
+      const name = (r.host?.name || "").toLowerCase();
+      const handle = (r.host?.handle || "").toLowerCase();
+      const title = (r.title || "").toLowerCase();
+      return name.includes(q) || handle.includes(q) || title.includes(q);
+    });
+  }, [rooms, query]);
 
   const resetAndClose = () => {
     pk.reset();
@@ -110,6 +124,7 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
               <BattleSide
                 name={state.hostA === myUserId ? `${hostName} (you)` : nameOf(state.hostA)}
+                avatar={state.hostA === myUserId ? undefined : avatarOf(state.hostA)}
                 score={state.scoreA}
                 winner={finished && state.winner === "A"}
                 align="left"
@@ -119,6 +134,7 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
               </span>
               <BattleSide
                 name={state.hostB === myUserId ? `${nameOf(state.hostB)} (you)` : nameOf(state.hostB)}
+                avatar={state.hostB === myUserId ? undefined : avatarOf(state.hostB)}
                 score={state.scoreB}
                 winner={finished && state.winner === "B"}
                 align="right"
@@ -161,6 +177,12 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
         ) : isHost && pk.incomingInvite ? (
           /* Incoming invite (host B) */
           <div className="space-y-4 text-center">
+            <Avatar
+              name={nameOf(pk.incomingInvite.fromHostId)}
+              src={avatarOf(pk.incomingInvite.fromHostId)}
+              size="lg"
+              className="mx-auto"
+            />
             <p className="text-[14px] font-semibold text-[#F3ECE0]">
               {nameOf(pk.incomingInvite.fromHostId)} challenges you
             </p>
@@ -221,11 +243,21 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
         ) : isHost ? (
           /* Challenge list */
           <div className="space-y-2">
-            <p className="mb-1 text-[12px] text-white/45">Choose a live host to challenge</p>
-            {rooms.length === 0 ? (
-              <p className="py-6 text-center text-[13px] text-white/35">No other live hosts right now</p>
+            <div className="flex items-center gap-2 rounded-full border border-[#2A2238] bg-[#17131F] px-3 py-2">
+              <Search className="h-4 w-4 shrink-0 text-white/40" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search live hosts…"
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-[#F3ECE0] placeholder:text-white/30 focus:outline-none"
+              />
+            </div>
+            {filteredRooms.length === 0 ? (
+              <p className="py-6 text-center text-[13px] text-white/35">
+                {query ? "No hosts match your search" : "No other live hosts right now"}
+              </p>
             ) : (
-              rooms.map((r) => {
+              filteredRooms.map((r) => {
                 const h = r.host;
                 const name = h?.name || h?.handle || "Host";
                 return (
@@ -236,9 +268,7 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
                     disabled={pk.busy}
                     className="flex w-full items-center gap-3 rounded-2xl border border-[#2A2238] bg-[#17131F] px-3 py-3 transition hover:bg-white/5 disabled:opacity-50"
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F5B93F]/15 text-[#F5B93F]">
-                      <Crown className="h-4 w-4" />
-                    </span>
+                    <Avatar name={name} src={h?.avatar ?? undefined} size="sm" />
                     <div className="min-w-0 flex-1 text-left">
                       <p className="truncate text-[13px] font-semibold text-[#F3ECE0]">{name}</p>
                       <p className="truncate text-[11px] text-white/40">{r.title}</p>
@@ -265,17 +295,20 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
 
 function BattleSide({
   name,
+  avatar,
   score,
   winner,
   align,
 }: {
   name: string;
+  avatar?: string;
   score: number;
   winner: boolean;
   align: "left" | "right";
 }) {
   return (
     <div className={cn("flex flex-col items-center gap-1", align === "left" ? "text-left" : "text-right")}>
+      <Avatar name={name} src={avatar} size="sm" className={cn("h-10 w-10", winner && "ring-2 ring-[#F5B93F]")} />
       <span
         className={cn(
           "max-w-[110px] truncate text-[12px] font-semibold text-white/80",

@@ -258,6 +258,7 @@ export const pkService = {
       if (!state || state.status !== "ACTIVE") return null;
 
       await pkRedis.setStatus(battleId, "FINALIZING");
+      await pkEvents.publishBattle(battleId, { type: "PK_ENDING" });
 
       const scoreA = state.scoreA;
       const scoreB = state.scoreB;
@@ -279,6 +280,13 @@ export const pkService = {
 
       await pkEvents.publishBattle(battleId, {
         type: "PK_RESULT",
+        winner,
+        scoreA,
+        scoreB,
+        version: state.version,
+      });
+      await pkEvents.publishBattle(battleId, {
+        type: "PK_ENDED",
         winner,
         scoreA,
         scoreB,

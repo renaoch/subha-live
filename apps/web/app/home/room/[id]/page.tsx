@@ -42,9 +42,13 @@ import { useRoomChat } from '@/hooks/useRoomChat';
 
 import { usePk } from '@/hooks/usePk';
 
+import { usePkMedia } from '@/hooks/usePkMedia';
+
 import { PkBattleBar } from '@/components/PkBattleBar';
 
 import { PkBattleSheet } from '@/components/PkBattleSheet';
+
+import { PkDualVideo } from '@/components/PkDualVideo';
 
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
@@ -174,6 +178,9 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   // PK battle (1v1) state + actions.
   const pk = usePk(room?.id ?? '', userId, isHost, room?.status);
   const [pkOpen, setPkOpen] = useState(false);
+
+  // Opponent's stream for the dual-video PK view (client-side side-by-side).
+  const { opponentStream, opponentConnected } = usePkMedia(room, userId, pk.state);
 
   // "Someone joined" pulses for RoomJoinFeed. The realtime service doesn't
   // currently emit a per-user join event with a username (only the polled
@@ -455,21 +462,37 @@ useEffect(() => {
 
         {/* Video layer */}
 
-        <LiveVideo
+        {pk.state &&
+        (pk.state.status === 'ACTIVE' ||
+          pk.state.status === 'FINALIZING' ||
+          pk.state.status === 'FINISHED') ? (
+          <PkDualVideo
+            isHost={isHost}
+            localStream={localStreamRef.current}
+            remoteStream={remoteStreamRef.current}
+            opponentStream={opponentStream}
+            opponentConnected={opponentConnected}
+            filter={filterPresets[selectedFilter as keyof typeof filterPresets]}
+            primaryLabel={isHost ? 'You' : room.host?.name || 'Host'}
+            opponentLabel="Opponent"
+          />
+        ) : (
+          <LiveVideo
 
-          isHost={isHost}
+            isHost={isHost}
 
-          isWaiting={isWaiting}
+            isWaiting={isWaiting}
 
-          isLive={isLive}
+            isLive={isLive}
 
-          localStream={localStreamRef.current}
+            localStream={localStreamRef.current}
 
-          remoteStream={remoteStreamRef.current}
+            remoteStream={remoteStreamRef.current}
 
-          filter={filterPresets[selectedFilter as keyof typeof filterPresets]}
+            filter={filterPresets[selectedFilter as keyof typeof filterPresets]}
 
-        />
+          />
+        )}
 
 
 
