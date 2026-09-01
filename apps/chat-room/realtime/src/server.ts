@@ -11,6 +11,7 @@ import { RedisAuthorizationCache } from './chat/authorization/authorizationCache
 import { ChatRepository } from './chat/chat.repository.js'
 import { ChatService } from './chat/chat.service.js'
 import { registerChatGateway } from './chat/chat.gateway.js'
+import { registerPkGateway } from './pk/pk.gateway.js'
 import { ChatPersistenceWorker } from './workers/chat-persistence.worker.js'
 
 async function main() {
@@ -52,7 +53,17 @@ async function main() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 
-  const { rooms } = await registerChatGateway(app, { config, redis, pool, verifier, chatService })
+  const connectionCount = { value: 0 }
+  const { rooms } = await registerChatGateway(app, { config, redis, pool, verifier, chatService, connectionCount })
+
+  const pkRegistries = await registerPkGateway(app, {
+    config,
+    redisCommand: redis.command,
+    subscriber: redis.subscriber,
+    verifier,
+    chatService,
+    connectionCount,
+  })
 
   const worker = new ChatPersistenceWorker(redis.command, repository, config)
   await worker.start()
@@ -67,6 +78,12 @@ async function main() {
       await app.close()
       // 3. Notify/close active WebSockets safely.
       for (const sockets of rooms.values()) {
+        for (const socket of sockets) socket.close(1001, 'Server shutting down')
+      }
+      for (const sockets of pkRegistries.battles.values()) {
+        for (const socket of sockets) socket.close(1001, 'Server shutting down')
+      }
+      for (const sockets of pkRegistries.hosts.values()) {
         for (const socket of sockets) socket.close(1001, 'Server shutting down')
       }
       // 4-5. Stop the worker loop and let in-flight persistence finish.

@@ -18,12 +18,12 @@ export type GatewayDeps = {
   pool: pg.Pool
   verifier: SupabaseTokenVerifier
   chatService: ChatService
+  connectionCount: { value: number }
 }
 
 export async function registerChatGateway(app: FastifyInstance, deps: GatewayDeps): Promise<{ rooms: RoomRegistry; connectionCount: { value: number } }> {
-  const { config, redis, pool, verifier, chatService } = deps
+  const { config, redis, pool, verifier, chatService, connectionCount } = deps
   const rooms: RoomRegistry = new Map()
-  const connectionCount = { value: 0 }
 
   app.get('/health', async () => ({ status: 'ok' }))
 

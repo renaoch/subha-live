@@ -14,6 +14,7 @@ import type { GiftListQuery, SendGiftInput } from "./charisma.schema";
 
 import { roomTaskService } from "../room-tasks/room-task.service";
 import { hostTaskService } from "../host-task/host-task.service";
+import { pkService } from "../pk/pk.service";
 
 function toNumber(value: number | null): number {
   return value ?? 0;
@@ -402,6 +403,13 @@ export async function sendGift(
       console.error("[sendGift] failed to record host-task coin progress:", err);
     });
   }
+
+  // PK battle scoring: only AFTER the gift transaction committed durably.
+  // Tied to gift.id for idempotency — never score before the gift succeeded,
+  // and never score the same gift twice.
+  pkService.recordGiftScore(input.recipientId, input.value, gift.id).catch((err) => {
+    console.error("[sendGift] failed to record PK score:", err);
+  });
 
   return {
     id: gift.id,
