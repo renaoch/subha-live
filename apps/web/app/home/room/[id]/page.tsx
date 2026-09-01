@@ -40,6 +40,12 @@ import { RoomJoinFeed, type RoomJoinEvent } from '@/components/RoomJoinFeed';
 
 import { useRoomChat } from '@/hooks/useRoomChat';
 
+import { usePk } from '@/hooks/usePk';
+
+import { PkBattleBar } from '@/components/PkBattleBar';
+
+import { PkBattleSheet } from '@/components/PkBattleSheet';
+
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
@@ -164,6 +170,10 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const { messages: chatMessages, state: chatState, selfUserId, send: sendChat } =
     useRoomChat(room?.id ?? '', room?.status);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
+
+  // PK battle (1v1) state + actions.
+  const pk = usePk(room?.id ?? '', userId, isHost, room?.status);
+  const [pkOpen, setPkOpen] = useState(false);
 
   // "Someone joined" pulses for RoomJoinFeed. The realtime service doesn't
   // currently emit a per-user join event with a username (only the polled
@@ -609,7 +619,12 @@ useEffect(() => {
             }
           }}
           onLike={() => toast.success('❤️')}
+          onOpenPk={() => setPkOpen(true)}
         />
+
+        {/* PK battle bar (score + timer, active/finished) */}
+
+        <PkBattleBar state={pk.state} onOpen={() => setPkOpen(true)} />
 
         {/* "X joined" pulses, top-left, above the chat stream */}
 
@@ -803,7 +818,6 @@ useEffect(() => {
         {/* Audio stage modal */}
 
         {speakerPanelOpen && (
-
           <AudioStageModal
 
             isHost={isHost}
@@ -835,6 +849,24 @@ useEffect(() => {
           />
 
         )}
+
+        {/* PK battle sheet */}
+
+        <PkBattleSheet
+
+          open={pkOpen}
+
+          onClose={() => setPkOpen(false)}
+
+          myUserId={userId}
+
+          isHost={isHost}
+
+          hostName={room.host?.name || 'Host'}
+
+          pk={pk}
+
+        />
 
       </section>
 

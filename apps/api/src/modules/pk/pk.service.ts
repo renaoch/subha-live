@@ -295,4 +295,12 @@ export const pkService = {
   async getState(battleId: string): Promise<PkRedisState | null> {
     return pkRedis.readState(battleId);
   },
+
+  /** Discover the active battle for a room (via its host's busy index). */
+  async getForRoom(roomId: string): Promise<PkRedisState | null> {
+    const room = await getRoomOrThrow(roomId);
+    const battleId = await pkRedis.getHostBattle(room.host_id);
+    if (!battleId) return null;
+    return pkRedis.readState(battleId);
+  },
 };

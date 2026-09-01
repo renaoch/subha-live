@@ -30,6 +30,20 @@ export function chatHistoryUrl(roomId: string): string | null {
   return `${base}/rooms/${roomId}/chat/history`;
 }
 
+/** Absolute WebSocket URL for a PK battle's live state stream. */
+export function pkBattleWsUrl(battleId: string): string | null {
+  if (!WS_BASE) return null;
+  const base = WS_BASE.replace(/\/+$/, "");
+  return `${base}/ws/pk/${battleId}`;
+}
+
+/** Absolute WebSocket URL for a host's directed PK events (invite/accept/decline). */
+export function pkHostWsUrl(hostId: string): string | null {
+  if (!WS_BASE) return null;
+  const base = WS_BASE.replace(/\/+$/, "");
+  return `${base}/ws/pk/host/${hostId}`;
+}
+
 /** Current Supabase access token (for the realtime service's JWT auth). */
 export async function getAccessToken(): Promise<string | null> {
   try {

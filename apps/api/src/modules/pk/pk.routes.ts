@@ -7,6 +7,7 @@ import {
   startPk,
   cancelPk,
   getPk,
+  getPkForRoom,
 } from "./pk.controller";
 
 const router = Router();
@@ -16,6 +17,7 @@ router.post("/pk/:battleId/accept", authMiddleware, acceptPk);
 router.post("/pk/:battleId/decline", authMiddleware, declinePk);
 router.post("/pk/:battleId/start", authMiddleware, startPk);
 router.post("/pk/:battleId/cancel", authMiddleware, cancelPk);
+router.get("/pk/for-room/:roomId", authMiddleware, getPkForRoom);
 router.get("/pk/:battleId", authMiddleware, getPk);
 
 export default router;

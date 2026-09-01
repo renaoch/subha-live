@@ -84,3 +84,13 @@ export async function getPk(req: Request<{ battleId: string }>, res: Response, n
     next(error);
   }
 }
+
+export async function getPkForRoom(req: Request<{ roomId: string }>, res: Response, next: NextFunction) {
+  try {
+    requireUser(req);
+    const state = await pkService.getForRoom(req.params.roomId);
+    res.status(200).json({ success: true, data: state });
+  } catch (error) {
+    next(error);
+  }
+}
