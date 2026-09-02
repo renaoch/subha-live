@@ -45,9 +45,9 @@ export default function ChatsPage() {
   useEffect(() => {
     let channel: RealtimeChannel | null = null;
     let disposed = false;
+    const supabase = createClient();
 
     (async () => {
-      const supabase = createClient();
       const { data } = await supabase.auth.getUser();
       const me = data.user?.id;
       if (!me || disposed) return;
