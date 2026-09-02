@@ -21,6 +21,7 @@ import turnRoutes from "./modules/media/turn.routes";
 import charismaRoutes from "./modules/charisma/charisma.routes";
 import hostTaskRoutes from "./modules/host-task/host-task.routes";
 import pkRoutes from "./modules/pk/pk.routes";
+import messagesRoutes from "./modules/messages/messages.routes";
     import { errorMiddleware } from "./middleware/error.middleware";
 
 
@@ -71,6 +72,7 @@ import pkRoutes from "./modules/pk/pk.routes";
     app.use("/api/v1/charisma", charismaRoutes);
     app.use("/api/v1", hostTaskRoutes);
     app.use("/api/v1", pkRoutes);
+    app.use("/api/v1", messagesRoutes);
     app.use(
   "/api/v1/media/test",
   mediaTestRoutes,

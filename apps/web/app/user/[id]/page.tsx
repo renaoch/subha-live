@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Check, MessageCircle, MoreHorizontal, UserPlus, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
@@ -62,7 +63,7 @@ export default function PublicProfilePage() {
               <p className="mt-3 text-sm leading-6 text-white/70">{profile.bio}</p>
             </div>
           </div>
-          <div className="mt-5 flex gap-2"><button onClick={toggleFollow} className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold ${isFollowing ? "border border-white/15 bg-white/[0.06] text-white" : "bg-white text-black"}`}><UserPlus className="h-4 w-4" />{isFollowing ? "Following" : "Follow"}</button><button className="flex h-10 w-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.04]" aria-label="Message"><MessageCircle className="h-4 w-4" /></button></div>
+          <div className="mt-5 flex gap-2"><button onClick={toggleFollow} className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold ${isFollowing ? "border border-white/15 bg-white/[0.06] text-white" : "bg-white text-black"}`}><UserPlus className="h-4 w-4" />{isFollowing ? "Following" : "Follow"}</button><button onClick={() => router.push(`/home/chats/${id}`)} className="flex h-10 w-11 items-center justify-center rounded-xl border border-white/12 bg-white/[0.04] hover:bg-white/[0.08]" aria-label="Message"><MessageCircle className="h-4 w-4" /></button></div>
           <div className="mt-6 grid grid-cols-3 divide-x divide-white/[0.08] text-center"><Stat value={profile.followers} label="Followers" onClick={() => setTab("followers")} /><Stat value={profile.following} label="Following" onClick={() => setTab("following")} /><Stat value={friends.length  || 0} label="Friends" onClick={() => setTab("friends")} /></div>
         </section>
 
@@ -75,4 +76,4 @@ export default function PublicProfilePage() {
 
 function Stat({ value, label, onClick }: { value: number; label: string; onClick: () => void }) { return <button onClick={onClick} className="group"><strong className="block text-lg font-semibold group-hover:text-white/70">{Intl.NumberFormat("en", { notation: "compact" }).format(value)}</strong><span className="text-xs text-white/40">{label}</span></button>; }
 function About({ profile }: { profile: PublicProfile }) { return <section className="space-y-3 p-5"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/35">About</p><div className="flex flex-wrap gap-2"><span className="rounded-full bg-white/[0.07] px-3 py-1.5 text-xs text-white/70">Level {profile.level}</span><span className="rounded-full bg-white/[0.07] px-3 py-1.5 text-xs text-white/70">{profile.country_flag ?? ""} {profile.country ?? "Worldwide"}</span><span className="rounded-full bg-white/[0.07] px-3 py-1.5 text-xs text-white/70">{profile.role === "user" ? "Creator" : profile.role}</span></div><p className="text-sm leading-6 text-white/55">A welcoming creator who enjoys meeting new people and building a thoughtful live community.</p></section>; }
-function Connection({ user }: { user: FollowListEntry }) { return <div className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-white/[0.04]"><Avatar name={user.name ?? "User"} src={user.avatar ?? undefined} size="sm" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{user.name ?? "User"}</p><p className="truncate text-xs text-white/40">@{user.handle ?? user.public_id}</p></div>{user.is_verified && <Check className="h-4 w-4 text-white/60" />}</div>; }
+function Connection({ user }: { user: FollowListEntry }) { return <Link href={`/user/${user.id}`} className="flex items-center gap-3 rounded-xl px-3 py-3 hover:bg-white/[0.04]"><Avatar name={user.name ?? "User"} src={user.avatar ?? undefined} size="sm" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{user.name ?? "User"}</p><p className="truncate text-xs text-white/40">@{user.handle ?? user.public_id}</p></div>{user.is_verified && <Check className="h-4 w-4 text-white/60" />}</Link>; }
