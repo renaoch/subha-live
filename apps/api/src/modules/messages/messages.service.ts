@@ -150,30 +150,58 @@ export const messagesService = {
     return conversations;
   },
 
-  async getThread(userId: string, otherUserId: string): Promise<DmMessage[]> {
-    // Mark incoming messages as read.
-    await supabase
-      .from("direct_messages")
-      .update({ is_read: true, read_at: new Date().toISOString() })
-      .eq("recipient_id", userId)
-      .eq("sender_id", otherUserId)
-      .eq("is_read", false);
+  async getThread(
+    userId: string,
+    otherUserId: string,
+    opts: { before?: string; limit?: number } = {},
+  ): Promise<{ messages: DmMessage[]; hasMore: boolean }> {
+    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
 
-    const { data, error } = await supabase
+    // Mark incoming messages as read only on the initial (latest) load, not
+    // while paginating backward through history.
+    if (!opts.before) {
+      await supabase
+        .from("direct_messages")
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq("recipient_id", userId)
+        .eq("sender_id", otherUserId)
+        .eq("is_read", false);
+    }
+
+    let query = supabase
       .from("direct_messages")
       .select("id, sender_id, recipient_id, encrypted_content, is_read, created_at")
       .or(
         `and(sender_id.eq.${userId},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${userId})`,
       )
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false })
+      .limit(limit + 1);
 
+    if (opts.before) {
+      query = query.lt("created_at", opts.before);
+    }
+
+    const { data, error } = await query;
     if (error) {
       throw new AppError(500, "Failed to load messages", {
         code: "DM_THREAD_FAILED",
         details: error.message,
       });
     }
-    return (data ?? []).map(toMessage);
+
+    const rows = (data ?? []) as DmRow[];
+    const hasMore = rows.length > limit;
+    const page = rows.slice(0, limit).reverse();
+    return { messages: page.map(toMessage), hasMore };
+  },
+
+  async markThreadRead(userId: string, otherUserId: string): Promise<void> {
+    await supabase
+      .from("direct_messages")
+      .update({ is_read: true, read_at: new Date().toISOString() })
+      .eq("recipient_id", userId)
+      .eq("sender_id", otherUserId)
+      .eq("is_read", false);
   },
 
   async sendMessage(userId: string, otherUserId: string, content: string): Promise<DmMessage> {

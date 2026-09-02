@@ -13,7 +13,7 @@ export default function HomeLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const isFullScreenRoute = pathname?.includes("/room/");
+  const isFullScreenRoute = pathname?.includes("/room/") || pathname?.includes("/chats");
 
   const isAuthed = useAuthStore((s) => s.isAuthed);
   const hydrated = useAuthStore((s) => s.hydrated);

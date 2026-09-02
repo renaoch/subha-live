@@ -41,8 +41,23 @@ export async function getFriendship(req: Request<{ userId: string }>, res: Respo
 export async function getThread(req: Request<{ userId: string }>, res: Response, next: NextFunction) {
   try {
     const user = requireUser(req);
-    const messages = await messagesService.getThread(user.id, otherId(req));
-    res.status(200).json({ success: true, data: messages });
+    const before = typeof req.query.before === "string" ? req.query.before : undefined;
+    const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : undefined;
+    const result = await messagesService.getThread(user.id, otherId(req), {
+      before,
+      limit: Number.isFinite(limit) && limit ? limit : undefined,
+    });
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function markThreadRead(req: Request<{ userId: string }>, res: Response, next: NextFunction) {
+  try {
+    const user = requireUser(req);
+    await messagesService.markThreadRead(user.id, otherId(req));
+    res.status(200).json({ success: true, data: null });
   } catch (error) {
     next(error);
   }

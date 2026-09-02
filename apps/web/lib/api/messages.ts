@@ -49,10 +49,20 @@ export const messagesApi = {
     ).then((r) => r.data);
   },
 
-  thread(userId: string) {
-    return apiFetch<Envelope<DmMessage[]>>(
-      `/api/v1/messages/${encodeURIComponent(userId)}`,
+  thread(userId: string, opts?: { before?: string; limit?: number }) {
+    const params = new URLSearchParams();
+    if (opts?.before) params.set("before", opts.before);
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    const qs = params.toString();
+    return apiFetch<Envelope<{ messages: DmMessage[]; hasMore: boolean }>>(
+      `/api/v1/messages/${encodeURIComponent(userId)}${qs ? `?${qs}` : ""}`,
     ).then((r) => r.data);
+  },
+
+  markRead(userId: string) {
+    return apiFetch<Envelope<null>>(`/api/v1/messages/${encodeURIComponent(userId)}/read`, {
+      method: "POST",
+    });
   },
 
   send(userId: string, content: string) {

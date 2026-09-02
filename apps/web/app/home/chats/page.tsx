@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Search, Loader2, MessagesSquare } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { createClient } from "@/lib/supabase/client";
 import { messagesApi, type Conversation } from "@/lib/api/messages";
-import { cn } from "@/lib/utils";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 function timeLabel(iso: string | null): string {
   if (!iso) return "";
@@ -25,14 +26,57 @@ export default function ChatsPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const refetchTimerRef = useRef<number | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = await messagesApi.conversations();
+      setConversations(data);
+    } catch {
+      // Keep the previous list on failure.
+    }
+  }, []);
 
   useEffect(() => {
-    messagesApi
-      .conversations()
-      .then(setConversations)
-      .catch(() => setConversations([]))
-      .finally(() => setLoading(false));
-  }, []);
+    refresh().finally(() => setLoading(false));
+  }, [refresh]);
+
+  // Realtime: bump the inbox the moment a message addressed to me lands.
+  useEffect(() => {
+    let channel: RealtimeChannel | null = null;
+    let disposed = false;
+
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getUser();
+      const me = data.user?.id;
+      if (!me || disposed) return;
+
+      channel = supabase
+        .channel(`dm-inbox:${me}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "direct_messages",
+            filter: `recipient_id=eq.${me}`,
+          },
+          () => {
+            // Debounce a refetch so a burst of messages triggers one query.
+            if (refetchTimerRef.current) window.clearTimeout(refetchTimerRef.current);
+            refetchTimerRef.current = window.setTimeout(() => void refresh(), 250);
+          },
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      disposed = true;
+      if (refetchTimerRef.current) window.clearTimeout(refetchTimerRef.current);
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, [refresh]);
 
   const filtered = query.trim()
     ? conversations.filter((c) => {
@@ -44,7 +88,7 @@ export default function ChatsPage() {
     : conversations;
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-2xl px-5 pb-24 pt-8 text-foreground sm:px-8">
+    <main className="mx-auto min-h-dvh w-full max-w-2xl px-5 pb-10 pt-8 text-foreground sm:px-8">
       <header className="mb-8">
         <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Inbox</p>
         <div className="flex items-end justify-between gap-4">
@@ -92,9 +136,7 @@ export default function ChatsPage() {
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center justify-between gap-3">
                     <p className="truncate text-sm font-medium">{name}</p>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {timeLabel(chat.lastAt)}
-                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{timeLabel(chat.lastAt)}</span>
                   </div>
                   <p className="truncate text-sm text-muted-foreground">{chat.lastMessage}</p>
                 </div>
