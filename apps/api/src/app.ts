@@ -22,6 +22,7 @@ import charismaRoutes from "./modules/charisma/charisma.routes";
 import hostTaskRoutes from "./modules/host-task/host-task.routes";
 import pkRoutes from "./modules/pk/pk.routes";
 import messagesRoutes from "./modules/messages/messages.routes";
+import financialRoutes from "./modules/financial/financial.routes";
     import { errorMiddleware } from "./middleware/error.middleware";
 
 
@@ -70,6 +71,7 @@ import messagesRoutes from "./modules/messages/messages.routes";
     app.use("/api/v1/offline-recharge", offlineRechargeRoutes);
     app.use("/api/v1/wallet", walletRoutes);
     app.use("/api/v1/charisma", charismaRoutes);
+    app.use("/api/v1/financial", financialRoutes);
     app.use("/api/v1", hostTaskRoutes);
     app.use("/api/v1", pkRoutes);
     app.use("/api/v1", messagesRoutes);
