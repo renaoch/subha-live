@@ -15,6 +15,7 @@ import type { GiftListQuery, SendGiftInput } from "./charisma.schema";
 import { roomTaskService } from "../room-tasks/room-task.service";
 import { hostTaskService } from "../host-task/host-task.service";
 import { pkService } from "../pk/pk.service";
+import { getGiftCatalogItem, sendGiftTransaction } from "../financial/financial.service";
 
 function toNumber(value: number | null): number {
   return value ?? 0;
@@ -259,12 +260,20 @@ const totalValue = (totalsData ?? []).reduce(
 }
 
 /**
- * Records a gift and updates the recipient's charisma progress.
+ * Sends a gift. This is the single entry point for gift-sending — call it
+ * from wherever gifts are actually triggered in the app (a live room, a
+ * profile page, etc).
  *
- * This is the single source of truth for gift-sending — call it from
- * wherever gifts are actually triggered in the app (a live room, a
- * profile page, etc). It handles the ledger row, the recipient's
- * cumulative charisma, and recalculating/caching their charisma tier.
+ * Financial correctness (coin deduction, host diamond credit, platform/
+ * agency share, idempotency, concurrency-safe balance locking) is handled
+ * entirely by financial.service.ts#sendGiftTransaction, which calls the
+ * fin_send_gift() Postgres function — an atomic transaction. This
+ * function ONLY runs after that transaction has committed successfully;
+ * everything below (the `gifts` display row, charisma progress, room/
+ * host-task/PK hooks) is presentation/progression state, never money.
+ *
+ * The client supplies a gift_id (catalog reference) and a
+ * clientRequestId (idempotency key) — never a price or value.
  */
 export async function sendGift(
   senderId: string,
@@ -276,6 +285,23 @@ export async function sendGift(
     });
   }
 
+  const catalogItem = await getGiftCatalogItem(input.giftId);
+  if (!catalogItem || !catalogItem.isActive) {
+    throw new AppError(404, "Gift not found", { code: "GIFT_NOT_FOUND" });
+  }
+
+  // Atomic financial transaction: deducts sender coins, credits recipient
+  // diamonds (net of platform/agency share), records the ledger. Throws
+  // AppError (e.g. INSUFFICIENT_BALANCE) if it can't be completed — in
+  // which case nothing below runs and no gift/charisma record is created.
+  await sendGiftTransaction({
+    senderId,
+    recipientId: input.recipientId,
+    giftId: input.giftId,
+    roomId: input.roomId ?? null,
+    clientRequestId: input.clientRequestId,
+  });
+
   const {
     data: gift,
     error: giftError,
@@ -284,9 +310,9 @@ export async function sendGift(
     .insert({
       sender_id: senderId,
       recipient_id: input.recipientId,
-      gift_name: input.giftName,
-      gift_icon: input.giftIcon,
-      value: input.value,
+      gift_name: catalogItem.name,
+      gift_icon: catalogItem.icon,
+      value: catalogItem.coinPrice,
       stream_id: input.streamId ?? null,
       // TODO: remove this cast once database.types.ts is regenerated
       // after running 20260829_room_tasks.sql (adds gifts.room_id) —
@@ -307,8 +333,23 @@ export async function sendGift(
     .single();
 
   if (giftError) {
-    throw giftError;
+    // The money has already moved (fin_send_gift committed). This insert
+    // is a display/history record — log and continue rather than making
+    // the sender think their gift failed after they've already been
+    // charged. The charisma/room-task/PK hooks below still run using the
+    // catalog values we already have.
+    console.error("[sendGift] failed to write display record for a committed financial transaction:", giftError);
   }
+
+  const giftRow = gift ?? {
+    id: input.clientRequestId,
+    value: catalogItem.coinPrice,
+    gift_name: catalogItem.name,
+    gift_icon: catalogItem.icon,
+    created_at: new Date().toISOString(),
+    sender: null,
+    recipient: null,
+  };
 
   const {
     data: progressRow,
@@ -324,7 +365,7 @@ export async function sendGift(
   }
 
   const newTotalCharisma =
-    (progressRow?.total_charisma ?? 0) + input.value;
+    (progressRow?.total_charisma ?? 0) + catalogItem.coinPrice;
 
   const { error: upsertError } = await supabase
     .from("user_charisma_progress")
@@ -385,34 +426,34 @@ export async function sendGift(
     }
   }
 
-  const sender: any = (gift as any).sender;
-  const recipient: any = (gift as any).recipient;
+  const sender: any = (giftRow as any).sender;
+  const recipient: any = (giftRow as any).recipient;
 
   // Best-effort: if this gift was sent inside a room that has a live
   // task/goal running, count its value toward that goal. Never let a
   // task-progress hiccup fail the gift itself.
   if (input.roomId) {
-    roomTaskService.bumpProgress(input.roomId, input.value).catch((err) => {
+    roomTaskService.bumpProgress(input.roomId, catalogItem.coinPrice).catch((err) => {
       console.error("[sendGift] failed to bump room task progress:", err);
     });
 
     // Per-user "coins earned from this room" progress: the gift's recipient
     // (typically the host) earns coin-progress toward any active eligible
     // host task in the room.
-    hostTaskService.recordCoinProgress(input.roomId, input.recipientId, input.value).catch((err) => {
+    hostTaskService.recordCoinProgress(input.roomId, input.recipientId, catalogItem.coinPrice).catch((err) => {
       console.error("[sendGift] failed to record host-task coin progress:", err);
     });
   }
 
   // PK battle scoring: only AFTER the gift transaction committed durably.
-  // Tied to gift.id for idempotency — never score before the gift succeeded,
+  // Tied to giftRow.id for idempotency — never score before the gift succeeded,
   // and never score the same gift twice.
-  pkService.recordGiftScore(input.recipientId, input.value, gift.id).catch((err) => {
+  pkService.recordGiftScore(input.recipientId, catalogItem.coinPrice, giftRow.id).catch((err) => {
     console.error("[sendGift] failed to record PK score:", err);
   });
 
   return {
-    id: gift.id,
+    id: giftRow.id,
 
     senderId,
     senderName: sender?.name ?? "Unknown",
@@ -424,9 +465,9 @@ export async function sendGift(
     recipientAvatar: recipient?.avatar ?? null,
     recipientLevel: newLevel,
 
-    giftName: gift.gift_name,
-    giftIcon: gift.gift_icon,
-    value: toNumber(gift.value),
-    createdAt: gift.created_at,
+    giftName: giftRow.gift_name,
+    giftIcon: giftRow.gift_icon,
+    value: toNumber(giftRow.value),
+    createdAt: giftRow.created_at,
   };
 }

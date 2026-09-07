@@ -1,10 +1,11 @@
 // components/GiftPickerSheet.tsx
 "use client";
 
-import { useState } from "react";
-import { Heart, Star, Crown, Sparkles, X, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Heart, Star, Crown, Sparkles, Gift as GiftIcon, Car, Ship, Rocket, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { charismaApi } from "@/lib/api/charisma";
+import { financialApi, newClientRequestId, type GiftCatalogItem } from "@/lib/api/financial";
 
 interface GiftPickerSheetProps {
   roomId: string;
@@ -12,40 +13,81 @@ interface GiftPickerSheetProps {
   onClose: () => void;
 }
 
-const PRESET_GIFTS = [
-  { name: "Heart", icon: "heart", value: 10, Icon: Heart },
-  { name: "Star", icon: "star", value: 50, Icon: Star },
-  { name: "Crown", icon: "crown", value: 200, Icon: Crown },
-  { name: "Sparkles", icon: "sparkles", value: 500, Icon: Sparkles },
-] as const;
+// Maps gift_catalog.icon (server-side) to a lucide icon for display. Falls
+// back to a generic gift icon for any catalog entry we don't recognize —
+// new gifts can be added to the catalog without a frontend deploy.
+const ICONS: Record<string, typeof Heart> = {
+  rose: Heart,
+  heart: Heart,
+  star: Star,
+  perfume: Sparkles,
+  crown: Crown,
+  sports_car: Car,
+  yacht: Ship,
+  rocket: Rocket,
+};
+
+function iconFor(icon: string) {
+  return ICONS[icon] ?? GiftIcon;
+}
 
 /**
  * Minimal in-room gift picker. Sending a gift here is what actually
  * feeds the room's live goal (see RoomTaskBar) — the API bumps the
  * active task's progress by the gift's value automatically whenever
- * `streamId` matches a room with an active goal.
+ * `roomId` matches a room with an active goal.
+ *
+ * Prices come from the server-side gift catalog (`financialApi.giftCatalog`)
+ * — nothing here invents a price. Sending goes through `charismaApi.send`,
+ * which performs the atomic coin-deduct/diamond-credit transaction AND
+ * the room-task/host-task/PK/charisma side effects together.
  */
 export function GiftPickerSheet({ roomId, hostId, onClose }: GiftPickerSheetProps) {
-  const [sendingValue, setSendingValue] = useState<number | null>(null);
+  const [gifts, setGifts] = useState<GiftCatalogItem[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [sendingGiftId, setSendingGiftId] = useState<string | null>(null);
 
-  const handleSend = async (gift: (typeof PRESET_GIFTS)[number]) => {
-    if (sendingValue !== null) return;
+  useEffect(() => {
+    let cancelled = false;
 
-    setSendingValue(gift.value);
+    financialApi
+      .giftCatalog()
+      .then((catalog) => {
+        if (!cancelled) setGifts(catalog);
+      })
+      .catch((e) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : "Failed to load gifts");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSend = async (gift: GiftCatalogItem) => {
+    if (sendingGiftId !== null) return;
+
+    setSendingGiftId(gift.id);
     try {
       await charismaApi.send({
         recipientId: hostId,
-        giftName: gift.name,
-        giftIcon: gift.icon,
-        value: gift.value,
+        giftId: gift.id,
         roomId,
+        // Generated fresh for this tap. If the request is retried (e.g.
+        // a network hiccup) the SAME id must be reused so the server can
+        // recognize it as a retry rather than a second gift — this
+        // single-shot flow reuses it implicitly since we don't retry here.
+        clientRequestId: newClientRequestId(),
       });
       toast.success(`Sent a ${gift.name}!`);
       onClose();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to send gift");
+      const message = e instanceof Error ? e.message : "Failed to send gift";
+      toast.error(message.includes("INSUFFICIENT") || message.toLowerCase().includes("insufficient")
+        ? "Not enough coins for this gift"
+        : message);
     } finally {
-      setSendingValue(null);
+      setSendingGiftId(null);
     }
   };
 
@@ -64,28 +106,41 @@ export function GiftPickerSheet({ roomId, hostId, onClose }: GiftPickerSheetProp
           </button>
         </div>
 
-        <div className="grid grid-cols-4 gap-2.5">
-          {PRESET_GIFTS.map((gift) => {
-            const isSending = sendingValue === gift.value;
-            return (
-              <button
-                key={gift.name}
-                type="button"
-                onClick={() => handleSend(gift)}
-                disabled={sendingValue !== null}
-                className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 py-3 transition hover:bg-white/10 disabled:opacity-50"
-              >
-                {isSending ? (
-                  <Loader2 className="h-6 w-6 animate-spin text-white" />
-                ) : (
-                  <gift.Icon className="h-6 w-6 text-amber-300" />
-                )}
-                <span className="text-[11px] font-semibold text-white">{gift.name}</span>
-                <span className="text-[10px] text-white/50">{gift.value}</span>
-              </button>
-            );
-          })}
-        </div>
+        {loadError && (
+          <p className="mb-3 text-[12px] text-red-400">{loadError}</p>
+        )}
+
+        {!gifts && !loadError && (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-white/60" />
+          </div>
+        )}
+
+        {gifts && (
+          <div className="grid grid-cols-4 gap-2.5">
+            {gifts.map((gift) => {
+              const Icon = iconFor(gift.icon);
+              const isSending = sendingGiftId === gift.id;
+              return (
+                <button
+                  key={gift.id}
+                  type="button"
+                  onClick={() => handleSend(gift)}
+                  disabled={sendingGiftId !== null}
+                  className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 py-3 transition hover:bg-white/10 disabled:opacity-50"
+                >
+                  {isSending ? (
+                    <Loader2 className="h-6 w-6 animate-spin text-white" />
+                  ) : (
+                    <Icon className="h-6 w-6 text-amber-300" />
+                  )}
+                  <span className="text-[11px] font-semibold text-white">{gift.name}</span>
+                  <span className="text-[10px] text-white/50">{gift.coinPrice}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

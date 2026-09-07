@@ -1,9 +1,16 @@
 import { randomUUID } from "crypto";
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
-import { logAudit } from "../../lib/audit";
+import {
+  confirmPayment,
+  requestWithdrawalTransaction,
+  getLedgerHistory,
+} from "../financial/financial.service";
 
 // ─── Coin Packages ──────────────────────────────────────────────
+// Prices are defined here, server-side, and are the only prices
+// purchaseCoins() will ever honor — a client can send a packageId but
+// can never dictate the amount charged or coins granted.
 export const COIN_PACKAGES = [
   { id: "pkg_100", coins: 100, priceUsd: 0.99, label: "100 Coins" },
   { id: "pkg_500", coins: 500, priceUsd: 4.99, label: "500 Coins" },
@@ -23,6 +30,21 @@ export async function getWallet(userId: string) {
 }
 
 // ─── Purchase coins ────────────────────────────────────────────
+/**
+ * Confirms a coin purchase and credits coins.
+ *
+ * Everything financial (idempotent recording of the payment, atomic
+ * coin credit, ledger entry) happens in financial.service.ts#confirmPayment,
+ * which calls the fin_confirm_payment() Postgres function. It is keyed on
+ * (provider, providerTransactionId), so calling this twice for the same
+ * payment intent — a webhook retry, a duplicate client submit — credits
+ * coins exactly once.
+ *
+ * `paymentIntentId` should come from the real payment gateway once one is
+ * wired up. Until then we mint a synthetic one per call so local/dev
+ * "purchases" still get a stable idempotency key instead of one that's
+ * different (and therefore double-creditable) on every retry.
+ */
 export async function purchaseCoins(
   userId: string,
   packageId: string,
@@ -31,122 +53,61 @@ export async function purchaseCoins(
   const pkg = COIN_PACKAGES.find((p) => p.id === packageId);
   if (!pkg) throw new AppError(404, "Package not found");
 
-  // 1. Record the transaction (pending)
-  const { data: tx, error: txError } = await supabase
-    .from("wallet_transactions")
-    .insert({
-      id: randomUUID(),
-      user_id: userId,
-      type: "purchase",
-      amount: pkg.priceUsd,
-      coins: pkg.coins,
-      status: "pending",
-      payment_intent_id: paymentIntentId,
-      metadata: { packageId },
-    })
-    .select("id")
-    .single();
-  if (txError) throw txError;
+  const providerTransactionId = paymentIntentId ?? randomUUID();
 
-  // 2. In a real flow, you'd confirm the payment via webhook
-  // Here we simulate immediate success – mark as completed and credit coins
-  const { error: updateError } = await supabase
-    .from("wallet_transactions")
-    .update({ status: "completed" })
-    .eq("id", tx.id);
-  if (updateError) throw updateError;
-
-  // 3. Credit coins to user
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("coins")
-    .eq("id", userId)
-    .single();
-  if (profileError) throw profileError;
-
-  const newCoins = (profile.coins || 0) + pkg.coins;
-  const { error: updateProfileError } = await supabase
-    .from("profiles")
-    .update({ coins: newCoins })
-    .eq("id", userId);
-  if (updateProfileError) throw updateProfileError;
-
-  // 4. Audit
-  await logAudit({
-    actorId: userId,
-    action: "COIN_PURCHASE",
-    entityType: "wallet_transactions",
-    entityId: tx.id,
-    newValue: { packageId, coins: pkg.coins, amount: pkg.priceUsd },
+  const result = await confirmPayment({
+    userId,
+    provider: paymentIntentId ? "gateway" : "dev-simulated",
+    providerTransactionId,
+    packageId: pkg.id,
+    amountUsd: pkg.priceUsd,
+    coins: pkg.coins,
+    metadata: { packageId },
   });
 
-  return { txId: tx.id, newCoins };
+  return { txId: result.transactionId, newCoins: result.newCoins };
 }
 
 // ─── Withdraw coins ────────────────────────────────────────────
+/**
+ * Requests a coin withdrawal. The coins are moved out of the spendable
+ * balance atomically the moment the request is recorded (see
+ * fin_request_withdrawal()) so the same coins can never also be spent on
+ * a gift while the withdrawal is pending. Idempotent per
+ * (userId, clientRequestId) — safe against double-submits.
+ */
 export async function requestWithdrawal(
   userId: string,
-  payload: { amount: number; bankAccount?: string; upiId?: string; note?: string }
+  payload: { amount: number; bankAccount?: string; upiId?: string; note?: string; clientRequestId?: string }
 ) {
   const { amount, bankAccount, upiId, note } = payload;
 
-  // Check if user has enough coins (assuming 1 coin = $0.01 for withdrawal)
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("coins")
-    .eq("id", userId)
-    .single();
-  if (profileError) throw profileError;
+  // Historical conversion rate used by the old endpoint: 1 cent per coin.
+  const requiredCoins = Math.round(amount * 100);
 
-  const requiredCoins = Math.round(amount * 100); // 1 cent per coin
-  if ((profile.coins || 0) < requiredCoins) {
-    throw new AppError(400, "Insufficient coins");
-  }
-
-  // Deduct coins (immediately to prevent double spending)
-  const newCoins = (profile.coins || 0) - requiredCoins;
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ coins: newCoins })
-    .eq("id", userId);
-  if (updateError) throw updateError;
-
-  // Create withdrawal record (pending)
-  const { data: withdrawal, error: wError } = await supabase
-    .from("wallet_transactions")
-    .insert({
-      id: randomUUID(),
-      user_id: userId,
-      type: "withdrawal",
-      amount: amount,
-      coins: -requiredCoins, // negative
-      status: "pending",
-      bank_account: bankAccount,
-      upi_id: upiId,
-      note: note || null,
-    })
-    .select("id")
-    .single();
-  if (wError) throw wError;
-
-  await logAudit({
-    actorId: userId,
-    action: "WITHDRAWAL_REQUESTED",
-    entityType: "wallet_transactions",
-    entityId: withdrawal.id,
-    newValue: { amount, bankAccount, upiId },
+  const result = await requestWithdrawalTransaction({
+    userId,
+    currency: "coins",
+    amount: requiredCoins,
+    bankAccount,
+    upiId,
+    note,
+    // Callers that don't yet pass one (older clients) get a random key,
+    // which means their retries won't dedupe — this is a transitional
+    // fallback; clients should be updated to send a stable id.
+    clientRequestId: payload.clientRequestId ?? randomUUID(),
   });
 
-  return { withdrawalId: withdrawal.id, newCoins };
+  return { withdrawalId: result.withdrawalId, newCoins: result.newBalance };
 }
 
 // ─── Get transaction history ──────────────────────────────────
+/**
+ * Wallet history now reads from the immutable financial_ledger — the same
+ * authoritative log every balance mutation writes to, rather than the
+ * legacy `wallet_transactions` table (still written to by unrelated
+ * reward-claim flows; see host_task_rewards.sql / room_task_rewards.sql).
+ */
 export async function getTransactionHistory(userId: string) {
-  const { data, error } = await supabase
-    .from("wallet_transactions")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data;
+  return getLedgerHistory(userId, 100, 0);
 }

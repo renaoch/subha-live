@@ -3,6 +3,7 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { logAudit } from "../../lib/audit";
+import { claimAgencyTaskRewardTransaction } from "../financial/financial.service";
 
 import type {
   Agency,
@@ -3479,96 +3480,38 @@ export async function claimAgencyTaskReward(
     );
   }
 
-  const rewardCoins =
-    taskData.reward_coins as number;
-
-  const rewardDiamonds =
-    taskData.reward_diamonds as number;
-
-  const {
-    data: profile,
-    error: profileError,
-  } = await supabase
-    .from("profiles")
-    .select(
-      "id, coins, diamonds",
-    )
-    .eq("id", hostId)
-    .single();
-
-  if (profileError) {
-    throw profileError;
-  }
-
-  const newCoins =
-    (profile.coins ?? 0) +
-    rewardCoins;
-
-  const newDiamonds =
-    (profile.diamonds ?? 0) +
-    rewardDiamonds;
-
-  const {
-    error: walletError,
-  } = await supabase
-    .from("profiles")
-    .update({
-      coins: newCoins,
-      diamonds: newDiamonds,
-    })
-    .eq("id", hostId);
-
-  if (walletError) {
-    throw walletError;
-  }
-
-  const {
-    error: claimError,
-  } = await (
-    supabase.from(
-      "agency_task_assignments" as any,
-    ) as any
-  )
-    .update({
-      status: "claimed",
-      claimed_at:
-        new Date().toISOString(),
-    })
-    .eq(
-      "id",
-      assignment.id,
-    )
-    .eq(
-      "status",
-      "completed",
-    );
-
-  if (claimError) {
-    throw claimError;
-  }
-
-  await logAudit({
-    actorId: hostId,
-    agencyId:
-      taskData.agency_id,
-    action:
-      "AGENCY_TASK_CLAIMED",
-    entityType:
-      "agency_task_assignments",
-    entityId:
-      assignment.id,
-    newValue: {
-      rewardCoins,
-      rewardDiamonds,
-    },
+  // Previously: read profiles.coins/diamonds in JS, added the reward, and
+  // wrote back an absolute value — a lost-update race if anything else
+  // (a gift, another claim) touched this host's wallet at the same
+  // instant. fin_claim_agency_task_reward() locks the assignment row,
+  // re-verifies status = 'completed', flips it to 'claimed', and credits
+  // the wallet with a single atomic increment + ledger entry, all inside
+  // one transaction — see financial.service.ts#claimAgencyTaskRewardTransaction.
+  const claimResult = await claimAgencyTaskRewardTransaction({
+    hostId,
+    taskId,
   });
+
+  if (!claimResult.alreadyProcessed) {
+    await logAudit({
+      actorId: hostId,
+      agencyId: taskData.agency_id,
+      action: "AGENCY_TASK_CLAIMED",
+      entityType: "agency_task_assignments",
+      entityId: assignment.id,
+      newValue: {
+        rewardCoins: claimResult.rewardCoins,
+        rewardDiamonds: claimResult.rewardDiamonds,
+      },
+    });
+  }
 
   return {
     taskId,
-    rewardCoins,
-    rewardDiamonds,
-    newCoins,
-    newDiamonds,
+    rewardCoins: claimResult.rewardCoins,
+    rewardDiamonds: claimResult.rewardDiamonds,
+    newCoins: claimResult.newCoins,
+    newDiamonds: claimResult.newDiamonds,
   };
 }
 

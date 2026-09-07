@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { logAudit } from "../../lib/audit";
+import { assertIsPlatformAdmin, creditOfflineRecharge } from "../financial/financial.service";
 
 /* -------------------------------------------------------------------------- */
 /* USER REQUEST                                                               */
@@ -65,6 +66,8 @@ export async function getUserRecharges(userId: string) {
 /* -------------------------------------------------------------------------- */
 
 export async function listPendingRecharges(adminId: string) {
+  await assertIsPlatformAdmin(adminId);
+
   const { data, error } = await supabase
     .from("offline_recharges")
     .select("*, profiles!user_id(name, handle)")
@@ -79,75 +82,48 @@ export async function listPendingRecharges(adminId: string) {
 /* APPROVE / REJECT                                                           */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Approve or reject a pending offline recharge.
+ *
+ * SECURITY: previously any authenticated user could call this (no admin
+ * check existed) and credit arbitrary coins/diamonds to any account —
+ * that gap is closed here with assertIsPlatformAdmin().
+ *
+ * The actual crediting is delegated to
+ * financial.service.ts#creditOfflineRecharge, which calls
+ * fin_credit_offline_recharge(): it locks the recharge row, verifies it's
+ * still 'pending', and credits coins/diamonds atomically in the same
+ * transaction as the status flip — so double-clicking "approve" (or a
+ * retried request) can only ever credit once.
+ */
 export async function approveRecharge(
   adminId: string,
   rechargeId: string,
   payload: { status: "approved" | "rejected"; coins?: number; diamonds?: number }
 ) {
-  // 1. Fetch the request
-  const { data: recharge, error: fetchError } = await supabase
-    .from("offline_recharges")
-    .select("*, user_id, amount_usd, status")
-    .eq("id", rechargeId)
-    .single();
+  await assertIsPlatformAdmin(adminId);
 
-  if (fetchError) throw fetchError;
-  if (!recharge) throw new AppError(404, "Recharge request not found");
-  if (recharge.status !== "pending") {
-    throw new AppError(409, "Request already processed");
-  }
-
-  // 2. If approved, credit user
   let coinsToAdd = 0;
-  let diamondsToAdd = 0;
   if (payload.status === "approved") {
-    coinsToAdd = payload.coins ?? Math.floor(recharge.amount_usd * 100);
-    diamondsToAdd = payload.diamonds ?? 0;
-
-    // Get current user balance
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("coins, diamonds")
-      .eq("id", recharge.user_id)
+    const { data: recharge, error: fetchError } = await supabase
+      .from("offline_recharges")
+      .select("amount_usd")
+      .eq("id", rechargeId)
       .single();
 
-    if (profileError) throw profileError;
+    if (fetchError) throw fetchError;
+    if (!recharge) throw new AppError(404, "Recharge request not found");
 
-    const newCoins = (profile.coins || 0) + coinsToAdd;
-    const newDiamonds = (profile.diamonds || 0) + diamondsToAdd;
-
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ coins: newCoins, diamonds: newDiamonds })
-      .eq("id", recharge.user_id);
-
-    if (updateError) throw updateError;
+    coinsToAdd = payload.coins ?? Math.floor(recharge.amount_usd * 100);
   }
 
-  // 3. Update recharge status and coins_credited
-  const updatePayload: any = {
-    status: payload.status,
-  };
-  if (payload.status === "approved") {
-    updatePayload.coins_credited = coinsToAdd;
-    // Table doesn't have diamonds_credited, but we can add later if needed
-  }
-
-  const { error: updateRechargeError } = await supabase
-    .from("offline_recharges")
-    .update(updatePayload)
-    .eq("id", rechargeId);
-
-  if (updateRechargeError) throw updateRechargeError;
-
-  // 4. Audit
-  await logAudit({
-    actorId: adminId,
-    action: `OFFLINE_RECHARGE_${payload.status.toUpperCase()}`,
-    entityType: "offline_recharges",
-    entityId: rechargeId,
-    newValue: { ...payload, coins: coinsToAdd, diamonds: diamondsToAdd },
+  const result = await creditOfflineRecharge({
+    adminId,
+    rechargeId,
+    action: payload.status,
+    coins: coinsToAdd,
+    diamonds: payload.diamonds ?? 0,
   });
 
-  return { success: true };
+  return { success: true, alreadyProcessed: result.alreadyProcessed, newCoins: result.newCoins, newDiamonds: result.newDiamonds };
 }

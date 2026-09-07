@@ -9,4 +9,7 @@ export const withdrawalRequestSchema = z.object({
   bankAccount: z.string().optional(),
   upiId: z.string().optional(),
   note: z.string().optional(),
+  // Idempotency key: reuse the same value on retry so a double-submit
+  // (double-tap, network retry) can never create two withdrawals.
+  clientRequestId: z.string().min(8).max(128).optional(),
 });

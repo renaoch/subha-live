@@ -99,15 +99,26 @@ export const charismaApi = {
     };
   },
 
+  /**
+   * Sends a gift. This is the endpoint to use for all in-app gifting
+   * (the gift picker, profile gifting, etc.) — it performs the same
+   * atomic coin-deduct/diamond-credit transaction as
+   * `financialApi.sendGift` (see apps/web/lib/api/financial.ts) plus the
+   * presentation-layer side effects: charisma progress, room-task/
+   * host-task progress, and PK scoring.
+   *
+   * `giftId` is a `gift_catalog` row id from `financialApi.giftCatalog()`
+   * — never a client-chosen name/icon/value; the price is looked up
+   * server-side. `clientRequestId` is an idempotency key: generate one
+   * per user tap (see `newClientRequestId()`) and resend the SAME value
+   * if that tap's request is retried.
+   */
   async send(input: {
     recipientId: string;
-    giftName: string;
-    giftIcon?: string;
-    value: number;
-    /** Legacy `streams` table id — leave unset for room-based gifts. */
+    giftId: string;
     streamId?: string;
-    /** The live room (`rooms` table, uuid) this gift was sent from. */
     roomId?: string;
+    clientRequestId: string;
   }): Promise<CharismaGiftItem> {
     const response = await apiFetch<SendGiftResponse>(
       "/api/v1/charisma/send",
