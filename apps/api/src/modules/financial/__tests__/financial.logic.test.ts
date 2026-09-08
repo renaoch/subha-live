@@ -67,6 +67,11 @@ describe("extractFinancialErrorCode", () => {
     expect(extractFinancialErrorCode("error: INSUFFICIENT_BALANCE (context)")).toBe("INSUFFICIENT_BALANCE");
   });
 
+  it("finds the agency offline-recharge error codes too", () => {
+    expect(extractFinancialErrorCode("AGENCY_HOST_MISMATCH")).toBe("AGENCY_HOST_MISMATCH");
+    expect(extractFinancialErrorCode("AGENCY_NOT_FOUND")).toBe("AGENCY_NOT_FOUND");
+  });
+
   it("returns null for an unrecognized message", () => {
     expect(extractFinancialErrorCode("some unrelated database error")).toBeNull();
     expect(extractFinancialErrorCode(null)).toBeNull();

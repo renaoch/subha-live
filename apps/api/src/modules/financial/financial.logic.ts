@@ -89,6 +89,8 @@ export const FINANCIAL_ERROR_MAP: Record<string, { status: number; code: string;
   TASK_NOT_FOUND: { status: 404, code: "TASK_NOT_FOUND", message: "Task not found" },
   TASK_ASSIGNMENT_NOT_FOUND: { status: 404, code: "TASK_ASSIGNMENT_NOT_FOUND", message: "You are not assigned to this task" },
   TASK_NOT_COMPLETED: { status: 400, code: "TASK_NOT_COMPLETED", message: "Task has not been completed" },
+  AGENCY_HOST_MISMATCH: { status: 403, code: "AGENCY_HOST_MISMATCH", message: "This host does not belong to your agency" },
+  AGENCY_NOT_FOUND: { status: 404, code: "AGENCY_NOT_FOUND", message: "You do not own an active agency" },
 };
 
 /**

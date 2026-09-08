@@ -195,6 +195,14 @@ export async function creditOfflineRecharge(input: {
   action: "approved" | "rejected";
   coins?: number;
   diamonds?: number;
+  /**
+   * Set when an agency owner (not a platform admin) is processing this
+   * recharge for one of their own hosts. fin_credit_offline_recharge()
+   * independently re-verifies that the recharge's user_id actually
+   * belongs to this agency before crediting anything — this parameter is
+   * not itself a trust boundary, the DB check is.
+   */
+  agencyId?: string | null;
 }): Promise<CreditOfflineRechargeResult> {
   const { data, error } = await supabase.rpc("fin_credit_offline_recharge" as any, {
     p_admin_id: input.adminId,
@@ -202,6 +210,7 @@ export async function creditOfflineRecharge(input: {
     p_action: input.action,
     p_coins: input.coins ?? 0,
     p_diamonds: input.diamonds ?? 0,
+    p_agency_id: input.agencyId ?? null,
   });
 
   if (error) {
@@ -220,7 +229,12 @@ export async function creditOfflineRecharge(input: {
     action: `OFFLINE_RECHARGE_${input.action.toUpperCase()}`,
     entityType: "offline_recharges",
     entityId: input.rechargeId,
-    newValue: { coins: input.coins ?? 0, diamonds: input.diamonds ?? 0, alreadyProcessed: row.already_processed },
+    newValue: {
+      coins: input.coins ?? 0,
+      diamonds: input.diamonds ?? 0,
+      agencyId: input.agencyId ?? null,
+      alreadyProcessed: row.already_processed,
+    },
   });
 
   return {

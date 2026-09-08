@@ -5,6 +5,8 @@ import {
   getUserRecharges,
   listPendingRecharges,
   approveRecharge,
+  listPendingRechargesForAgency,
+  approveRechargeAsAgency,
 } from "./offline-recharge.service";
 import { requestRechargeSchema, approveRechargeSchema } from "./offline-recharge.schema";
 
@@ -64,8 +66,8 @@ export async function listPendingRechargesController(
 ) {
   try {
     const user = requireUser(req);
-    // optional: check if user is admin or agency owner
-    // we'll assume any authenticated user can see pending for simplicity
+    // Platform-admin only — listPendingRecharges() itself calls
+    // assertIsPlatformAdmin() and throws 403 for anyone else.
     const data = await listPendingRecharges(user.id);
     res.status(200).json({ status: "ok", data });
   } catch (error) {
@@ -90,6 +92,42 @@ export async function approveRechargeController(
     }
     await approveRecharge(user.id, req.params.id, parsed.data);
     res.status(200).json({ status: "ok", message: "Recharge updated" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* AGENCY OWNER — LIST PENDING / APPROVE (scoped to their own hosts)         */
+/* -------------------------------------------------------------------------- */
+
+export async function listPendingRechargesForAgencyController(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const user = requireUser(req);
+    const data = await listPendingRechargesForAgency(user.id);
+    res.status(200).json({ status: "ok", data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function approveRechargeAsAgencyController(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const user = requireUser(req);
+    const parsed = approveRechargeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "Invalid payload", { details: parsed.error.flatten() });
+    }
+    const result = await approveRechargeAsAgency(user.id, req.params.id, parsed.data);
+    res.status(200).json({ status: "ok", data: result });
   } catch (error) {
     next(error);
   }

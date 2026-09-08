@@ -29,7 +29,11 @@ export async function requestOfflineRecharge(
       transaction_ref: transactionRef,
       status: "pending",
       coins_credited: 0, // placeholder, updated on approval
-    })
+      // TODO: remove this cast once database.types.ts is regenerated after
+      // 20260906000000_agency_offline_recharge.sql — the generated Insert
+      // type doesn't know about `note` yet.
+      note: note ?? null,
+    } as never)
     .select("id")
     .single();
 
@@ -62,7 +66,7 @@ export async function getUserRecharges(userId: string) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* ADMIN / AGENCY OWNER – LIST PENDING                                       */
+/* PLATFORM ADMIN — LIST PENDING / APPROVE                                   */
 /* -------------------------------------------------------------------------- */
 
 export async function listPendingRecharges(adminId: string) {
@@ -78,12 +82,8 @@ export async function listPendingRecharges(adminId: string) {
   return data;
 }
 
-/* -------------------------------------------------------------------------- */
-/* APPROVE / REJECT                                                           */
-/* -------------------------------------------------------------------------- */
-
 /**
- * Approve or reject a pending offline recharge.
+ * Approve or reject a pending offline recharge as a PLATFORM ADMIN.
  *
  * SECURITY: previously any authenticated user could call this (no admin
  * check existed) and credit arbitrary coins/diamonds to any account —
@@ -102,28 +102,171 @@ export async function approveRecharge(
   payload: { status: "approved" | "rejected"; coins?: number; diamonds?: number }
 ) {
   await assertIsPlatformAdmin(adminId);
+  return creditRecharge(adminId, rechargeId, payload, null);
+}
 
+/* -------------------------------------------------------------------------- */
+/* AGENCY OWNER — LIST PENDING / APPROVE (for their own hosts only)          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Returns the id of the active agency owned by `userId`, or throws
+ * AppError(404, ..., { code: "AGENCY_NOT_FOUND" }) — same error code the
+ * fin_credit_offline_recharge() RPC uses, so failures look identical
+ * regardless of which layer catches them first.
+ */
+async function getOwnedActiveAgencyId(userId: string): Promise<string> {
+  const { data, error } = await supabase
+    .from("agencies")
+    .select("id")
+    .eq("owner_id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw new AppError(404, "You do not own an active agency", { code: "AGENCY_NOT_FOUND" });
+  }
+  return data.id;
+}
+
+/**
+ * Throws unless `hostId` is an approved host of `agencyId`. Mirrors the
+ * status vocabulary used everywhere else in agency.service.ts
+ * (agency_hosts.status = 'approved', not 'active' — 'active' is a
+ * different table's status value, see agency_agents).
+ */
+async function assertHostBelongsToAgency(hostId: string, agencyId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("agency_hosts")
+    .select("host_id")
+    .eq("host_id", hostId)
+    .eq("agency_id", agencyId)
+    .eq("status", "approved")
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw new AppError(403, "This host does not belong to your agency", { code: "AGENCY_HOST_MISMATCH" });
+  }
+}
+
+/**
+ * Lists pending offline recharges for hosts that belong to the calling
+ * agency owner's agency — never recharges belonging to other agencies or
+ * to hosts with no agency at all.
+ *
+ * Efficient by construction: two indexed lookups (agency_hosts by
+ * (agency_id, status), then offline_recharges by (status, user_id) via an
+ * IN clause), not a scan or an N+1 — see the indexes added in
+ * 20260906000000_agency_offline_recharge.sql. Agency host counts are
+ * small (tens to low hundreds), so a single IN-clause round trip is both
+ * simple and fast; a fancier single-query embedded join buys nothing at
+ * this scale and is harder to reason about.
+ */
+export async function listPendingRechargesForAgency(agencyOwnerId: string) {
+  const agencyId = await getOwnedActiveAgencyId(agencyOwnerId);
+
+  const { data: hostRows, error: hostError } = await supabase
+    .from("agency_hosts")
+    .select("host_id")
+    .eq("agency_id", agencyId)
+    .eq("status", "approved");
+
+  if (hostError) throw hostError;
+
+  const hostIds = (hostRows ?? []).map((r) => r.host_id);
+  if (hostIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("offline_recharges")
+    .select("*, profiles!user_id(name, handle)")
+    .eq("status", "pending")
+    .in("user_id", hostIds)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Approve or reject a pending offline recharge as an AGENCY OWNER, scoped
+ * to hosts in the caller's own agency.
+ *
+ * Two independent checks before any money moves:
+ *   1. Here: the recharge's user_id must be an 'approved' host of the
+ *      caller's 'is_active' agency (assertHostBelongsToAgency).
+ *   2. Again, inside fin_credit_offline_recharge() itself, via p_agency_id
+ *      — so this can never be bypassed by a bug in this function; the DB
+ *      is the actual authority.
+ */
+export async function approveRechargeAsAgency(
+  agencyOwnerId: string,
+  rechargeId: string,
+  payload: { status: "approved" | "rejected"; coins?: number; diamonds?: number }
+) {
+  const agencyId = await getOwnedActiveAgencyId(agencyOwnerId);
+
+  const { data: recharge, error: fetchError } = await supabase
+    .from("offline_recharges")
+    .select("user_id, amount_usd, status")
+    .eq("id", rechargeId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!recharge) throw new AppError(404, "Recharge request not found", { code: "RECHARGE_NOT_FOUND" });
+
+  if (recharge.status === "pending") {
+    // Only enforce membership while there's still something to authorize;
+    // an already-processed recharge just returns idempotently below.
+    await assertHostBelongsToAgency(recharge.user_id, agencyId);
+  }
+
+  return creditRecharge(agencyOwnerId, rechargeId, payload, agencyId, recharge.amount_usd);
+}
+
+/* -------------------------------------------------------------------------- */
+/* SHARED CREDITING LOGIC (platform admin + agency owner paths converge here)*/
+/* -------------------------------------------------------------------------- */
+
+async function creditRecharge(
+  actorId: string,
+  rechargeId: string,
+  payload: { status: "approved" | "rejected"; coins?: number; diamonds?: number },
+  agencyId: string | null,
+  knownAmountUsd?: number
+) {
   let coinsToAdd = 0;
   if (payload.status === "approved") {
-    const { data: recharge, error: fetchError } = await supabase
-      .from("offline_recharges")
-      .select("amount_usd")
-      .eq("id", rechargeId)
-      .single();
+    let amountUsd = knownAmountUsd;
+    if (amountUsd === undefined) {
+      const { data: recharge, error: fetchError } = await supabase
+        .from("offline_recharges")
+        .select("amount_usd")
+        .eq("id", rechargeId)
+        .single();
 
-    if (fetchError) throw fetchError;
-    if (!recharge) throw new AppError(404, "Recharge request not found");
+      if (fetchError) throw fetchError;
+      if (!recharge) throw new AppError(404, "Recharge request not found", { code: "RECHARGE_NOT_FOUND" });
+      amountUsd = recharge.amount_usd;
+    }
 
-    coinsToAdd = payload.coins ?? Math.floor(recharge.amount_usd * 100);
+    coinsToAdd = payload.coins ?? Math.floor(amountUsd * 100);
   }
 
   const result = await creditOfflineRecharge({
-    adminId,
+    adminId: actorId,
     rechargeId,
     action: payload.status,
     coins: coinsToAdd,
     diamonds: payload.diamonds ?? 0,
+    agencyId,
   });
 
-  return { success: true, alreadyProcessed: result.alreadyProcessed, newCoins: result.newCoins, newDiamonds: result.newDiamonds };
+  return {
+    success: true,
+    alreadyProcessed: result.alreadyProcessed,
+    newCoins: result.newCoins,
+    newDiamonds: result.newDiamonds,
+  };
 }
