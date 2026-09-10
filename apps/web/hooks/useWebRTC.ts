@@ -449,8 +449,8 @@ export function useWebRTC(
       },
       video: {
         facingMode: "user",
-        width: { ideal: 720 },
-        height: { ideal: 1280 },
+        width: { ideal: 1080, max: 1080 },
+        height: { ideal: 1920, max: 1920 },
         aspectRatio: { ideal: 9 / 16 },
         // "crop-and-scale" (the default) tells the browser it's allowed to
         // digitally crop into the sensor to force the exact aspect ratio
@@ -665,6 +665,20 @@ export function useWebRTC(
         for (const track of stream.getTracks()) {
           const transceiver = peer.addTransceiver(track, {
             direction: "sendonly",
+            // Without explicit encoding parameters, browsers default to a
+            // fairly conservative bitrate ceiling (often ~1-1.5 Mbps for
+            // video), which looks noticeably soft/blocky even at a decent
+            // capture resolution. Raise the cap so the encoder is actually
+            // allowed to use the bitrate a 1080x1920 capture needs.
+            sendEncodings:
+              track.kind === "video"
+                ? [
+                    {
+                      maxBitrate: 3_500_000,
+                      maxFramerate: 30,
+                    },
+                  ]
+                : undefined,
           });
 
           transceivers.push({

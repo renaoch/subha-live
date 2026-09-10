@@ -83,6 +83,12 @@ export async function handleConnection(socket: WebSocket, roomId: string, reques
   // only attached after the async authenticate -> authorize chain resolves.
   socket.send(JSON.stringify({ type: 'connected', userId: context.userId, username: context.username, canChat: context.canChat !== false }))
 
+  // Let everyone already in the room (and the socket that just joined) know
+  // a new viewer entered, so the client can show an animated "X entered the
+  // room" line in chat. Best-effort / fire-and-forget: a broadcast failure
+  // here should never block the connection itself.
+  broadcastJoin(rooms, roomId, context.userId, context.username)
+
   const inputSchema = chatMessageInputSchema(config)
 
   socket.on('message', async (raw: Buffer) => {
@@ -114,6 +120,24 @@ export async function handleConnection(socket: WebSocket, roomId: string, reques
     // written to the hot bucket, stream, and Postgres are untouched, and the
     // client can recover anything missed via the history cursor API.
   })
+}
+
+function broadcastJoin(rooms: RoomRegistry, roomId: string, userId: string, username: string): void {
+  const set = rooms.get(roomId)
+  if (!set || !set.size) return
+
+  const payload = JSON.stringify({
+    type: 'join',
+    id: `join-${roomId}-${userId}-${Date.now()}`,
+    roomId,
+    userId,
+    username,
+    createdAt: Date.now(),
+  })
+
+  for (const peer of set) {
+    if (peer.readyState === 1) peer.send(payload)
+  }
 }
 
 export function registerSocket(rooms: RoomRegistry, roomId: string, socket: WebSocket): void {
