@@ -232,7 +232,7 @@ function LivePageInner() {
         ) : isError && rooms.length === 0 ? (
           <div className="flex min-h-[45vh] flex-col items-center justify-center text-center">
             <p className="text-sm font-semibold text-ink">
-              Couldn't load live rooms
+              Couldn&apos;t load live rooms
             </p>
             <button
               onClick={() => refetch()}

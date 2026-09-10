@@ -2,6 +2,7 @@ import { app } from "./app";
 import { connectRedis } from "./lib/redis";
 import { cloudflareRealtimeProvider } from "./lib/media/cloudflare/cloudflare-realtime";
 import { startPkFinalizer, stopPkFinalizer } from "./modules/pk/pk.finalizer";
+import { startQuizFinalizer, stopQuizFinalizer } from "./modules/quiz/quiz.finalizer";
 
 const PORT = Number(process.env.PORT) || 3000;
 const mode = process.env.NODE_ENV || "development";
@@ -30,6 +31,7 @@ export async function bootstrap() {
     await connectRedis();
     logMediaProviderStatus();
     startPkFinalizer();
+    startQuizFinalizer();
 
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running in ${mode} mode on port ${PORT}`);
@@ -38,6 +40,7 @@ export async function bootstrap() {
     const shutdown = (signal: string) => {
       console.log(`[shutdown] received ${signal}`);
       stopPkFinalizer();
+      stopQuizFinalizer();
       server.close(() => process.exit(0));
       setTimeout(() => process.exit(1), 10_000).unref();
     };

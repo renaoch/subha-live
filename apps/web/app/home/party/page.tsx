@@ -129,7 +129,7 @@ export default function PartyPage() {
 
         {roomsError && !loading && (
           <div className="mt-4 flex items-center justify-between rounded-2xl border border-border bg-surface-raised p-3 text-xs text-ink-muted">
-            Some activity data couldn't load.
+            Some activity data couldn&apos;t load.
             <button
               onClick={() => refetchRooms()}
               className="flex items-center gap-1 font-semibold text-ink"
@@ -257,7 +257,7 @@ function PkSection({
           className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-surface-raised p-4 text-xs font-semibold text-ink-muted"
         >
           <RotateCcw className="h-3.5 w-3.5" />
-          Couldn't load PK battles — tap to retry
+          Couldn&apos;t load PK battles — tap to retry
         </button>
       ) : !battles || battles.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-ink-muted">
@@ -375,7 +375,7 @@ function EventsSection() {
             Scheduled events are coming soon
           </p>
           <p className="mt-0.5 text-xs text-ink-muted">
-            We'll surface hosted events and special activities here.
+            We&apos;ll surface hosted events and special activities here.
           </p>
         </div>
       </div>
