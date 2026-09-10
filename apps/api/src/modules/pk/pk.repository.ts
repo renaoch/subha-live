@@ -50,6 +50,28 @@ export const pkRepository = {
     return data as PkBattleRow;
   },
 
+  /** Durable fallback list of currently-live/pending battles, for Party's
+   * "PK Battles" discovery surface. Redis holds the authoritative hot state
+   * per-battle, but there's no Redis-side index of *all* active battles, so
+   * this reads straight from Postgres (small, infrequent — a discovery
+   * page poll, not the realtime score path). */
+  async listActive(limit = 20): Promise<PkBattleRow[]> {
+    const { data, error } = await db
+      .from("pk_battles")
+      .select("*")
+      .in("status", ["INVITED", "ACCEPTED", "STARTING", "ACTIVE"])
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new AppError(500, "Failed to list PK battles", {
+        code: "PK_LIST_FAILED",
+        details: error.message,
+      });
+    }
+    return (data ?? []) as PkBattleRow[];
+  },
+
   async getBattle(battleId: string): Promise<PkBattleRow | null> {
     const { data, error } = await db
       .from("pk_battles")

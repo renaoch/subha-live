@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Camera,
@@ -8,14 +8,16 @@ import {
   Loader2,
   Plus,
   Radio,
+  RotateCcw,
   Search,
   Users,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
-import { roomsApi, type RoomRecord } from "@/lib/api/rooms";
+import { useCreateRoom, useRooms } from "@/hooks/queries/use-rooms";
+import type { RoomRecord } from "@/lib/api/rooms";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -45,37 +47,45 @@ function initials(name: string) {
 }
 
 export default function LivePage() {
+  return (
+    <Suspense fallback={null}>
+      <LivePageInner />
+    </Suspense>
+  );
+}
+
+function LivePageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [rooms, setRooms] = useState<RoomRecord[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  async function loadRooms(showLoader = false) {
-    try {
-      if (showLoader) setLoading(true);
-      const data = await roomsApi.list();
-      setRooms(data);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Couldn't load live rooms",
-      );
-    } finally {
-      if (showLoader) setLoading(false);
-    }
-  }
+  // Shared room-discovery hook (React Query) — same query/polling logic Party
+  // and any other surface uses, so there's one source of truth for "list
+  // rooms" instead of a page-local fetch+setInterval.
+  const {
+    data,
+    isLoading: loading,
+    isError,
+    refetch,
+  } = useRooms();
+  const rooms = useMemo<RoomRecord[]>(() => data ?? [], [data]);
+  const createRoomMutation = useCreateRoom();
 
   useEffect(() => {
-    loadRooms(true);
+    if (isError) {
+      toast.error("Couldn't load live rooms");
+    }
+  }, [isError]);
 
-    const interval = window.setInterval(() => {
-      loadRooms(false);
-    }, 5000);
-
-    return () => window.clearInterval(interval);
-  }, []);
+  // Deep link from the bottom nav's "Go Live" button (`/home?create=1`).
+  useEffect(() => {
+    if (searchParams.get("create") === "1") {
+      setCreateOpen(true);
+    }
+  }, [searchParams]);
 
   const filteredRooms = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -103,7 +113,7 @@ export default function LivePage() {
     category: string;
   }) {
     try {
-      const room = await roomsApi.create({
+      const room = await createRoomMutation.mutateAsync({
         title: input.title,
         description: input.description || null,
         category: input.category,
@@ -113,7 +123,6 @@ export default function LivePage() {
       });
 
       setCreateOpen(false);
-      await loadRooms(false);
       router.push(`/home/room/${room.id}`);
     } catch (error) {
       toast.error(
@@ -219,6 +228,19 @@ export default function LivePage() {
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading live rooms…
             </div>
+          </div>
+        ) : isError && rooms.length === 0 ? (
+          <div className="flex min-h-[45vh] flex-col items-center justify-center text-center">
+            <p className="text-sm font-semibold text-ink">
+              Couldn't load live rooms
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="mt-3 flex items-center gap-2 rounded-full border border-border bg-surface-raised px-4 py-2 text-xs font-bold text-ink"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Retry
+            </button>
           </div>
         ) : filteredRooms.length === 0 ? (
           <EmptyRooms onCreate={() => setCreateOpen(true)} query={query} />

@@ -311,4 +311,11 @@ export const pkService = {
     if (!battleId) return null;
     return pkRedis.readState(battleId);
   },
+
+  /** List currently active/pending battles for Party's PK discovery surface.
+   * Reads the durable rows (Postgres), then overlays live scores from Redis
+   * where available so the list matches what a viewer would see in-room. */
+  async listActive(): Promise<PkBattleRow[]> {
+    return pkRepository.listActive();
+  },
 };

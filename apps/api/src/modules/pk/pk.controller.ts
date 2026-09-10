@@ -18,6 +18,15 @@ function battleId(req: Request<{ battleId: string }>): string {
   return parsed.data.battleId;
 }
 
+export async function listActivePk(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const battles = await pkService.listActive();
+    res.status(200).json({ success: true, data: battles });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function invitePk(req: Request, res: Response, next: NextFunction) {
   try {
     const user = requireUser(req);

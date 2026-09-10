@@ -95,4 +95,11 @@ export const pkApi = {
       `/api/v1/pk/for-room/${roomId}`,
     ).then((r) => r.data);
   },
+
+  /** Currently active/pending battles, for Party's PK discovery surface. */
+  listActive() {
+    return apiFetch<PkEnvelope<PkBattle[]>>("/api/v1/pk/active").then(
+      (r) => r.data,
+    );
+  },
 };

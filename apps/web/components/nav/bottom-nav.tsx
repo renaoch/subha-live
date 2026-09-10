@@ -24,7 +24,7 @@ export function BottomNav() {
         ))}
 
         <button
-          onClick={() => router.push("/home/party?create=1")}
+          onClick={() => router.push("/home?create=1")}
           aria-label="Go live"
           className="relative -mt-7 flex h-12 w-12 items-center justify-center rounded-xl border border-foreground/20 bg-foreground text-background shadow-lg shadow-black/30 transition-transform active:scale-95"
         >
