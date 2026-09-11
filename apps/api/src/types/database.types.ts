@@ -1416,6 +1416,7 @@ export type Database = {
           id: string
           livekit_room_name: string
           max_guest_slots: number
+          media_type: Database["public"]["Enums"]["room_media_type"]
           playback_url: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["room_status"]
@@ -1431,6 +1432,7 @@ export type Database = {
           id?: string
           livekit_room_name: string
           max_guest_slots?: number
+          media_type?: Database["public"]["Enums"]["room_media_type"]
           playback_url?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["room_status"]
@@ -1446,6 +1448,7 @@ export type Database = {
           id?: string
           livekit_room_name?: string
           max_guest_slots?: number
+          media_type?: Database["public"]["Enums"]["room_media_type"]
           playback_url?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["room_status"]
@@ -2177,6 +2180,7 @@ export type Database = {
       room_participant_role: "host" | "moderator" | "speaker" | "audience"
       room_request_status: "pending" | "accepted" | "rejected" | "cancelled"
       room_request_type: "audio" | "video"
+      room_media_type: "video" | "audio"
       room_status: "created" | "live" | "ending" | "ended"
       user_role:
         | "user"
@@ -2315,6 +2319,7 @@ export const Constants = {
       room_participant_role: ["host", "moderator", "speaker", "audience"],
       room_request_status: ["pending", "accepted", "rejected", "cancelled"],
       room_request_type: ["audio", "video"],
+      room_media_type: ["video", "audio"],
       room_status: ["created", "live", "ending", "ended"],
       user_role: [
         "user",
