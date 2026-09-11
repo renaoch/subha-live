@@ -2250,6 +2250,7 @@ export type Database = {
           id: string
           livekit_room_name: string
           max_guest_slots: number
+          media_type: Database["public"]["Enums"]["room_media_type"]
           playback_url: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["room_status"]
@@ -2265,6 +2266,7 @@ export type Database = {
           id?: string
           livekit_room_name: string
           max_guest_slots?: number
+          media_type?: Database["public"]["Enums"]["room_media_type"]
           playback_url?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["room_status"]
@@ -2280,6 +2282,7 @@ export type Database = {
           id?: string
           livekit_room_name?: string
           max_guest_slots?: number
+          media_type?: Database["public"]["Enums"]["room_media_type"]
           playback_url?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["room_status"]
@@ -3190,6 +3193,7 @@ export type Database = {
       reset_weekly_tasks: { Args: never; Returns: undefined }
     }
     Enums: {
+      room_media_type: "video" | "audio"
       room_participant_role: "host" | "moderator" | "speaker" | "audience"
       room_request_status: "pending" | "accepted" | "rejected" | "cancelled"
       room_request_type: "audio" | "video"
@@ -3328,6 +3332,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      room_media_type: ["video", "audio"],
       room_participant_role: ["host", "moderator", "speaker", "audience"],
       room_request_status: ["pending", "accepted", "rejected", "cancelled"],
       room_request_type: ["audio", "video"],
