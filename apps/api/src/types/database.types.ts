@@ -100,6 +100,68 @@ export type Database = {
           },
         ]
       }
+      agency_commissions: {
+        Row: {
+          agency_id: string
+          commission_diamonds: number
+          created_at: string
+          gift_transaction_id: string
+          host_id: string
+          id: string
+          payout_id: string | null
+          rate_applied: number
+        }
+        Insert: {
+          agency_id: string
+          commission_diamonds: number
+          created_at?: string
+          gift_transaction_id: string
+          host_id: string
+          id?: string
+          payout_id?: string | null
+          rate_applied?: number
+        }
+        Update: {
+          agency_id?: string
+          commission_diamonds?: number
+          created_at?: string
+          gift_transaction_id?: string
+          host_id?: string
+          id?: string
+          payout_id?: string | null
+          rate_applied?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agency_commissions_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_commissions_gift_transaction_id_fkey"
+            columns: ["gift_transaction_id"]
+            isOneToOne: true
+            referencedRelation: "gift_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_commissions_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_commissions_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "payouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agency_hosts: {
         Row: {
           agency_id: string
@@ -700,6 +762,56 @@ export type Database = {
           },
         ]
       }
+      financial_ledger: {
+        Row: {
+          amount: number
+          balance_after: number | null
+          created_at: string
+          direction: string
+          id: string
+          metadata: Json
+          reason: string
+          reference_id: string | null
+          reference_type: string
+          user_id: string | null
+          wallet_type: string
+        }
+        Insert: {
+          amount: number
+          balance_after?: number | null
+          created_at?: string
+          direction: string
+          id?: string
+          metadata?: Json
+          reason: string
+          reference_id?: string | null
+          reference_type: string
+          user_id?: string | null
+          wallet_type: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number | null
+          created_at?: string
+          direction?: string
+          id?: string
+          metadata?: Json
+          reason?: string
+          reference_id?: string | null
+          reference_type?: string
+          user_id?: string | null
+          wallet_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_ledger_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       follows: {
         Row: {
           created_at: string
@@ -727,6 +839,323 @@ export type Database = {
           {
             foreignKeyName: "follows_following_id_fkey"
             columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_players: {
+        Row: {
+          id: string
+          is_ready: boolean
+          joined_at: string
+          left_at: string | null
+          score: number
+          session_id: string
+          streak: number
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_ready?: boolean
+          joined_at?: string
+          left_at?: string | null
+          score?: number
+          session_id: string
+          streak?: number
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_ready?: boolean
+          joined_at?: string
+          left_at?: string | null
+          score?: number
+          session_id?: string
+          streak?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_players_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_players_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_results: {
+        Row: {
+          created_at: string
+          final_score: number
+          game_type: string
+          id: string
+          rank: number | null
+          session_id: string
+          user_id: string
+          won: boolean
+        }
+        Insert: {
+          created_at?: string
+          final_score?: number
+          game_type: string
+          id?: string
+          rank?: number | null
+          session_id: string
+          user_id: string
+          won?: boolean
+        }
+        Update: {
+          created_at?: string
+          final_score?: number
+          game_type?: string
+          id?: string
+          rank?: number | null
+          session_id?: string
+          user_id?: string
+          won?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_results_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_results_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_rounds: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          payload: Json
+          round_number: number
+          session_id: string
+          started_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          payload?: Json
+          round_number: number
+          session_id: string
+          started_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          payload?: Json
+          round_number?: number
+          session_id?: string
+          started_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_rounds_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_sessions: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string
+          ended_at: string | null
+          game_type: string
+          id: string
+          room_id: string
+          started_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by: string
+          ended_at?: string | null
+          game_type: string
+          id?: string
+          room_id: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string
+          ended_at?: string | null
+          game_type?: string
+          id?: string
+          room_id?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_sessions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_sessions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gift_catalog: {
+        Row: {
+          code: string
+          coin_price: number
+          created_at: string
+          diamond_value: number
+          icon: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          coin_price: number
+          created_at?: string
+          diamond_value: number
+          icon?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          coin_price?: number
+          created_at?: string
+          diamond_value?: number
+          icon?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gift_transactions: {
+        Row: {
+          agency_commission_diamonds: number
+          agency_id: string | null
+          client_request_id: string
+          coin_amount: number
+          completed_at: string | null
+          created_at: string
+          diamond_value: number
+          failure_reason: string | null
+          gift_id: string
+          host_net_diamonds: number
+          id: string
+          platform_share_diamonds: number
+          recipient_id: string
+          room_id: string | null
+          sender_id: string
+          status: string
+        }
+        Insert: {
+          agency_commission_diamonds?: number
+          agency_id?: string | null
+          client_request_id: string
+          coin_amount: number
+          completed_at?: string | null
+          created_at?: string
+          diamond_value: number
+          failure_reason?: string | null
+          gift_id: string
+          host_net_diamonds?: number
+          id?: string
+          platform_share_diamonds?: number
+          recipient_id: string
+          room_id?: string | null
+          sender_id: string
+          status?: string
+        }
+        Update: {
+          agency_commission_diamonds?: number
+          agency_id?: string | null
+          client_request_id?: string
+          coin_amount?: number
+          completed_at?: string | null
+          created_at?: string
+          diamond_value?: number
+          failure_reason?: string | null
+          gift_id?: string
+          host_net_diamonds?: number
+          id?: string
+          platform_share_diamonds?: number
+          recipient_id?: string
+          room_id?: string | null
+          sender_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gift_transactions_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gift_transactions_gift_id_fkey"
+            columns: ["gift_id"]
+            isOneToOne: false
+            referencedRelation: "gift_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gift_transactions_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gift_transactions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gift_transactions_sender_id_fkey"
+            columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -838,6 +1267,184 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      host_earnings: {
+        Row: {
+          created_at: string
+          diamonds: number
+          gift_transaction_id: string
+          host_id: string
+          id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          diamonds: number
+          gift_transaction_id: string
+          host_id: string
+          id?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          diamonds?: number
+          gift_transaction_id?: string
+          host_id?: string
+          id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "host_earnings_gift_transaction_id_fkey"
+            columns: ["gift_transaction_id"]
+            isOneToOne: true
+            referencedRelation: "gift_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "host_earnings_host_id_fkey"
+            columns: ["host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      host_task_progress: {
+        Row: {
+          claimed_at: string | null
+          coins_progress: number
+          completed_at: string | null
+          created_at: string
+          hours_progress: number
+          id: string
+          room_id: string
+          status: string
+          task_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          coins_progress?: number
+          completed_at?: string | null
+          created_at?: string
+          hours_progress?: number
+          id?: string
+          room_id: string
+          status?: string
+          task_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          coins_progress?: number
+          completed_at?: string | null
+          created_at?: string
+          hours_progress?: number
+          id?: string
+          room_id?: string
+          status?: string
+          task_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "host_task_progress_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "host_task_progress_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "host_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "host_task_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      host_tasks: {
+        Row: {
+          audience: string
+          created_at: string
+          created_by: string
+          description: string
+          expires_at: string | null
+          id: string
+          max_claims: number | null
+          new_user_window_days: number
+          reward_amount: number
+          room_id: string
+          starts_at: string | null
+          status: string
+          target_coins: number | null
+          target_hours: number | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          created_at?: string
+          created_by: string
+          description?: string
+          expires_at?: string | null
+          id?: string
+          max_claims?: number | null
+          new_user_window_days?: number
+          reward_amount?: number
+          room_id: string
+          starts_at?: string | null
+          status?: string
+          target_coins?: number | null
+          target_hours?: number | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          created_at?: string
+          created_by?: string
+          description?: string
+          expires_at?: string | null
+          id?: string
+          max_claims?: number | null
+          new_user_window_days?: number
+          reward_amount?: number
+          room_id?: string
+          starts_at?: string | null
+          status?: string
+          target_coins?: number | null
+          target_hours?: number | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "host_tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "host_tasks_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
             referencedColumns: ["id"]
           },
         ]
@@ -978,38 +1585,123 @@ export type Database = {
       }
       offline_recharges: {
         Row: {
+          admin_note: string | null
+          agency_id: string | null
           amount_usd: number
           coins_credited: number
           created_at: string | null
+          diamonds_credited: number
           id: string
+          note: string | null
           payment_method: string
+          processed_at: string | null
+          processed_by: string | null
           status: string | null
           transaction_ref: string
           user_id: string
         }
         Insert: {
+          admin_note?: string | null
+          agency_id?: string | null
           amount_usd: number
           coins_credited: number
           created_at?: string | null
+          diamonds_credited?: number
           id: string
+          note?: string | null
           payment_method: string
+          processed_at?: string | null
+          processed_by?: string | null
           status?: string | null
           transaction_ref: string
           user_id: string
         }
         Update: {
+          admin_note?: string | null
+          agency_id?: string | null
           amount_usd?: number
           coins_credited?: number
           created_at?: string | null
+          diamonds_credited?: number
           id?: string
+          note?: string | null
           payment_method?: string
+          processed_at?: string | null
+          processed_by?: string | null
           status?: string | null
           transaction_ref?: string
           user_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "offline_recharges_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offline_recharges_processed_by_fkey"
+            columns: ["processed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "offline_recharges_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_transactions: {
+        Row: {
+          amount_usd: number
+          coins: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          package_id: string | null
+          provider: string
+          provider_transaction_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount_usd: number
+          coins: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          package_id?: string | null
+          provider: string
+          provider_transaction_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount_usd?: number
+          coins?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          package_id?: string | null
+          provider?: string
+          provider_transaction_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_transactions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -1062,6 +1754,148 @@ export type Database = {
           {
             foreignKeyName: "payouts_requested_by_fkey"
             columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pk_battles: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          ends_at: string | null
+          host_a_id: string
+          host_b_id: string
+          id: string
+          invited_by: string
+          room_a_id: string
+          room_b_id: string
+          score_a: number
+          score_b: number
+          started_at: string | null
+          status: string
+          updated_at: string
+          winner_host_id: string | null
+          winner_side: string | null
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          ends_at?: string | null
+          host_a_id: string
+          host_b_id: string
+          id?: string
+          invited_by: string
+          room_a_id: string
+          room_b_id: string
+          score_a?: number
+          score_b?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          winner_host_id?: string | null
+          winner_side?: string | null
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          ends_at?: string | null
+          host_a_id?: string
+          host_b_id?: string
+          id?: string
+          invited_by?: string
+          room_a_id?: string
+          room_b_id?: string
+          score_a?: number
+          score_b?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          winner_host_id?: string | null
+          winner_side?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pk_battles_host_a_id_fkey"
+            columns: ["host_a_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pk_battles_host_b_id_fkey"
+            columns: ["host_b_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pk_battles_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pk_battles_room_a_id_fkey"
+            columns: ["room_a_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pk_battles_room_b_id_fkey"
+            columns: ["room_b_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pk_battles_winner_host_id_fkey"
+            columns: ["winner_host_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pk_participants: {
+        Row: {
+          battle_id: string
+          id: string
+          joined_at: string
+          left_at: string | null
+          side: string
+          user_id: string
+        }
+        Insert: {
+          battle_id: string
+          id?: string
+          joined_at?: string
+          left_at?: string | null
+          side: string
+          user_id: string
+        }
+        Update: {
+          battle_id?: string
+          id?: string
+          joined_at?: string
+          left_at?: string | null
+          side?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pk_participants_battle_id_fkey"
+            columns: ["battle_id"]
+            isOneToOne: false
+            referencedRelation: "pk_battles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pk_participants_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1416,7 +2250,6 @@ export type Database = {
           id: string
           livekit_room_name: string
           max_guest_slots: number
-          media_type: Database["public"]["Enums"]["room_media_type"]
           playback_url: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["room_status"]
@@ -1432,7 +2265,6 @@ export type Database = {
           id?: string
           livekit_room_name: string
           max_guest_slots?: number
-          media_type?: Database["public"]["Enums"]["room_media_type"]
           playback_url?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["room_status"]
@@ -1448,7 +2280,6 @@ export type Database = {
           id?: string
           livekit_room_name?: string
           max_guest_slots?: number
-          media_type?: Database["public"]["Enums"]["room_media_type"]
           playback_url?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["room_status"]
@@ -2023,6 +2854,69 @@ export type Database = {
           },
         ]
       }
+      withdrawals: {
+        Row: {
+          admin_note: string | null
+          amount: number
+          bank_account: string | null
+          client_request_id: string
+          currency: string
+          id: string
+          note: string | null
+          processed_at: string | null
+          processed_by: string | null
+          requested_at: string
+          status: string
+          upi_id: string | null
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string | null
+          amount: number
+          bank_account?: string | null
+          client_request_id: string
+          currency: string
+          id?: string
+          note?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          requested_at?: string
+          status?: string
+          upi_id?: string | null
+          user_id: string
+        }
+        Update: {
+          admin_note?: string | null
+          amount?: number
+          bank_account?: string | null
+          client_request_id?: string
+          currency?: string
+          id?: string
+          note?: string | null
+          processed_at?: string | null
+          processed_by?: string | null
+          requested_at?: string
+          status?: string
+          upi_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "withdrawals_processed_by_fkey"
+            columns: ["processed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "withdrawals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2124,6 +3018,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      claim_host_task_reward: {
+        Args: { p_task_id: string; p_user_id: string }
+        Returns: {
+          claimed_at: string
+          new_coins: number
+          reward_amount: number
+        }[]
+      }
       claim_room_task_reward: {
         Args: { p_room_task_id: string; p_user_id: string }
         Returns: {
@@ -2136,6 +3038,117 @@ export type Database = {
       claim_task_reward: {
         Args: { p_task_id: string; p_user_id: string }
         Returns: number
+      }
+      fin_claim_agency_task_reward: {
+        Args: { p_host_id: string; p_task_id: string }
+        Returns: {
+          already_processed: boolean
+          new_coins: number
+          new_diamonds: number
+          reward_coins: number
+          reward_diamonds: number
+        }[]
+      }
+      fin_confirm_payment: {
+        Args: {
+          p_amount_usd: number
+          p_coins: number
+          p_metadata?: Json
+          p_package_id: string
+          p_provider: string
+          p_provider_transaction_id: string
+          p_user_id: string
+        }
+        Returns: {
+          already_processed: boolean
+          new_coins: number
+          transaction_id: string
+        }[]
+      }
+      fin_credit_offline_recharge:
+        | {
+            Args: {
+              p_action: string
+              p_admin_id: string
+              p_coins: number
+              p_diamonds: number
+              p_recharge_id: string
+            }
+            Returns: {
+              already_processed: boolean
+              new_coins: number
+              new_diamonds: number
+              recharge_id: string
+              status: string
+            }[]
+          }
+        | {
+            Args: {
+              p_action: string
+              p_admin_id: string
+              p_agency_id?: string
+              p_coins: number
+              p_diamonds: number
+              p_recharge_id: string
+            }
+            Returns: {
+              already_processed: boolean
+              new_coins: number
+              new_diamonds: number
+              recharge_id: string
+              status: string
+            }[]
+          }
+      fin_process_withdrawal: {
+        Args: {
+          p_action: string
+          p_admin_id: string
+          p_admin_note: string
+          p_withdrawal_id: string
+        }
+        Returns: {
+          already_processed: boolean
+          refunded_balance: number
+          status: string
+          withdrawal_id: string
+        }[]
+      }
+      fin_request_withdrawal: {
+        Args: {
+          p_amount: number
+          p_bank_account: string
+          p_client_request_id: string
+          p_currency: string
+          p_note: string
+          p_upi_id: string
+          p_user_id: string
+        }
+        Returns: {
+          already_processed: boolean
+          new_balance: number
+          status: string
+          withdrawal_id: string
+        }[]
+      }
+      fin_send_gift: {
+        Args: {
+          p_client_request_id: string
+          p_gift_id: string
+          p_host_share_rate?: number
+          p_recipient_id: string
+          p_room_id: string
+          p_sender_id: string
+        }
+        Returns: {
+          agency_commission_diamonds: number
+          already_processed: boolean
+          gift_transaction_id: string
+          host_net_diamonds: number
+          platform_share_diamonds: number
+          recipient_new_diamonds: number
+          sender_new_coins: number
+          status: string
+        }[]
       }
       get_client_tasks: {
         Args: { p_user_id: string }
@@ -2180,7 +3193,6 @@ export type Database = {
       room_participant_role: "host" | "moderator" | "speaker" | "audience"
       room_request_status: "pending" | "accepted" | "rejected" | "cancelled"
       room_request_type: "audio" | "video"
-      room_media_type: "video" | "audio"
       room_status: "created" | "live" | "ending" | "ended"
       user_role:
         | "user"
@@ -2204,12 +3216,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2233,11 +3245,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2258,11 +3270,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2283,11 +3295,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2300,11 +3312,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2319,7 +3331,6 @@ export const Constants = {
       room_participant_role: ["host", "moderator", "speaker", "audience"],
       room_request_status: ["pending", "accepted", "rejected", "cancelled"],
       room_request_type: ["audio", "video"],
-      room_media_type: ["video", "audio"],
       room_status: ["created", "live", "ending", "ended"],
       user_role: [
         "user",
