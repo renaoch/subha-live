@@ -68,23 +68,6 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
           console.warn("[useRoomChat] server error:", msg.code, msg.message);
           return;
         }
-        if (msg && msg.type === "join" && typeof msg.id === "string") {
-          // Skip our own join line — no need to tell yourself you entered.
-          if (msg.userId && msg.userId === selfUserIdRef.current) return;
-          upsert([
-            {
-              id: msg.id,
-              roomId: msg.roomId,
-              userId: msg.userId ?? "",
-              username: msg.username ?? "Someone",
-              avatar: null,
-              message: "entered the room",
-              createdAt: msg.createdAt ?? Date.now(),
-              kind: "join",
-            },
-          ]);
-          return;
-        }
         // Otherwise it's a canonical chat message.
         if (msg && typeof msg.id === "string" && typeof msg.message === "string") {
           // If this is our own message coming back, reconcile it with the

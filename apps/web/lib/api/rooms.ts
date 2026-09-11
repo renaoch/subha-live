@@ -33,12 +33,13 @@ export interface RoomRecord {
   description: string | null;
   livekit_room_name: string;
   max_guest_slots: number;
+  /** 'video' (camera + mic, default) or 'audio' (mic-only, no camera ever). */
+  media_type: RoomMediaType;
   started_at?: string | null;
   ended_at?: string | null;
   created_at?: string;
   host?: RoomHost | null;
   viewerCount?: number;
-  mediaType?: RoomMediaType;
 }
 
 export interface CreateRoomInput {
@@ -48,6 +49,8 @@ export interface CreateRoomInput {
   cover?: string | null;
   description?: string | null;
   max_guest_slots?: number;
+  /** Defaults to 'video' server-side if omitted. */
+  media_type?: RoomMediaType;
 }
 
 export interface RoomMediaState {
@@ -213,12 +216,12 @@ export const roomsApi = {
     ).then((r) => r.data);
   },
 
-  createViewerSession(id: string, offerSdp: string) {
+  createViewerSession(id: string, offerSdp: string, preview = false) {
     return apiFetch<RoomEnvelope<MediaViewerResult>>(
       `/api/v1/rooms/${id}/media/viewer/session`,
       {
         method: "POST",
-        body: JSON.stringify({ offerSdp }),
+        body: JSON.stringify({ offerSdp, preview }),
       },
     ).then((r) => r.data);
   },

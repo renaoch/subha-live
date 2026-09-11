@@ -11,9 +11,6 @@ export interface RoomChatMessage {
   /** Client-only: true while this message is optimistically shown before the
       server has echoed it back. Never set by the API. */
   pending?: boolean;
-  /** "join" for the animated "X entered the room" system line; omitted (or
-      "chat") for a normal message. */
-  kind?: "chat" | "join";
 }
 
 export interface ChatHistoryPage {

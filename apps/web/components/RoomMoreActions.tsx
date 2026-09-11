@@ -32,12 +32,12 @@ interface RoomMoreActionsProps {
   cameraEnabled?: boolean;
   onToggleCamera?: () => void;
   filterOpen?: boolean;
-  onToggleFilter?: () => void;
-  micEnabled?: boolean;
+  onToggleFilter?: () => void;  micEnabled?: boolean;
   onToggleMic?: () => void;
   onShare?: () => void;
   onOpenMenu?: () => void;
   onLike?: () => void;
+  isAudioRoom?: boolean;
 }
 
 /**
@@ -58,6 +58,7 @@ export function RoomMoreActions({
   onShare,
   onOpenMenu,
   onLike,
+  isAudioRoom = false,
 }: RoomMoreActionsProps) {
   // Lock body scroll while open
   useEffect(() => {
@@ -79,20 +80,24 @@ export function RoomMoreActions({
             onClick: onToggleMic,
             active: !micEnabled,
           },
-          {
-            key: "camera",
-            label: cameraEnabled ? "Hide video" : "Show video",
-            icon: cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />,
-            onClick: onToggleCamera,
-            active: !cameraEnabled,
-          },
-          {
-            key: "filters",
-            label: "Filters",
-            icon: <SlidersHorizontal className="h-5 w-5" />,
-            onClick: onToggleFilter,
-            active: filterOpen,
-          },
+          ...(isAudioRoom
+            ? []
+            : [
+                {
+                  key: "camera",
+                  label: cameraEnabled ? "Hide video" : "Show video",
+                  icon: cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />,
+                  onClick: onToggleCamera,
+                  active: !cameraEnabled,
+                },
+                {
+                  key: "filters",
+                  label: "Filters",
+                  icon: <SlidersHorizontal className="h-5 w-5" />,
+                  onClick: onToggleFilter,
+                  active: filterOpen,
+                },
+              ]),
         ]
       : []),
     {

@@ -154,28 +154,6 @@ export function RoomChat({
           </p>
         ) : (
           messages.map((m) => {
-            if (m.kind === "join") {
-              return (
-                <div key={m.id} className="join-row flex justify-center">
-                  <div
-                    className="flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-3 py-1 backdrop-blur-md"
-                    style={{ boxShadow: `0 0 0 1px ${colorFor(m.username)}22 inset` }}
-                  >
-                    <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ background: colorFor(m.username) }}
-                    />
-                    <p className="text-[11.5px] font-medium leading-none text-white/80 [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]">
-                      <span className="font-bold" style={{ color: colorFor(m.username) }}>
-                        {m.username}
-                      </span>{" "}
-                      entered the room
-                    </p>
-                  </div>
-                </div>
-              );
-            }
-
             const mine = !!selfUserId && m.userId === selfUserId;
             const nameColor = mine ? "#FF3B5C" : colorFor(m.username);
             const avatarEl = m.avatar ? (
@@ -302,23 +280,6 @@ export function RoomChat({
           100% {
             opacity: 1;
             transform: translateY(0);
-          }
-        }
-        .join-row {
-          animation: join-row-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-        @keyframes join-row-in {
-          0% {
-            opacity: 0;
-            transform: translateY(10px) scale(0.9);
-          }
-          60% {
-            opacity: 1;
-            transform: translateY(0) scale(1.03);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0) scale(1);
           }
         }
       `}</style>

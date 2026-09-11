@@ -416,6 +416,9 @@ export function createMediaService(
               value.lastSequence ??
                 0,
             ),
+
+          preview:
+            value.preview === "1",
         };
       }
 
@@ -447,8 +450,13 @@ export function createMediaService(
         );
       }
 
+      // Preview viewers (home-feed scroll previews) are real Cloudflare
+      // sessions but are deliberately not part of the room's audience
+      // count — only people who actually opened the room count as viewers.
       const viewerCount =
-        Object.keys(viewers).length;
+        Object.values(viewers).filter(
+          (viewer) => !viewer.preview,
+        ).length;
 
       return {
         roomId,
@@ -884,6 +892,10 @@ export function createMediaService(
 
           lastSequence:
             "0",
+
+          preview: session.preview
+            ? "1"
+            : "0",
         },
       );
 

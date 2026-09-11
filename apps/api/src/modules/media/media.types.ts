@@ -45,6 +45,16 @@ export interface MediaSession {
   createdAt: number;
 
   lastHeartbeatAt: number;
+
+  /**
+   * A "preview" viewer is a lightweight, silent subscribe used for the
+   * home-feed scroll preview — the person hasn't opened the room, they're
+   * just scrolled past its card. It creates a real Cloudflare viewer
+   * session (so it can actually show video) but is deliberately excluded
+   * from `viewerCount` so browsing the feed doesn't inflate a host's
+   * apparent audience.
+   */
+  preview?: boolean;
 }
 
 /* ============================================================
@@ -165,6 +175,9 @@ export interface ViewerMediaState {
   lastHeartbeatAt: number;
 
   lastSequence: number;
+
+  /** See `MediaSession.preview`. Excluded from `viewerCount`. */
+  preview?: boolean;
 }
 
 /* ============================================================

@@ -749,6 +749,7 @@ async subscribeHostToGuests(
     roomId: string,
     userId: string,
     offerSdp: string,
+    preview = false,
   ) {
     /*
      * Fetch the room status immediately before creating the
@@ -967,6 +968,7 @@ async subscribeHostToGuests(
         });
 
         session = sessionResult.session;
+        session.preview = preview;
         createdNewSession = true;
 
         await mediaService.saveViewerSession(session);
@@ -987,6 +989,11 @@ async subscribeHostToGuests(
           status: existingViewer.status,
           createdAt: existingViewer.joinedAt,
           lastHeartbeatAt: existingViewer.lastHeartbeatAt,
+          // Trust the caller's *current* intent over whatever the stale
+          // entry says — e.g. someone previewed this room while
+          // scrolling, then actually opened it: that resumed session
+          // should now count as a real viewer.
+          preview,
         };
       }
 
@@ -1177,6 +1184,8 @@ async subscribeHostToGuests(
           viewer.joinedAt,
         lastHeartbeatAt:
           Date.now(),
+        preview:
+          viewer.preview,
       });
     }
   },

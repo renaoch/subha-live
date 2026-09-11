@@ -491,6 +491,12 @@ useEffect(() => {
 
             filter={filterPresets[selectedFilter as keyof typeof filterPresets]}
 
+            isAudioRoom={room.media_type === "audio"}
+
+            hostName={room.host?.name}
+
+            hostAvatar={room.host?.avatar}
+
           />
         )}
 
@@ -634,6 +640,7 @@ useEffect(() => {
           onToggleFilter={() => setFilterOpen((v) => !v)}
           micEnabled={micEnabled}
           onToggleMic={isHost ? () => setMicEnabled((v) => !v) : undefined}
+          isAudioRoom={room.media_type === "audio"}
           onShare={() => {
             const url = typeof window !== 'undefined' ? window.location.href : '';
             if (navigator.share) {

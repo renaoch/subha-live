@@ -1,6 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Camera,
@@ -17,8 +23,36 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
 import { useCreateRoom, useRooms } from "@/hooks/queries/use-rooms";
+import { useRoomPreview } from "@/hooks/useRoomPreview";
 import type { RoomRecord } from "@/lib/api/rooms";
+import type { RoomMediaType } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+/**
+ * True while `ref`'s element is at least 50% visible in the viewport.
+ * Used to drive the home-feed live previews: a card starts previewing as
+ * it scrolls into view and stops the instant it scrolls back out, in
+ * either direction.
+ */
+function useInView<T extends Element>(threshold = 0.5) {
+  const ref = useRef<T | null>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [threshold]);
+
+  return { ref, inView };
+}
 
 const TABS = [
   { key: "all", label: "All" },
@@ -111,6 +145,7 @@ function LivePageInner() {
     title: string;
     description: string;
     category: string;
+    mediaType: RoomMediaType;
   }) {
     try {
       const room = await createRoomMutation.mutateAsync({
@@ -120,6 +155,7 @@ function LivePageInner() {
         livekit_room_name: `subha-${crypto.randomUUID()}`,
         max_guest_slots: 3,
         cover: null,
+        media_type: input.mediaType,
       });
 
       setCreateOpen(false);
@@ -311,30 +347,83 @@ function LivePageInner() {
 function RoomCard({ room, index }: { room: RoomRecord; index: number }) {
   const hostName = room.host?.name || "Subha host";
   const viewerCount = room.viewerCount ?? 0;
+  const isLive = room.status === "live";
+  const isAudioRoom = room.media_type === "audio";
+
+  const { ref: viewRef, inView } = useInView<HTMLButtonElement>(0.5);
+  const { stream, connected } = useRoomPreview(
+    // Audio rooms never publish a camera, so there's nothing to preview —
+    // skip connecting a preview session for them entirely.
+    isLive && !isAudioRoom ? room.id : null,
+    isLive && !isAudioRoom && inView,
+  );
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.srcObject = stream ?? null;
+  }, [stream]);
+
+  const showPreview = isLive && !isAudioRoom && connected && !!stream;
 
   return (
     <motion.button
+      ref={viewRef}
       onClick={() => window.location.assign(`/home/room/${room.id}`)}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.035 }}
       className="group relative aspect-[3/4] overflow-hidden rounded-[22px] border border-border/60 bg-surface-raised text-left shadow-sm"
     >
-      {room.cover ? (
+      {isAudioRoom ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-[linear-gradient(160deg,#3a2e5c,#1c1430_55%,#0a0714)]">
+          <Avatar
+            name={hostName}
+            src={room.host?.avatar ?? undefined}
+            size="lg"
+            className="ring-2 ring-white/25"
+          />
+        </div>
+      ) : room.cover ? (
         <img
           src={room.cover}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
+            showPreview ? "opacity-0" : "opacity-100 group-hover:scale-105 transition-transform duration-500",
+          )}
         />
       ) : (
-        <div className="absolute inset-0 bg-[linear-gradient(145deg,#272727,#111111_55%,#050505)]" />
+        <div
+          className={cn(
+            "absolute inset-0 bg-[linear-gradient(145deg,#272727,#111111_55%,#050505)] transition-opacity duration-300",
+            showPreview && "opacity-0",
+          )}
+        />
+      )}
+
+      {/* Live preview — muted, silent viewer session (not counted toward
+          viewerCount). Only mounted/connected while the card is scrolled
+          into view; see useRoomPreview. Audio rooms never render this. */}
+      {!isAudioRoom && (
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
+            showPreview ? "opacity-100" : "opacity-0",
+          )}
+        />
       )}
 
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-black/5" />
 
       <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-md">
         <span className="h-1.5 w-1.5 rounded-full bg-red-400 shadow-[0_0_0_3px_rgba(248,113,113,0.18)]" />
-        {room.status === "live" ? "LIVE" : "WAITING"}
+        {isLive ? (isAudioRoom ? "LIVE AUDIO" : "LIVE") : "WAITING"}
       </div>
 
       <div className="absolute right-2.5 top-2.5 rounded-full bg-black/45 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-md">
@@ -422,11 +511,13 @@ function CreateRoomModal({
     title: string;
     description: string;
     category: string;
+    mediaType: RoomMediaType;
   }) => Promise<void>;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("explore");
+  const [mediaType, setMediaType] = useState<RoomMediaType>("video");
   const [creating, setCreating] = useState(false);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -443,6 +534,7 @@ function CreateRoomModal({
         title: title.trim(),
         description: description.trim(),
         category,
+        mediaType,
       });
     } finally {
       setCreating(false);
@@ -456,7 +548,9 @@ function CreateRoomModal({
           <div>
             <p className="text-lg font-bold text-ink">Start a live room</p>
             <p className="mt-0.5 text-xs text-ink-muted">
-              Camera and microphone connect when you press Start Live.
+              {mediaType === "video"
+                ? "Camera and microphone connect when you press Start Live."
+                : "Only your microphone connects — no camera is ever requested."}
             </p>
           </div>
           <button
@@ -469,6 +563,41 @@ function CreateRoomModal({
         </div>
 
         <form onSubmit={submit} className="space-y-4 p-5">
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              type="button"
+              onClick={() => setMediaType("video")}
+              className={cn(
+                "flex flex-col items-start gap-1 rounded-2xl border px-4 py-3 text-left transition-colors",
+                mediaType === "video"
+                  ? "border-accent bg-accent/10"
+                  : "border-border bg-surface-raised",
+              )}
+            >
+              <Camera className="h-4 w-4 text-ink" />
+              <span className="text-sm font-bold text-ink">Video room</span>
+              <span className="text-[11px] text-ink-muted">
+                Camera + mic, like going live
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMediaType("audio")}
+              className={cn(
+                "flex flex-col items-start gap-1 rounded-2xl border px-4 py-3 text-left transition-colors",
+                mediaType === "audio"
+                  ? "border-accent bg-accent/10"
+                  : "border-border bg-surface-raised",
+              )}
+            >
+              <Radio className="h-4 w-4 text-ink" />
+              <span className="text-sm font-bold text-ink">Audio room</span>
+              <span className="text-[11px] text-ink-muted">
+                Mic only, no camera at all
+              </span>
+            </button>
+          </div>
+
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold text-ink-muted">
               Room title
@@ -520,8 +649,10 @@ function CreateRoomModal({
           >
             {creating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
+            ) : mediaType === "video" ? (
               <Camera className="h-4 w-4" />
+            ) : (
+              <Radio className="h-4 w-4" />
             )}
             {creating ? "Creating room…" : "Create room"}
           </button>

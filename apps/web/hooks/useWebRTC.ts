@@ -52,6 +52,55 @@ function safeClosePeer(peer: RTCPeerConnection | null) {
 }
 
 /**
+ * Target bitrate for the host's outgoing camera feed. 720x1280 needs
+ * roughly this much to stay sharp; the browser's un-configured default
+ * starts much lower (and ramps up slowly), which is what made the stream
+ * look like a heavily compressed 480p/144p feed rather than 720p.
+ */
+const HOST_VIDEO_MAX_BITRATE_BPS = 2_500_000;
+const HOST_VIDEO_MAX_FRAMERATE = 30;
+
+/**
+ * Push explicit encoding parameters onto a video RTCRtpSender right after
+ * it's created. Best-effort: some browsers don't support every field, and
+ * a handful (older Safari) don't support setParameters on a sender that
+ * hasn't sent a frame yet, so failures here are swallowed rather than
+ * blocking publish.
+ */
+function applyVideoSenderQuality(sender: RTCRtpSender) {
+  try {
+    const params = sender.getParameters();
+
+    if (!params.encodings || params.encodings.length === 0) {
+      params.encodings = [{}];
+    }
+
+    params.encodings[0] = {
+      ...params.encodings[0],
+      maxBitrate: HOST_VIDEO_MAX_BITRATE_BPS,
+      maxFramerate: HOST_VIDEO_MAX_FRAMERATE,
+      // Don't let the SFU/browser silently scale the resolution down to
+      // save bandwidth — that's the "why does 720p look like 144p"
+      // complaint. If bandwidth gets tight, drop framerate instead.
+      scaleResolutionDownBy: 1,
+    };
+
+    // "maintain-resolution" tells the encoder to protect sharpness over
+    // smoothness under CPU/bandwidth pressure, instead of the default
+    // "balanced" behaviour which downscales resolution first.
+    (params as RTCRtpSendParameters & {
+      degradationPreference?: RTCDegradationPreference;
+    }).degradationPreference = "maintain-resolution";
+
+    sender.setParameters(params).catch((error) => {
+      console.warn("[WebRTC] setParameters failed for video sender", error);
+    });
+  } catch (error) {
+    console.warn("[WebRTC] applyVideoSenderQuality failed", error);
+  }
+}
+
+/**
  * Play a single remote audio track through its own dedicated <audio>
  * element.
  *
@@ -434,6 +483,8 @@ export function useWebRTC(
     }
   }, []);
 
+  const isAudioRoom = room?.media_type === "audio";
+
   const ensureLocalPreview = useCallback(async () => {
     const existing = localStreamRef.current;
 
@@ -447,22 +498,39 @@ export function useWebRTC(
         noiseSuppression: true,
         autoGainControl: true,
       },
-      video: {
-        facingMode: "user",
-        width: { ideal: 1080, max: 1080 },
-        height: { ideal: 1920, max: 1920 },
-        aspectRatio: { ideal: 9 / 16 },
-        // "crop-and-scale" (the default) tells the browser it's allowed to
-        // digitally crop into the sensor to force the exact aspect ratio
-        // above, which is what was causing the zoomed-in look. "none" uses
-        // the camera's native field of view instead; CSS object-cover on
-        // <video> still fills the frame, it just isn't the sensor itself
-        // cropping first.
-        // Cast needed: `resizeMode` is part of the MediaTrackConstraints
-        // spec but isn't in the currently installed TS DOM lib typings.
-        ...({ resizeMode: "none" } as MediaTrackConstraints),
-      },
+      // Audio rooms never request the camera at all — not just "hidden",
+      // genuinely never asked for, so there's no camera permission prompt
+      // and no video track to ever accidentally publish.
+      video: isAudioRoom
+        ? false
+        : {
+            facingMode: "user",
+            width: { ideal: 720 },
+            height: { ideal: 1280 },
+            aspectRatio: { ideal: 9 / 16 },
+            frameRate: { ideal: 30, min: 24 },
+            // "crop-and-scale" (the default) tells the browser it's allowed to
+            // digitally crop into the sensor to force the exact aspect ratio
+            // above, which is what was causing the zoomed-in look. "none" uses
+            // the camera's native field of view instead; CSS object-cover on
+            // <video> still fills the frame, it just isn't the sensor itself
+            // cropping first.
+            // Cast needed: `resizeMode` is part of the MediaTrackConstraints
+            // spec but isn't in the currently installed TS DOM lib typings.
+            ...({ resizeMode: "none" } as MediaTrackConstraints),
+          },
     });
+
+    // Hints the browser's encoder to prioritize sharpness/detail over
+    // motion smoothness for this track — helps avoid the soft/blocky look
+    // on a talking-head camera feed.
+    for (const track of stream.getVideoTracks()) {
+      try {
+        track.contentHint = "detail";
+      } catch {
+        // Not supported in every browser; safe to ignore.
+      }
+    }
 
     localStreamRef.current = stream;
 
@@ -471,7 +539,7 @@ export function useWebRTC(
     }
 
     return stream;
-  }, []);
+  }, [isAudioRoom]);
 
   // ---------------------------------------------------------------------------
   // Peer cleanup
@@ -665,21 +733,18 @@ export function useWebRTC(
         for (const track of stream.getTracks()) {
           const transceiver = peer.addTransceiver(track, {
             direction: "sendonly",
-            // Without explicit encoding parameters, browsers default to a
-            // fairly conservative bitrate ceiling (often ~1-1.5 Mbps for
-            // video), which looks noticeably soft/blocky even at a decent
-            // capture resolution. Raise the cap so the encoder is actually
-            // allowed to use the bitrate a 1080x1920 capture needs.
-            sendEncodings:
-              track.kind === "video"
-                ? [
-                    {
-                      maxBitrate: 3_500_000,
-                      maxFramerate: 30,
-                    },
-                  ]
-                : undefined,
           });
+
+          if (track.kind === "video") {
+            // Left at browser defaults, the encoder's starting bitrate is far
+            // too low for a 720x1280 feed and it ramps up slowly, which is
+            // what made the stream look like a blurry 480p/144p feed even
+            // though the captured resolution was fine. Ask explicitly for a
+            // bitrate/framerate ceiling that matches 720p, and bias the
+            // encoder toward keeping resolution (sharpness) over framerate
+            // if bandwidth ever gets tight.
+            applyVideoSenderQuality(transceiver.sender);
+          }
 
           transceivers.push({
             transceiver,

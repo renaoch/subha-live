@@ -154,10 +154,12 @@ export async function createViewerSession(
     });
 
     const offerSdp = typeof req.body?.offerSdp === "string" ? req.body.offerSdp : "";
+    const preview = req.body?.preview === true;
     const result = await roomMediaService.createViewerSession(
       req.params.id,
       req.user.id,
       offerSdp,
+      preview,
     );
 
     res.status(201).json({ success: true, data: result });

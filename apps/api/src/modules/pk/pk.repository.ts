@@ -72,6 +72,30 @@ export const pkRepository = {
     return (data ?? []) as PkBattleRow[];
   },
 
+  /**
+   * Find any battle that is still "open" (not yet finished/cancelled) for a
+   * given room, on either side of the match. Used to tear a battle down
+   * when one of its two rooms ends, so it never outlives the room it's
+   * running in.
+   */
+  async getOpenBattleForRoom(roomId: string): Promise<PkBattleRow | null> {
+    const { data, error } = await db
+      .from("pk_battles")
+      .select("*")
+      .or(`room_a_id.eq.${roomId},room_b_id.eq.${roomId}`)
+      .in("status", ["INVITED", "ACCEPTED", "STARTING", "ACTIVE", "FINALIZING"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) {
+      throw new AppError(500, "Failed to look up PK battle for room", {
+        code: "PK_LOOKUP_FAILED",
+        details: error.message,
+      });
+    }
+    return (data as PkBattleRow | null) ?? null;
+  },
+
   async getBattle(battleId: string): Promise<PkBattleRow | null> {
     const { data, error } = await db
       .from("pk_battles")

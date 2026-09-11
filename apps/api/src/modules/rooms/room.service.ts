@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
+import { pkService } from "../pk/pk.service";
 import type { Tables, TablesInsert } from "../../types/database.types";
 
 type Room = Tables<"rooms">;
@@ -12,6 +13,7 @@ type CreateRoomInput = Pick<
   | "cover"
   | "description"
   | "max_guest_slots"
+  | "media_type"
 >;
 
 export interface RoomAuthorization {
@@ -131,6 +133,7 @@ export const roomService = {
         cover: input.cover ?? null,
         description: input.description ?? null,
         max_guest_slots: input.max_guest_slots ?? 3,
+        media_type: input.media_type ?? "video",
       })
       .select()
       .single();
@@ -295,6 +298,12 @@ export const roomService = {
         },
       );
     }
+
+    // If this room was mid-PK-battle, the battle can't continue against a
+    // room that no longer exists — tear it (and its Redis hot state) down
+    // now rather than leaving it live for viewers to keep listening to.
+    // Best-effort: never let a PK cleanup failure stop the room from ending.
+    await pkService.endForRoom(roomId).catch(() => {});
 
     return data;
   },

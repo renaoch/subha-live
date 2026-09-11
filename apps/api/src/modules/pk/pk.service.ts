@@ -214,6 +214,50 @@ export const pkService = {
   },
 
   /**
+   * Tear down whatever PK battle a room is in — invitation, in-progress
+   * match, or anything in between — because the room itself just ended.
+   *
+   * A PK battle spans TWO rooms; if either side's room ends, the match can
+   * no longer continue, so it is force-cancelled rather than left running
+   * against a room that no longer exists. This clears the durable row, the
+   * Redis hot state, the host "busy" locks, and tells any still-connected
+   * viewers/hosts to stop listening — nothing about the finished room's
+   * battle is left around to be read later.
+   *
+   * Idempotent and best-effort: called from `endRoom`, so it must never
+   * throw and block the room from actually ending.
+   */
+  async endForRoom(roomId: string): Promise<void> {
+    try {
+      const battle = await pkRepository.getOpenBattleForRoom(roomId);
+      if (!battle) return;
+
+      const updated = await pkRepository.transitionStatus(
+        battle.id,
+        ["INVITED", "ACCEPTED", "STARTING", "ACTIVE", "FINALIZING"],
+        "CANCELLED",
+        { ended_at: new Date().toISOString() },
+      );
+
+      // Always clear the hot state / locks, even if another caller already
+      // won the status transition (e.g. the other host's room ended at the
+      // same moment) — both rooms ending should both result in a clean slate.
+      await pkRedis.releaseHosts(battle.id, battle.host_a_id, battle.host_b_id);
+      await pkRedis.markInactive(battle.id);
+      await pkRedis.deleteState(battle.id);
+
+      if (updated) {
+        await pkEvents.publishBattle(battle.id, {
+          type: "PK_CANCEL",
+          reason: "ROOM_ENDED",
+        });
+      }
+    } catch (error) {
+      console.error(`[pk] failed to end battle for room ${roomId}:`, error);
+    }
+  },
+
+  /**
    * Gift → score hook. Called ONLY after the underlying gift transaction has
    * been durably committed. Ties the score increment to the gift transaction id
    * for idempotency; never scores before the gift succeeded.
