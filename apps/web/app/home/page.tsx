@@ -235,7 +235,7 @@ function LivePageInner() {
           )}
         </div>
 
-        <div className="mt-4 flex gap-1 overflow-x-auto rounded-2xl border border-white/5 bg-surface-raised p-1">
+        <div className="stage-card mt-4 flex gap-1 overflow-x-auto p-1">
           {TABS.map((item) => (
             <button
               key={item.key}
@@ -380,7 +380,7 @@ function RoomCard({ room, index }: { room: RoomRecord; index: number }) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.035 }}
-      className="group relative aspect-[3/4] overflow-hidden rounded-[22px] border border-white/10 bg-surface-raised text-left shadow-sm transition-shadow duration-300 hover:glow-hot hover:border-accent-hot/40"
+      className="group relative aspect-[3/4] overflow-hidden rounded-[26px] border border-white/10 bg-surface-raised text-left shadow-sm transition-shadow duration-300 hover:glow-hot hover:border-accent-hot/40"
     >
       {isAudioRoom ? (
         <div className="absolute inset-0 flex items-center justify-center bg-[linear-gradient(160deg,#3a2e5c,#1c1430_55%,#0a0714)]">
@@ -450,12 +450,14 @@ function RoomCard({ room, index }: { room: RoomRecord; index: number }) {
 
       <div className="absolute inset-x-0 bottom-0 p-3">
         <div className="flex items-center gap-2.5">
-          <Avatar
-            name={hostName}
-            src={room.host?.avatar ?? undefined}
-            size="sm"
-            className="ring-2 ring-accent-hot/60"
-          />
+          <span className="avatar-ring shrink-0">
+            <Avatar
+              name={hostName}
+              src={room.host?.avatar ?? undefined}
+              size="sm"
+              className="ring-2 ring-surface"
+            />
+          </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-white">{hostName}</p>
             <p className="truncate text-[11px] text-white/65">{room.title}</p>
@@ -472,7 +474,7 @@ function WaitingRoomCard({ room }: { room: RoomRecord }) {
   return (
     <button
       onClick={() => window.location.assign(`/home/room/${room.id}`)}
-      className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-surface-raised p-3 text-left transition hover:border-accent-hot/40 hover:glow-hot"
+      className="stage-card flex w-full items-center gap-3 p-3 text-left transition hover:border-accent-hot/40 hover:glow-hot"
     >
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-surface-overlay text-accent-violet">
         <Radio className="h-5 w-5" />
@@ -567,7 +569,7 @@ function CreateRoomModal({
         initial={{ opacity: 0, y: 40, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ type: "spring", stiffness: 340, damping: 32 }}
-        className="glow-hot-lg w-full max-w-[520px] overflow-hidden rounded-[28px] border border-white/10 bg-surface"
+        className="stage-card glow-hot-lg w-full max-w-[520px] overflow-hidden rounded-[28px]"
       >
         <div className="grad-brand relative flex items-start justify-between px-5 py-5">
           <div className="absolute inset-0 opacity-20 animate-gradient-shift" />

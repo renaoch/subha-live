@@ -90,12 +90,13 @@ export default function PartyPage() {
 
   return (
     <main className="mx-auto min-h-dvh w-full max-w-[680px] bg-surface pb-10">
-      <header className="sticky top-0 z-30 border-b border-border/70 bg-surface/90 px-4 pb-3 pt-5 backdrop-blur-xl">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-muted">
+      <header className="glass-panel sticky top-0 z-30 rounded-none border-x-0 border-t-0 px-4 pb-3 pt-5">
+        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-accent-hot">
+          <Sparkles className="h-3 w-3" />
           Subha Live
         </p>
-        <h1 className="mt-0.5 font-display text-[1.7rem] font-bold tracking-[-0.04em] text-ink">
-          Party
+        <h1 className="mt-0.5 font-display text-[1.8rem] font-black tracking-[-0.04em] text-ink">
+          Discover
         </h1>
         <p className="mt-1 text-sm text-ink-muted">
           Join a PK battle, play a game, or catch a live event.
@@ -159,7 +160,7 @@ function FeaturedActivity({
     return (
       <Link
         href={`/home/room/${battle.room_a_id}`}
-        className="relative block overflow-hidden rounded-[24px] bg-gradient-to-br from-accent-hot to-accent px-5 py-6 text-white shadow-panel"
+        className="grad-brand animate-gradient-shift glow-hot-lg relative block overflow-hidden rounded-[28px] px-5 py-6 text-white"
       >
         <Swords className="absolute -right-3 -top-3 h-24 w-24 text-white/15" />
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/80">
@@ -179,7 +180,7 @@ function FeaturedActivity({
     return (
       <Link
         href={`/home/room/${room.id}`}
-        className="relative block overflow-hidden rounded-[24px] bg-gradient-to-br from-accent to-accent-hot px-5 py-6 text-white shadow-panel"
+        className="grad-brand animate-gradient-shift glow-hot-lg relative block overflow-hidden rounded-[28px] px-5 py-6 text-white"
       >
         <Sparkles className="absolute -right-3 -top-3 h-24 w-24 text-white/15" />
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/80">
@@ -194,7 +195,7 @@ function FeaturedActivity({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-[24px] border border-border bg-surface-raised px-5 py-6 text-center">
+    <div className="stage-card relative overflow-hidden rounded-[28px] px-5 py-6 text-center">
       <Sparkles className="mx-auto h-6 w-6 text-ink-muted" />
       <p className="mt-2 text-sm font-semibold text-ink">
         Nothing featured right now
@@ -254,13 +255,13 @@ function PkSection({
       {error ? (
         <button
           onClick={onRetry}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-surface-raised p-4 text-xs font-semibold text-ink-muted"
+          className="stage-card flex w-full items-center justify-center gap-2 p-4 text-xs font-semibold text-ink-muted"
         >
           <RotateCcw className="h-3.5 w-3.5" />
           Couldn&apos;t load PK battles — tap to retry
         </button>
       ) : !battles || battles.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-ink-muted">
+        <div className="rounded-[20px] border border-dashed border-white/15 bg-surface-raised/40 p-4 text-center text-xs text-ink-muted">
           No PK battles right now. Start one from inside a live room.
         </div>
       ) : (
@@ -273,21 +274,25 @@ function PkSection({
               <Link
                 key={battle.id}
                 href={`/home/room/${battle.room_a_id}`}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-surface-raised p-3 shadow-sm transition-colors hover:border-accent/40"
+                className="stage-card flex items-center gap-3 p-3 transition-colors hover:border-accent-hot/40"
               >
                 <div className="flex -space-x-3">
-                  <Avatar
-                    name={roomA?.host?.name ?? "Host A"}
-                    src={roomA?.host?.avatar ?? undefined}
-                    size="sm"
-                    className="ring-2 ring-surface-raised"
-                  />
-                  <Avatar
-                    name={roomB?.host?.name ?? "Host B"}
-                    src={roomB?.host?.avatar ?? undefined}
-                    size="sm"
-                    className="ring-2 ring-surface-raised"
-                  />
+                  <span className="avatar-ring">
+                    <Avatar
+                      name={roomA?.host?.name ?? "Host A"}
+                      src={roomA?.host?.avatar ?? undefined}
+                      size="sm"
+                      className="ring-2 ring-surface"
+                    />
+                  </span>
+                  <span className="avatar-ring-static">
+                    <Avatar
+                      name={roomB?.host?.name ?? "Host B"}
+                      src={roomB?.host?.avatar ?? undefined}
+                      size="sm"
+                      className="ring-2 ring-surface"
+                    />
+                  </span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-ink">
@@ -322,32 +327,58 @@ function PkSection({
   );
 }
 
+// Each tile gets its own gradient accent so the grid reads as colorful
+// "activity chips" (matching the reference mockup's Discover tiles)
+// instead of a flat repeated card.
+const TILE_GRADIENTS = [
+  "from-fuchsia-500 to-violet-600",
+  "from-violet-500 to-indigo-600",
+  "from-cyan-500 to-blue-600",
+  "from-amber-400 to-rose-500",
+];
+
 function GamesSection() {
   return (
     <section>
       <SectionHeader icon={Gamepad2} title="Games" />
       <div className="grid grid-cols-2 gap-2.5">
-        {GAMES.map((game) =>
+        {GAMES.map((game, index) =>
           game.available ? (
             <Link
               key={game.id}
               href={`/home/party/games/${game.id}`}
-              className="flex flex-col justify-between rounded-2xl border border-border bg-surface-raised p-3.5 text-left shadow-sm transition-colors hover:border-accent/40"
+              className="stage-card group flex flex-col justify-between p-3.5 text-left transition hover:border-accent-hot/40"
             >
-              <p className="text-sm font-bold text-ink">{game.name}</p>
+              <span
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white",
+                  TILE_GRADIENTS[index % TILE_GRADIENTS.length],
+                )}
+              >
+                <Gamepad2 className="h-4.5 w-4.5" />
+              </span>
+              <p className="mt-2.5 text-sm font-bold text-ink">{game.name}</p>
               <p className="mt-1 text-[11px] leading-4 text-ink-muted">
                 {game.description}
               </p>
-              <span className="mt-2.5 inline-flex w-fit items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent">
+              <span className="mt-2.5 inline-flex w-fit items-center gap-1 rounded-full bg-accent-hot/15 px-2 py-0.5 text-[10px] font-bold text-accent-hot">
                 Play now
               </span>
             </Link>
           ) : (
             <div
               key={game.id}
-              className="flex flex-col justify-between rounded-2xl border border-dashed border-border bg-surface-raised/60 p-3.5 text-left opacity-70"
+              className="flex flex-col justify-between rounded-[26px] border border-dashed border-white/12 bg-surface-raised/50 p-3.5 text-left opacity-70"
             >
-              <p className="text-sm font-bold text-ink">{game.name}</p>
+              <span
+                className={cn(
+                  "flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white opacity-60",
+                  TILE_GRADIENTS[index % TILE_GRADIENTS.length],
+                )}
+              >
+                <Gamepad2 className="h-4.5 w-4.5" />
+              </span>
+              <p className="mt-2.5 text-sm font-bold text-ink">{game.name}</p>
               <p className="mt-1 text-[11px] leading-4 text-ink-muted">
                 {game.description}
               </p>
@@ -366,7 +397,7 @@ function EventsSection() {
   return (
     <section>
       <SectionHeader icon={CalendarClock} title="Events" />
-      <div className="flex items-center gap-3 rounded-2xl border border-dashed border-border p-4 text-left">
+      <div className="flex items-center gap-3 rounded-[20px] border border-dashed border-white/15 bg-surface-raised/40 p-4 text-left">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-surface-raised text-ink-muted">
           <Users className="h-5 w-5" />
         </div>

@@ -66,59 +66,65 @@
   color-scheme: dark;
 
   /* ---- base shadcn-style tokens (kept for existing components) ---- */
-  --background: oklch(0.105 0 0);
+  --background: oklch(0.11 0.015 290);
   --foreground: oklch(0.96 0 0);
-  --card: oklch(0.16 0.01 320);
+  --card: oklch(0.17 0.02 280);
   --card-foreground: oklch(0.96 0 0);
-  --popover: oklch(0.14 0.01 320);
+  --popover: oklch(0.15 0.02 280);
   --popover-foreground: oklch(0.96 0 0);
-  --primary: oklch(0.68 0.24 350);
+  --primary: oklch(0.62 0.24 290);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.22 0.02 300);
+  --secondary: oklch(0.24 0.03 280);
   --secondary-foreground: oklch(0.96 0 0);
-  --muted: oklch(0.2 0.01 300);
-  --muted-foreground: oklch(0.68 0.02 300);
-  --accent: oklch(0.22 0.02 300);
+  --muted: oklch(0.21 0.02 280);
+  --muted-foreground: oklch(0.7 0.03 280);
+  --accent: oklch(0.24 0.03 280);
   --accent-foreground: oklch(0.96 0 0);
   --destructive: oklch(0.65 0.22 25);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.68 0.24 350);
+  --ring: oklch(0.62 0.24 290);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.9rem;
-  --sidebar: oklch(0.145 0 0);
+  --sidebar: oklch(0.15 0.02 285);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.68 0.24 350);
+  --sidebar-primary: oklch(0.62 0.24 290);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent: oklch(0.27 0.03 280);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* ---- "Neon Stage" custom tokens used across every redesigned page ---- */
-  --surface: 260 24% 6%;
-  --surface-raised: 262 22% 11%;
-  --surface-overlay: 262 26% 15%;
-  --ink: 0 0% 98%;
-  --ink-muted: 260 12% 70%;
-  --ink-faint: 260 10% 52%;
+  /* ---- "Cosmic Violet" custom tokens used across every redesigned page ----
+     Deep indigo-violet stage backdrop matching the reference mockup,
+     electric violet as the primary brand color, cyan for "live"/tech
+     accents, magenta kept as a secondary hot accent for badges & hearts,
+     gold for currency. Token names are unchanged so every existing
+     component (bg-surface, text-accent-hot, glass-panel, grad-brand, …)
+     re-themes automatically. */
+  --surface: 252 42% 7%;
+  --surface-raised: 254 38% 12%;
+  --surface-overlay: 255 40% 17%;
+  --ink: 0 0% 99%;
+  --ink-muted: 250 18% 74%;
+  --ink-faint: 250 14% 55%;
 
-  --accent-hot: 330 92% 60%;
-  --accent-hot-2: 350 90% 62%;
-  --accent-violet: 265 85% 65%;
-  --accent-cyan: 189 94% 55%;
+  --accent-hot: 273 88% 66%;
+  --accent-hot-2: 322 85% 64%;
+  --accent-violet: 258 90% 68%;
+  --accent-cyan: 192 92% 58%;
   --accent-gold: 42 96% 58%;
   --accent-green: 152 60% 50%;
 
-  --grad-start: 330 92% 60%;
-  --grad-mid: 280 80% 58%;
-  --grad-end: 245 85% 58%;
+  --grad-start: 273 90% 62%;
+  --grad-mid: 258 85% 55%;
+  --grad-end: 232 80% 50%;
 
-  --shadow-color: 320 90% 45%;
+  --shadow-color: 265 85% 45%;
 
   --live-red: 356 85% 58%;
 }
@@ -223,6 +229,47 @@
     position: relative;
     isolation: isolate;
   }
+  /* Rounded, bordered "stage" card used for chat panels, discover tiles,
+     leaderboard rows — mirrors the reference mockup's frosted violet cards. */
+  .stage-card {
+    background: linear-gradient(160deg, hsl(var(--surface-raised) / 0.9) 0%, hsl(var(--surface) / 0.95) 100%);
+    border: 1px solid hsl(0 0% 100% / 0.08);
+    border-radius: 1.75rem;
+    box-shadow: 0 20px 45px -24px hsl(var(--shadow-color) / 0.55);
+  }
+
+  /* Glowing gradient ring around avatars, as seen on the profile / chat mockup */
+  .avatar-ring {
+    padding: 2px;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, hsl(var(--accent-hot)), hsl(var(--accent-cyan)));
+  }
+
+  .avatar-ring-static {
+    padding: 2px;
+    border-radius: 9999px;
+    background: hsl(0 0% 100% / 0.14);
+  }
+
+  /* Pill used for rank numbers / small counters on leaderboard rows */
+  .rank-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: hsl(var(--surface-overlay));
+    color: hsl(var(--ink-muted));
+  }
+
+  .rank-pill-top {
+    background: linear-gradient(135deg, hsl(var(--accent-gold)), hsl(38 96% 50%));
+    color: hsl(30 60% 12%);
+  }
+
   .noise-overlay::before {
     content: "";
     position: absolute;

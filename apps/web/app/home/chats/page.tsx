@@ -88,68 +88,83 @@ export default function ChatsPage() {
     : conversations;
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-2xl px-5 pb-10 pt-8 text-foreground sm:px-8">
-      <header className="mb-8">
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Inbox</p>
+    <main className="relative mx-auto min-h-dvh w-full max-w-2xl bg-surface pb-10">
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-0 h-72 bg-brand-radial" />
+
+      <header className="glass-panel sticky top-0 z-30 rounded-none border-x-0 border-t-0 px-5 pb-3 pt-5 sm:px-8">
+        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-accent-hot">
+          <MessagesSquare className="h-3 w-3" />
+          Inbox
+        </p>
         <div className="flex items-end justify-between gap-4">
-          <h1 className="text-3xl font-semibold tracking-tight">Messages</h1>
-          <span className="pb-1 text-sm text-muted-foreground">{conversations.length} conversations</span>
+          <h1 className="mt-0.5 font-display text-[1.8rem] font-black tracking-[-0.04em] text-ink">
+            Chat
+          </h1>
+          <span className="pb-1 text-sm text-ink-muted">{conversations.length} conversations</span>
+        </div>
+
+        <div className="stage-card mt-4 flex items-center gap-3 px-4 py-3">
+          <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-accent-hot" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search conversations"
+            placeholder="Search conversations"
+            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
+          />
         </div>
       </header>
 
-      <div className="mb-8 flex items-center gap-3 rounded-2xl border border-border/70 bg-card/70 px-4 py-3 shadow-sm">
-        <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search conversations"
-          placeholder="Search conversations"
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-        />
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <MessagesSquare className="h-8 w-8 text-muted-foreground/40" />
-          <p className="mt-3 text-sm font-medium text-muted-foreground">
-            {query ? "No conversations match your search" : "No conversations yet"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground/60">
-            Message a friend from their profile to start chatting.
-          </p>
-        </div>
-      ) : (
-        <div className="divide-y divide-border/60">
-          {filtered.map((chat) => {
-            const name = chat.user?.name || "User";
-            return (
-              <Link
-                key={chat.otherId}
-                href={`/home/chats/${chat.otherId}`}
-                className="group flex items-center gap-3 py-4 transition-opacity hover:opacity-75"
-              >
-                <Avatar name={name} src={chat.user?.avatar ?? undefined} size="md" />
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center justify-between gap-3">
-                    <p className="truncate text-sm font-medium">{name}</p>
-                    <span className="shrink-0 text-xs text-muted-foreground">{timeLabel(chat.lastAt)}</span>
-                  </div>
-                  <p className="truncate text-sm text-muted-foreground">{chat.lastMessage}</p>
-                </div>
-                {chat.unread > 0 && (
-                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground px-1.5 text-[10px] font-semibold text-background">
-                    {chat.unread}
+      <section className="relative z-10 px-5 pt-5 sm:px-8">
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-ink-muted">
+            <Loader2 className="h-5 w-5 animate-spin text-accent-hot" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-[28px] bg-surface-raised text-accent-hot">
+              <span className="absolute inset-0 rounded-[28px] bg-accent-hot/10 animate-glow-pulse" />
+              <MessagesSquare className="relative h-8 w-8" />
+            </div>
+            <p className="mt-5 text-lg font-bold text-ink">
+              {query ? "No conversations match your search" : "No conversations yet"}
+            </p>
+            <p className="mt-1 max-w-xs text-sm leading-6 text-ink-muted">
+              Message a friend from their profile to start chatting.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map((chat) => {
+              const name = chat.user?.name || "User";
+              const hasUnread = chat.unread > 0;
+              return (
+                <Link
+                  key={chat.otherId}
+                  href={`/home/chats/${chat.otherId}`}
+                  className="stage-card flex items-center gap-3 p-3 transition hover:border-accent-hot/40 hover:glow-hot"
+                >
+                  <span className={hasUnread ? "avatar-ring shrink-0" : "avatar-ring-static shrink-0"}>
+                    <Avatar name={name} src={chat.user?.avatar ?? undefined} size="md" className="ring-2 ring-surface" />
                   </span>
-                )}
-              </Link>
-            );
-          })}
-        </div>
-      )}
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 flex items-center justify-between gap-3">
+                      <p className="truncate text-sm font-bold text-ink">{name}</p>
+                      <span className="shrink-0 text-xs text-ink-faint">{timeLabel(chat.lastAt)}</span>
+                    </div>
+                    <p className="truncate text-xs text-ink-muted">{chat.lastMessage}</p>
+                  </div>
+                  {hasUnread && (
+                    <span className="grad-brand flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white">
+                      {chat.unread}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
