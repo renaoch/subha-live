@@ -497,6 +497,14 @@ useEffect(() => {
 
             hostAvatar={room.host?.avatar}
 
+            speakers={dockSpeakers}
+
+            seatCount={seatCount}
+
+            hostSpeaking={!!room.host_id && (speakingSpeakerIds?.has(room.host_id) ?? false)}
+
+            onOpenSeats={() => setSpeakerPanelOpen(true)}
+
           />
         )}
 
@@ -620,11 +628,14 @@ useEffect(() => {
 
 
 
-        {/* Always-visible speaker dock: shows connected speakers no matter
+        {/* Always-visible speaker dock: shows connected speakers over the
+            camera feed for video rooms. Audio rooms already render every
+            seat inline as the stage background (see LiveVideo), so the
+            dock would just duplicate it there. */}
 
-            whether the audio-stage sheet is open or closed. */}
-
-        <SpeakerDock speakers={dockSpeakers} topOffset={100} />
+        {room.media_type !== "audio" && (
+          <SpeakerDock speakers={dockSpeakers} topOffset={100} />
+        )}
 
 
 
