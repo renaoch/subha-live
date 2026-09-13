@@ -57,6 +57,8 @@ import { AudioStageModal } from '@/components/AudioStageModal';
 
 import { SpeakerDock, type DockSpeaker } from '@/components/SpeakerDock';
 
+import { ViewerListSheet } from '@/components/ViewerListSheet';
+
 
 
 const filterPresets = {
@@ -229,6 +231,8 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
 
   const [speakerPanelOpen, setSpeakerPanelOpen] = useState(false);
 
+  const [viewersOpen, setViewersOpen] = useState(false);
+
   const [guestMicEnabled, setGuestMicEnabled] = useState(true);
 
   const [actionLoading, setActionLoading] = useState(false);
@@ -379,6 +383,17 @@ useEffect(() => {
   }, [mediaState]);
 
   const seatCount = room?.max_guest_slots ?? 3;
+
+  // Real connected viewer ids from the room's live media state (SFU
+  // presence), excluding the host and any on-stage speakers so this list
+  // is purely "people watching" as advertised — no invented names.
+  const viewerIds = useMemo(() => {
+    if (!mediaState?.viewers) return [];
+    const speakerIds = new Set(activeSpeakers.map((s) => s.userId));
+    return Object.keys(mediaState.viewers).filter(
+      (id) => id !== room?.host_id && !speakerIds.has(id),
+    );
+  }, [mediaState, activeSpeakers, room?.host_id]);
 
   const occupiedSeats = Math.min(activeSpeakers.length, seatCount);
 
@@ -557,6 +572,8 @@ useEffect(() => {
           claimingTask={claiming}
 
           taskStats={stats}
+
+          onOpenViewers={() => setViewersOpen(true)}
 
         />
 
@@ -859,6 +876,12 @@ useEffect(() => {
         )}
 
 
+
+        {/* Viewer list */}
+
+        {viewersOpen && (
+          <ViewerListSheet viewerIds={viewerIds} onClose={() => setViewersOpen(false)} />
+        )}
 
         {/* Audio stage modal */}
 

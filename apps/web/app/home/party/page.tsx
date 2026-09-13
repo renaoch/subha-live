@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Sparkles,
   Swords,
@@ -11,12 +13,16 @@ import {
   Users,
   Loader2,
   RotateCcw,
+  PartyPopper,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
-import { useRooms } from "@/hooks/queries/use-rooms";
+import { useRooms, useCreateRoom } from "@/hooks/queries/use-rooms";
 import { useActivePkBattles } from "@/hooks/queries/use-pk";
 import type { RoomRecord } from "@/lib/api/rooms";
 import { cn } from "@/lib/utils";
+
+/** Audio party rooms created from "Go Party" always open with 10 seats. */
+const PARTY_SEAT_COUNT = 10;
 
 // Party = "what interactive activity can I participate in?" — a discovery
 // surface for PK battles, party games, and events. It reuses the same room
@@ -53,6 +59,10 @@ const GAMES = [
 ] as const;
 
 export default function PartyPage() {
+  const router = useRouter();
+  const createRoomMutation = useCreateRoom();
+  const [launching, setLaunching] = useState(false);
+
   const {
     data: rooms,
     isLoading: roomsLoading,
@@ -88,6 +98,25 @@ export default function PartyPage() {
 
   const loading = roomsLoading || battlesLoading;
 
+  async function goParty() {
+    setLaunching(true);
+    try {
+      const room = await createRoomMutation.mutateAsync({
+        title: "Party time 🎉",
+        livekit_room_name: `subha-party-${crypto.randomUUID()}`,
+        category: "explore",
+        max_guest_slots: PARTY_SEAT_COUNT,
+        media_type: "audio",
+      });
+      router.push(`/home/room/${room.id}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Couldn't start the party",
+      );
+      setLaunching(false);
+    }
+  }
+
   return (
     <main className="mx-auto min-h-dvh w-full max-w-[680px] bg-surface pb-10">
       <header className="glass-panel sticky top-0 z-30 rounded-none border-x-0 border-t-0 px-4 pb-3 pt-5">
@@ -104,6 +133,33 @@ export default function PartyPage() {
       </header>
 
       <section className="px-4 pt-5">
+        {/* Go Party — one tap creates a 10-seat audio party room and jumps
+            straight into it. This is the only place audio rooms are
+            created now; Home only creates video rooms. */}
+        <button
+          type="button"
+          onClick={goParty}
+          disabled={launching}
+          className="grad-brand animate-gradient-shift glow-hot-lg relative mb-5 flex w-full items-center gap-4 overflow-hidden rounded-[28px] px-5 py-5 text-left text-white transition active:scale-[0.98] disabled:opacity-70"
+        >
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
+            {launching ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <PartyPopper className="h-6 w-6" />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-lg font-black tracking-tight">Go Party</span>
+            <span className="block text-xs text-white/80">
+              {launching
+                ? "Setting up your party…"
+                : `Start an audio room with ${PARTY_SEAT_COUNT} open seats`}
+            </span>
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0 text-white/70" />
+        </button>
+
         {loading ? (
           <div className="flex min-h-[30vh] items-center justify-center">
             <div className="flex items-center gap-2 text-sm text-ink-muted">

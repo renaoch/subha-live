@@ -43,6 +43,8 @@ interface RoomHeaderProps {
   claimingTask?: boolean;
   /** Host-only rollup stats for the active task. */
   taskStats?: HostTaskStats | null;
+  /** Tapping the viewer count opens the live viewer list. Omit to keep it static. */
+  onOpenViewers?: () => void;
 }
 
 type Tag = {
@@ -182,6 +184,7 @@ export function RoomHeader({
   onClaimTask,
   claimingTask,
   taskStats,
+  onOpenViewers,
 }: RoomHeaderProps) {
   const hostName = host?.name || "Host";
   const avatarUrl = host?.avatar || undefined;
@@ -243,14 +246,18 @@ export function RoomHeader({
 
         {/* Right group: LIVE pill, viewer count, close */}
         <div className="flex shrink-0 items-center gap-2">
-          <div className="flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-sm">
-          
-
+          <button
+            type="button"
+            onClick={onOpenViewers}
+            disabled={!onOpenViewers}
+            aria-label={`${formatCount(viewerCount)} viewers — view list`}
+            className="flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition enabled:hover:bg-black/60 enabled:active:scale-95"
+          >
             <span className="flex items-center gap-1 text-xs font-semibold leading-none text-white/90">
               <Users className="h-3.5 w-3.5" strokeWidth={2} />
               {formatCount(viewerCount)}
             </span>
-          </div>
+          </button>
 
           <button
             type="button"

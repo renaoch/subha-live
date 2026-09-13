@@ -539,7 +539,7 @@ function CreateRoomModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("explore");
-  const [mediaType, setMediaType] = useState<RoomMediaType>("video");
+  const mediaType: RoomMediaType = "video";
   const [creating, setCreating] = useState(false);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -576,9 +576,7 @@ function CreateRoomModal({
           <div className="relative">
             <p className="text-lg font-black text-white">Start a live room</p>
             <p className="mt-0.5 text-xs text-white/75">
-              {mediaType === "video"
-                ? "Camera and microphone connect when you press Start Live."
-                : "Only your microphone connects — no camera is ever requested."}
+              Camera and microphone connect when you press Start Live.
             </p>
           </div>
           <button
@@ -591,49 +589,15 @@ function CreateRoomModal({
         </div>
 
         <form onSubmit={submit} className="space-y-4 p-5">
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => setMediaType("video")}
-              className={cn(
-                "flex flex-col items-start gap-1 rounded-2xl border px-4 py-3 text-left transition-all",
-                mediaType === "video"
-                  ? "border-accent-hot/50 bg-accent-hot/10 glow-hot"
-                  : "border-white/10 bg-surface-raised",
-              )}
-            >
-              <Camera
-                className={cn(
-                  "h-4 w-4",
-                  mediaType === "video" ? "text-accent-hot" : "text-ink-muted",
-                )}
-              />
-              <span className="text-sm font-bold text-ink">Video room</span>
+          <div className="flex items-center gap-2 rounded-2xl border border-accent-hot/40 bg-accent-hot/10 px-4 py-3">
+            <Camera className="h-4 w-4 text-accent-hot" />
+            <div>
+              <span className="block text-sm font-bold text-ink">Video room</span>
               <span className="text-[11px] text-ink-muted">
-                Camera + mic, like going live
+                Camera + mic, like going live. Want an audio-only party
+                instead? Head to the Party tab.
               </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMediaType("audio")}
-              className={cn(
-                "flex flex-col items-start gap-1 rounded-2xl border px-4 py-3 text-left transition-all",
-                mediaType === "audio"
-                  ? "border-accent-violet/50 bg-accent-violet/10 shadow-[0_8px_30px_-8px_hsl(265_85%_45%/0.6)]"
-                  : "border-white/10 bg-surface-raised",
-              )}
-            >
-              <Radio
-                className={cn(
-                  "h-4 w-4",
-                  mediaType === "audio" ? "text-accent-violet" : "text-ink-muted",
-                )}
-              />
-              <span className="text-sm font-bold text-ink">Audio room</span>
-              <span className="text-[11px] text-ink-muted">
-                Mic only, no camera at all
-              </span>
-            </button>
+            </div>
           </div>
 
           <label className="block">
@@ -688,10 +652,8 @@ function CreateRoomModal({
           >
             {creating ? (
               <Loader2 className="h-4 w-4 animate-spin" />
-            ) : mediaType === "video" ? (
-              <Camera className="h-4 w-4" />
             ) : (
-              <Radio className="h-4 w-4" />
+              <Camera className="h-4 w-4" />
             )}
             {creating ? "Creating room…" : "Create room"}
           </motion.button>

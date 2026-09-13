@@ -46,9 +46,9 @@ export function PkDualVideo({
   }, [opponentStream]);
 
   return (
-    <div className="absolute inset-0 z-10 grid grid-rows-2">
+    <div className="absolute inset-0 z-10 grid grid-cols-2">
       {/* Primary (self room host, or self preview) */}
-      <div className="relative h-full overflow-hidden border-b border-black/40">
+      <div className="relative h-full overflow-hidden border-r border-black/40">
         <video
           ref={primaryRef}
           autoPlay
