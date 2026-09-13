@@ -54,7 +54,7 @@
 }
 
 /*
- * Subha Live â€” "Neon Stage" theme.
+ * Subha Live — "Neon Stage" theme.
  * A Bigo-Live-inspired palette: near-black stage backdrop, hot pink /
  * magenta / violet gradients for energy, a warm gold for currency &
  * status, and an electric cyan for "live" accents. Every custom token here
@@ -159,7 +159,7 @@
 }
 
 @layer utilities {
-  /* Signature brand gradient â€” buttons, active tabs, hero backdrops */
+  /* Signature brand gradient — buttons, active tabs, hero backdrops */
   .grad-brand {
     background: linear-gradient(
       135deg,
@@ -191,6 +191,15 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+
+  /* Shared page backdrop for auth / legal / agency screens — deep stage
+     black with a soft hot-pink → violet bloom top-center. */
+  .bg-Subha-gradient {
+    background:
+      radial-gradient(120% 60% at 50% -10%, hsl(var(--accent-hot) / 0.18), transparent 60%),
+      radial-gradient(90% 50% at 100% 100%, hsl(var(--accent-violet) / 0.14), transparent 60%),
+      hsl(var(--surface));
   }
 
   .glow-hot {
