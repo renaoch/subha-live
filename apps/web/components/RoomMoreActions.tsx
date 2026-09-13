@@ -177,7 +177,7 @@ export function RoomMoreActions({
               >
                 {a.icon}
                 {a.comingSoon && (
-                  <span className="absolute -right-1 -top-1 rounded-full bg-[#FF3B5C] px-1.5 py-[1px] text-[8px] font-bold leading-tight text-white">
+                  <span className="absolute -right-1 -top-1 rounded-full bg-[hsl(var(--accent-hot))] px-1.5 py-[1px] text-[8px] font-bold leading-tight text-white">
                     soon
                   </span>
                 )}

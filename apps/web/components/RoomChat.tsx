@@ -78,7 +78,7 @@ function RoundButton({ label, onClick, active, tone = "neutral", children }: Rou
       className={cn(
         "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-150 active:scale-90",
         tone === "neutral" && "bg-white/[0.08] text-white/85 hover:bg-white/15 hover:text-white",
-        tone === "rose" && "bg-[#FF3B5C] text-white shadow-[0_2px_12px_rgba(255,59,92,0.45)] hover:brightness-110",
+        tone === "rose" && "bg-accent-hot text-white shadow-[0_2px_12px_hsl(var(--accent-hot)/0.5)] hover:brightness-110",
         tone === "gold" && "bg-[#F5B93F]/15 text-[#F5B93F] ring-1 ring-inset ring-[#F5B93F]/30 hover:bg-[#F5B93F]/25",
         tone === "violet" && "bg-[#A86CFF]/15 text-[#C9A3FF] ring-1 ring-inset ring-[#A86CFF]/30 hover:bg-[#A86CFF]/25",
         active && "ring-2 ring-white/80",
@@ -155,7 +155,7 @@ export function RoomChat({
         ) : (
           messages.map((m) => {
             const mine = !!selfUserId && m.userId === selfUserId;
-            const nameColor = mine ? "#FF3B5C" : colorFor(m.username);
+            const nameColor = mine ? "hsl(var(--accent-cyan))" : colorFor(m.username);
             const avatarEl = m.avatar ? (
               <img
                 src={m.avatar}
@@ -217,7 +217,7 @@ export function RoomChat({
 
         <form
           onSubmit={submit}
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-full transition-shadow duration-200 focus-within:shadow-[0_0_0_3px_rgba(255,59,92,0.18)]"
+          className="flex min-w-0 flex-1 items-center gap-1 rounded-full transition-shadow duration-200 focus-within:shadow-[0_0_0_3px_hsl(var(--accent-hot)/0.22)]"
         >
           <input
             value={draft}
@@ -232,7 +232,7 @@ export function RoomChat({
               type="submit"
               disabled={!connected || !draft.trim()}
               aria-label="Send message"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FF3B5C] text-white transition-all duration-150 hover:brightness-110 active:scale-90 disabled:opacity-40"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-hot text-white transition-all duration-150 hover:brightness-110 active:scale-90 disabled:opacity-40"
             >
               <SendHorizonal className="h-4 w-4" strokeWidth={2} />
             </button>

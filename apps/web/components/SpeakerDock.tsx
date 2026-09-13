@@ -42,7 +42,7 @@ export function SpeakerDock({ speakers, topOffset = 96 }: SpeakerDockProps) {
             }`}
             style={{
               background:
-                'conic-gradient(from 0deg, #FF3B5C, #FF8A5B, #FFD36E, #FF3B5C)',
+                'conic-gradient(from 0deg, hsl(var(--accent-hot)), #FF8A5B, #FFD36E, hsl(var(--accent-hot)))',
               padding: 2,
               animation: speaker.speaking ? 'speakerSpin 1.6s linear infinite' : undefined,
             }}
@@ -52,7 +52,7 @@ export function SpeakerDock({ speakers, topOffset = 96 }: SpeakerDockProps) {
 
           {/* Soft pulse glow */}
           {speaker.speaking && (
-            <span className="absolute inset-0 -m-1 animate-ping rounded-full bg-[#FF3B5C]/25" />
+            <span className="absolute inset-0 -m-1 animate-ping rounded-full bg-[hsl(var(--accent-hot))]/25" />
           )}
 
           <Avatar

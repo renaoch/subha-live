@@ -150,10 +150,10 @@ export function RoomJoinFeed({ events, lifetimeMs = 5000, className }: RoomJoinF
         }
         @keyframes join-settle {
           0% {
-            box-shadow: 0 0 0 1px rgba(255, 59, 92, 0.55), 0 0 18px rgba(255, 59, 92, 0.35);
+            box-shadow: 0 0 0 1px rgba(179, 102, 240, 0.55), 0 0 18px rgba(179, 102, 240, 0.35);
           }
           100% {
-            box-shadow: 0 0 0 0 rgba(255, 59, 92, 0);
+            box-shadow: 0 0 0 0 rgba(179, 102, 240, 0);
           }
         }
         .join-avatar {
@@ -161,7 +161,7 @@ export function RoomJoinFeed({ events, lifetimeMs = 5000, className }: RoomJoinF
         }
         .join-ring {
           animation: join-ring-pulse 1.1s cubic-bezier(0.2, 0.6, 0.4, 1) 1;
-          box-shadow: 0 0 0 2px rgba(255, 178, 196, 0.9);
+          box-shadow: 0 0 0 2px rgba(200, 150, 250, 0.9);
         }
         @keyframes join-ring-pulse {
           0% {

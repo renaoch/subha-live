@@ -52,7 +52,7 @@ export function AudioStageModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Ambient top glow */}
-        <div className="pointer-events-none absolute -top-24 left-1/2 h-40 w-[280px] -translate-x-1/2 rounded-full bg-[#FF3B5C]/[0.10] blur-3xl" />
+        <div className="pointer-events-none absolute -top-24 left-1/2 h-40 w-[280px] -translate-x-1/2 rounded-full bg-[hsl(var(--accent-hot))]/[0.10] blur-3xl" />
 
         <div className="flex justify-center pt-3">
           <div className="h-1 w-9 rounded-full bg-white/15" />
@@ -71,8 +71,8 @@ export function AudioStageModal({
           {/* Header */}
           <div className="flex items-center justify-between px-5 pb-4 pt-4">
             <div className="flex items-center gap-1.5">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FF3B5C]/15">
-                <Mic className="h-2.5 w-2.5 text-[#FF3B5C]" strokeWidth={2.4} />
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[hsl(var(--accent-hot))]/15">
+                <Mic className="h-2.5 w-2.5 text-[hsl(var(--accent-hot))]" strokeWidth={2.4} />
               </span>
               <p className="text-[13px] font-bold tracking-tight text-white">Audio stage</p>
             </div>
@@ -98,12 +98,12 @@ export function AudioStageModal({
                     {speaker ? (
                       <>
                         {speaking && (
-                          <span className="absolute inset-0 -m-1 animate-ping rounded-full bg-[#FF3B5C]/20" />
+                          <span className="absolute inset-0 -m-1 animate-ping rounded-full bg-[hsl(var(--accent-hot))]/20" />
                         )}
                         <div
                           className={`absolute inset-0 rounded-full transition-all duration-200 ${
                             speaking
-                              ? 'bg-gradient-to-tr from-[#FF3B5C] via-[#FF8A5B] to-[#FFD36E] opacity-100'
+                              ? 'bg-gradient-to-tr from-[hsl(var(--accent-hot))] via-[#FF8A5B] to-[#FFD36E] opacity-100'
                               : 'opacity-0'
                           }`}
                           style={{ padding: 2 }}
@@ -160,7 +160,7 @@ export function AudioStageModal({
                       className="flex items-center gap-2 rounded-2xl px-2 py-2 transition hover:bg-white/[0.04]"
                     >
                       <div className="relative">
-                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-[#0c0c0f] bg-[#FF3B5C]" />
+                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-[#0c0c0f] bg-[hsl(var(--accent-hot))]" />
                         <Avatar
                           name={request.user?.name || 'Viewer'}
                           src={request.user?.avatar ?? undefined}
@@ -206,7 +206,7 @@ export function AudioStageModal({
                   type="button"
                   onClick={onRequest}
                   disabled={requestLoading}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#FF3B5C] to-[#FF6B4A] py-3.5 text-[13px] font-bold text-white shadow-[0_4px_24px_rgba(255,59,92,0.35)] transition active:scale-[0.98] disabled:opacity-40"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[hsl(var(--accent-hot))] to-[#FF6B4A] py-3.5 text-[13px] font-bold text-white shadow-[0_4px_24px_hsl(var(--shadow-color)/0.5)] transition active:scale-[0.98] disabled:opacity-40"
                 >
                   <Mic className="h-3.5 w-3.5" strokeWidth={2.4} />
                   Request to speak

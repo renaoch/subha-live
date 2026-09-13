@@ -59,7 +59,7 @@ export function RoomTaskBar({ task, onClaim, claiming }: RoomTaskBarProps) {
             "pointer-events-none absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out",
             completed
               ? "bg-emerald-400/25"
-              : "bg-gradient-to-r from-[#FF3B5C]/35 to-[#FF3B5C]/10",
+              : "bg-gradient-to-r from-accent-hot/35 to-accent-hot/10",
           )}
           style={{ width: `${Math.max(task.progress, 4)}%` }}
         />

@@ -163,7 +163,7 @@ function FollowButton({ hostId }: { hostId: string }) {
         "shrink-0 rounded-full px-3 py-1 text-xs font-bold leading-none transition active:scale-95 disabled:opacity-60",
         following
           ? "bg-white/15 text-white/80 backdrop-blur-sm hover:bg-white/20"
-          : "bg-[#FF3B5C] text-white hover:bg-[#FF3B5C]/90",
+          : "bg-accent-hot text-white hover:brightness-110",
       )}
     >
       {following ? "Following" : "Follow"}
