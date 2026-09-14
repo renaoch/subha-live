@@ -847,7 +847,7 @@ export function useWebRTC(
   // ---------------------------------------------------------------------------
 
   const connectViewer = useCallback(
-    async (currentRoom: RoomRecord) => {
+    async (currentRoom: RoomRecord, isRetryAfterStaleHost = false) => {
       if (viewerConnectInFlightRef.current) {
         return;
       }
@@ -1065,12 +1065,44 @@ export function useWebRTC(
 
         closeViewerPeer();
 
+        /*
+         * The server has already self-healed its state for these two
+         * codes (cleared the stale host/speaker Redis entry that caused
+         * the 410), so the very next attempt will see corrected data
+         * instead of hitting the identical dead session again. Retry
+         * automatically, once, instead of leaving the viewer stuck on a
+         * raw provider error they have no way to act on.
+         */
+        const code =
+          error instanceof ApiError ? error.code : undefined;
+
+        const isRecoverableStaleSession =
+          code === "MEDIA_HOST_SESSION_STALE" ||
+          code === "MEDIA_SPEAKER_SESSION_STALE";
+
         if (mountedRef.current) {
           setMediaError(
-            error instanceof Error
-              ? error.message
-              : "Viewer connection failed.",
+            isRecoverableStaleSession
+              ? "Reconnecting to the live stream…"
+              : error instanceof Error
+                ? error.message
+                : "Viewer connection failed.",
           );
+        }
+
+        if (isRecoverableStaleSession && !isRetryAfterStaleHost) {
+          viewerConnectInFlightRef.current = false;
+
+          window.setTimeout(() => {
+            if (
+              mountedRef.current &&
+              lifecycle === lifecycleGenerationRef.current
+            ) {
+              connectViewer(currentRoom, true).catch(() => {});
+            }
+          }, 1200);
+
+          return;
         }
 
         throw error;

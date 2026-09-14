@@ -380,14 +380,17 @@ export const roomMediaService = {
   const provider = await mediaService.getProvider();
 
   /*
-   * Unlike createViewerSession(), this endpoint can't silently swap in a
-   * fresh Cloudflare session on a 410 - the browser's RTCPeerConnection is
-   * already bound to viewer.sessionId, so a session created here would be
-   * orphaned from the client's actual peer connection. Instead, surface a
-   * distinct, actionable error code so the client knows its whole viewer
-   * session is dead and must redo the full connectViewer() handshake
-   * (which does create a fresh session) rather than retrying this call
-   * against the same stale sessionId forever.
+   * The renegotiate call below (answerSdp branch) operates directly on
+   * the viewer's own session with no remote-track reference, so a 410
+   * there really does mean the viewer's session is dead. Unlike
+   * createViewerSession(), we can't silently swap in a fresh Cloudflare
+   * session here - the browser's RTCPeerConnection is already bound to
+   * viewer.sessionId, so a session created here would be orphaned from
+   * the client's actual peer connection. Surface a distinct, actionable
+   * error code so the client knows its whole viewer session is dead and
+   * must redo the full connectViewer() handshake (which does create a
+   * fresh session) rather than retrying this call against the same
+   * stale sessionId forever.
    */
   try {
     if (answerSdp) {
@@ -426,15 +429,37 @@ export const roomMediaService = {
       tracks,
     });
   } catch (error) {
-    if (isStaleSessionError(error)) {
-      await mediaService.removeViewerSession(roomId, userId).catch(() => {});
-
-      throw new AppError(410, "Viewer session is no longer valid on the media provider", {
-        code: "MEDIA_VIEWER_SESSION_STALE",
-      });
+    if (!isStaleSessionError(error)) {
+      throw error;
     }
 
-    throw error;
+    /*
+     * This call pulls NEW remote tracks (the just-approved speaker(s))
+     * into an already-connected viewer session. Unlike the renegotiate
+     * branch above, a 410 here is far more likely to mean one of THOSE
+     * speaker sessions is dead on Cloudflare (approved/published, then
+     * disconnected, while Redis still says "connected") than that the
+     * viewer's own already-working session suddenly died. Blaming the
+     * viewer here would force a disruptive full reconnect over what is
+     * actually a stale speaker - clean up the implicated speakers
+     * instead and let the client simply skip them.
+     */
+    console.error(
+      "[room-media] subscribeViewerToSpeakers hit a stale speaker session on Cloudflare - self-healing room state",
+      {
+        roomId,
+        viewerUserId: userId,
+        speakerUserIds: speakerEntries.map(([id]) => id),
+      },
+    );
+
+    for (const [speakerUserId] of speakerEntries) {
+      await mediaService.removeSpeakerSession(roomId, speakerUserId).catch(() => {});
+    }
+
+    throw new AppError(503, "One or more speakers disconnected. Please try again.", {
+      code: "MEDIA_SPEAKER_SESSION_STALE",
+    });
   }
 
   if (!negotiation.answerSdp && !negotiation.offerSdp) {
@@ -936,6 +961,13 @@ async subscribeHostToGuests(
     ];
 
     /*
+     * Every speaker userId whose track(s) got added to `tracks` above,
+     * so a subscribe failure can be traced back to the Redis entries
+     * that need to be invalidated - see subscribeViewerTracksRobustly().
+     */
+    const speakerUserIdsInTracks: string[] = [];
+
+    /*
      * Add every active speaker's audio and optional video.
      *
      * Only speakers whose publish has actually completed
@@ -950,11 +982,13 @@ async subscribeHostToGuests(
      * picking them up on the next poll once they're ready.
      */
     for (
-      const speaker of Object.values(
+      const [speakerUserId, speaker] of Object.entries(
         state.speakers,
       )
     ) {
       if (speaker.status !== "connected") continue;
+
+      speakerUserIdsInTracks.push(speakerUserId);
 
       tracks.push({
         sessionId:
@@ -1073,6 +1107,33 @@ async subscribeHostToGuests(
         ReturnType<typeof provider.subscribeTracks>
       >;
 
+      /*
+       * Clears out whichever host/speaker Redis entries are lying about
+       * being "connected" so the NEXT attempt (manual retry or
+       * automatic poll) sees the corrected state instead of failing on
+       * the exact same dead remote session forever. Cleanup only - the
+       * caller is responsible for throwing.
+       */
+      async function cleanupStaleRemoteSessions(): Promise<void> {
+        console.error(
+          "[room-media] viewer subscribe hit a stale remote (host/speaker) session on Cloudflare - self-healing room state",
+          {
+            roomId,
+            userId,
+            hostSessionId: state.host?.sessionId,
+            speakerUserIds: speakerUserIdsInTracks,
+          },
+        );
+
+        await mediaService.removeHostSession(roomId).catch(() => {});
+
+        for (const speakerUserId of speakerUserIdsInTracks) {
+          await mediaService
+            .removeSpeakerSession(roomId, speakerUserId)
+            .catch(() => {});
+        }
+      }
+
       try {
         negotiation =
           await provider.subscribeTracks({
@@ -1082,27 +1143,20 @@ async subscribeHostToGuests(
             tracks,
           });
       } catch (subscribeError) {
-        /*
-         * The session we just reused (hasReusableSession branch) may be
-         * stale on Cloudflare's side even though Redis still marked it
-         * live. Rather than surfacing a raw MEDIA_PROVIDER_ERROR / 410
-         * to the client - which the viewer's WebRTC layer can't recover
-         * from on its own - create a brand-new Cloudflare session and
-         * retry the negotiation exactly once. If this was already a
-         * freshly-created session, don't retry; a 410 there is a real
-         * provider problem, not a staleness problem.
-         */
-        if (
-          !createdNewSession &&
-          isStaleSessionError(subscribeError)
-        ) {
+        if (!isStaleSessionError(subscribeError)) {
+          throw subscribeError;
+        }
+
+        if (!createdNewSession) {
+          /*
+           * The session we reused (hasReusableSession branch) may be
+           * stale on Cloudflare's side even though Redis still marked
+           * it live. Create a brand-new session and retry once before
+           * concluding the problem is actually upstream (host/speaker).
+           */
           console.warn(
             "[room-media] stale viewer session on Cloudflare (410) - creating a fresh session",
-            {
-              roomId,
-              userId,
-              staleSessionId: session.sessionId,
-            },
+            { roomId, userId, staleSessionId: session.sessionId },
           );
 
           const fresh =
@@ -1119,15 +1173,47 @@ async subscribeHostToGuests(
 
           await mediaService.saveViewerSession(session);
 
-          negotiation =
-            await provider.subscribeTracks({
-              sessionId:
-                session.sessionId,
-              offerSdp,
-              tracks,
-            });
+          try {
+            negotiation =
+              await provider.subscribeTracks({
+                sessionId:
+                  session.sessionId,
+                offerSdp,
+                tracks,
+              });
+          } catch (secondError) {
+            if (!isStaleSessionError(secondError)) {
+              throw secondError;
+            }
+
+            /*
+             * A 410 on a session we JUST created cannot mean our own
+             * session is stale - it never had a chance to be. It means
+             * one of the REMOTE tracks we asked to pull (the host's or
+             * a speaker's Cloudflare session) is dead even though Redis
+             * still says "connected".
+             */
+            await cleanupStaleRemoteSessions();
+
+            throw new AppError(
+              503,
+              "The live stream session is no longer available. Please try again in a moment.",
+              { code: "MEDIA_HOST_SESSION_STALE" },
+            );
+          }
         } else {
-          throw subscribeError;
+          /*
+           * Same reasoning as above: this session was created fresh
+           * moments ago in this very request, so a 410 here is about a
+           * remote track (host/speaker), not about us.
+           */
+          await cleanupStaleRemoteSessions();
+
+          throw new AppError(
+            503,
+            "The live stream session is no longer available. Please try again in a moment.",
+            { code: "MEDIA_HOST_SESSION_STALE" },
+          );
         }
       }
 
