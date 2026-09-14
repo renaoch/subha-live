@@ -15,12 +15,39 @@ function createFallbackRoom(roomId: string): RoomRecord {
   };
 }
 
+// True only when the backend/Supabase env vars are missing, i.e. we're
+// running with no real API to talk to at all (local/demo preview). This is
+// the ONLY case where fabricating a fake "live" room is safe — because
+// there is no real room, and therefore no auto-join call, that can be
+// silently pointed at a fake "live" status.
+function isBackendUnconfigured(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes("is not configured in this deployment")
+  );
+}
+
 export function useRoom(id: string) {
   const query = useQuery({
     queryKey: ["rooms", "detail", id],
     queryFn: async () => {
-      const data = await roomsApi.get(id);
-      return isValidRoom(data) ? data : createFallbackRoom(id);
+      try {
+        const data = await roomsApi.get(id);
+        return isValidRoom(data) ? data : createFallbackRoom(id);
+      } catch (error) {
+        // Only fabricate a demo room when there's genuinely no backend to
+        // call. Any real failure (room not found, unauthorized, network
+        // error, server error, transient blip) must propagate as a real
+        // error instead of being disguised as a live room — a viewer page
+        // that silently swaps in `status: "live"` on failure will
+        // auto-join against the real room id anyway, producing confusing
+        // "join failed" errors (or a permanently stuck loading state)
+        // with no sign that the actual problem was this GET failing.
+        if (isBackendUnconfigured(error)) {
+          return createFallbackRoom(id);
+        }
+        throw error;
+      }
     },
     // One shared query per room prevents each component from creating its own poll.
     refetchInterval: 10_000,
@@ -30,8 +57,10 @@ export function useRoom(id: string) {
   });
 
   return {
-    room: query.data ?? (query.isError ? createFallbackRoom(id) : null),
+    room: query.data ?? null,
     isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
     refetch: query.refetch,
   };
 }

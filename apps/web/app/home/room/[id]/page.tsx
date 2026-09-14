@@ -105,7 +105,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
   // ---- Room ----
 
-  const { room, isLoading, refetch } = useRoom(id);
+  const { room, isLoading, isError, refetch } = useRoom(id);
 
   const isHost = !!room && userId === room.host_id;
 
@@ -447,19 +447,38 @@ useEffect(() => {
 
         <div>
 
-          <p className="text-lg font-bold">Room not found</p>
+          <p className="text-lg font-bold">
+            {isError ? "Couldn't load this room" : 'Room not found'}
+          </p>
 
-          <button
+          {isError && (
+            <p className="mt-1 text-sm text-white/60">
+              Check your connection and try again.
+            </p>
+          )}
 
-            onClick={() => router.push('/home')}
+          <div className="mt-3 flex items-center justify-center gap-2">
+            {isError && (
+              <button
+                onClick={() => refetch()}
+                className="rounded-full bg-white/10 px-5 py-2 text-sm font-semibold text-white"
+              >
+                Retry
+              </button>
+            )}
 
-            className="mt-2 rounded-full bg-white px-5 py-2 text-sm font-semibold text-black"
+            <button
 
-          >
+              onClick={() => router.push('/home')}
 
-            Back home
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-black"
 
-          </button>
+            >
+
+              Back home
+
+            </button>
+          </div>
 
         </div>
 
