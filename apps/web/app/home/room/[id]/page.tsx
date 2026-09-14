@@ -53,6 +53,8 @@ import { PkDualVideo } from '@/components/PkDualVideo';
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
+import { GiftSendAnimation, type SentGift } from '@/components/GiftSendAnimation';
+
 import { AudioStageModal } from '@/components/AudioStageModal';
 
 import { SpeakerDock, type DockSpeaker } from '@/components/SpeakerDock';
@@ -176,6 +178,8 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const { messages: chatMessages, state: chatState, selfUserId, canChat, send: sendChat } =
     useRoomChat(room?.id ?? '', room?.status);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
+
+  const [sentGift, setSentGift] = useState<SentGift | null>(null);
 
   // PK battle (1v1) state + actions.
   const pk = usePk(room?.id ?? '', userId, isHost, room?.status);
@@ -745,7 +749,19 @@ useEffect(() => {
 
             onClose={() => setGiftSheetOpen(false)}
 
+            onSent={(gift) => setSentGift({ code: gift.code, icon: gift.icon, name: gift.name })}
+
           />
+
+        )}
+
+
+
+        {/* Gift-sent celebration: replaces the old success toast */}
+
+        {sentGift && (
+
+          <GiftSendAnimation gift={sentGift} onDone={() => setSentGift(null)} />
 
         )}
 

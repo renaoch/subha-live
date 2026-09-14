@@ -6,11 +6,18 @@ import { Heart, Star, Crown, Sparkles, Gift as GiftIcon, Car, Ship, Rocket, X, L
 import { toast } from "sonner";
 import { charismaApi } from "@/lib/api/charisma";
 import { financialApi, newClientRequestId, type GiftCatalogItem } from "@/lib/api/financial";
+import { GiftImage } from "@/components/GiftImage";
 
 interface GiftPickerSheetProps {
   roomId: string;
   hostId: string;
   onClose: () => void;
+  /**
+   * Called right after a gift is successfully sent, before the sheet
+   * closes. The room page uses this to trigger the full-screen
+   * GiftSendAnimation (with sound) instead of a toast.
+   */
+  onSent?: (gift: GiftCatalogItem) => void;
 }
 
 // Maps gift_catalog.icon (server-side) to a lucide icon for display. Falls
@@ -42,7 +49,7 @@ function iconFor(icon: string) {
  * which performs the atomic coin-deduct/diamond-credit transaction AND
  * the room-task/host-task/PK/charisma side effects together.
  */
-export function GiftPickerSheet({ roomId, hostId, onClose }: GiftPickerSheetProps) {
+export function GiftPickerSheet({ roomId, hostId, onClose, onSent }: GiftPickerSheetProps) {
   const [gifts, setGifts] = useState<GiftCatalogItem[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sendingGiftId, setSendingGiftId] = useState<string | null>(null);
@@ -79,7 +86,7 @@ export function GiftPickerSheet({ roomId, hostId, onClose }: GiftPickerSheetProp
         // single-shot flow reuses it implicitly since we don't retry here.
         clientRequestId: newClientRequestId(),
       });
-      toast.success(`Sent a ${gift.name}!`);
+      onSent?.(gift);
       onClose();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to send gift";
@@ -132,7 +139,12 @@ export function GiftPickerSheet({ roomId, hostId, onClose }: GiftPickerSheetProp
                   {isSending ? (
                     <Loader2 className="h-6 w-6 animate-spin text-white" />
                   ) : (
-                    <Icon className="h-6 w-6 text-amber-300" />
+                    <GiftImage
+                      gift={gift}
+                      fallbackIcon={Icon}
+                      className="flex h-8 w-8 items-center justify-center"
+                      imgClassName="h-8 w-8 object-contain text-amber-300"
+                    />
                   )}
                   <span className="text-[11px] font-semibold text-white">{gift.name}</span>
                   <span className="text-[10px] text-white/50">{gift.coinPrice}</span>
