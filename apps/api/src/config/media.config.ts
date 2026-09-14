@@ -54,6 +54,22 @@ export const mediaConfig = {
   },
 
   limits: {
-    maxGuestSlots: 3,
+    /*
+     * Hard ceiling on concurrent guest/speaker seats, enforced
+     * server-side regardless of what a room's `max_guest_slots` column
+     * says — that column is user-editable at room-creation time, so it
+     * is never trusted as the sole source of truth for a limit this
+     * consequential (Cloudflare Calls session count, SFU load).
+     *
+     * Video rooms stay capped at 3 concurrent camera+mic guests, which
+     * is what this used to be unconditionally. Audio rooms have no
+     * camera track at all — just mic-only Cloudflare sessions, which
+     * are far cheaper — so "Go Party" audio rooms are allowed up to 10
+     * seats.
+     */
+    maxGuestSlots: {
+      video: 3,
+      audio: 10,
+    },
   },
 } as const;

@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { roomState } from "./room-state.service";
+import { resolveMaxGuestSlots } from "./room-media.service";
 import type {
   Tables,
   TablesInsert,
@@ -19,7 +20,7 @@ type CreateSpeakerRequestInput = {
 async function getRoom(roomId: string) {
   const { data, error } = await supabase
     .from("rooms")
-    .select("id, host_id, status, max_guest_slots")
+    .select("id, host_id, status, max_guest_slots, media_type")
     .eq("id", roomId)
     .maybeSingle();
 
@@ -314,7 +315,7 @@ export const roomRequestService = {
     const speakerAdded = await roomState.addSpeaker(
       roomId,
       request.user_id,
-      Math.min(room.max_guest_slots ?? 3, 3),
+      resolveMaxGuestSlots(room.media_type, room.max_guest_slots),
     );
 
     if (!speakerAdded && !(await roomState.isSpeaker(roomId, request.user_id))) {
@@ -417,7 +418,7 @@ export const roomRequestService = {
     const speakerAdded = await roomState.addSpeaker(
       roomId,
       userId,
-      Math.min(room.max_guest_slots ?? 3, 3),
+      resolveMaxGuestSlots(room.media_type, room.max_guest_slots),
     );
 
     if (!speakerAdded && !(await roomState.isSpeaker(roomId, userId))) {

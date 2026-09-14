@@ -2,6 +2,7 @@ import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { mediaService } from "../media";
 import { roomState } from "./room-state.service";
+import { mediaConfig } from "../../config/media.config";
 import type {
   MediaSession,
   MediaTrack,
@@ -10,6 +11,25 @@ import type {
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Server-side ceiling on concurrent guest/speaker seats for a room.
+ * `room.max_guest_slots` is set by whoever created the room and is never
+ * trusted on its own — this clamps it to the hard per-media-type limit
+ * (3 for video, 10 for mic-only audio rooms) so a room can't be created
+ * with an inflated seat count and overload the SFU.
+ */
+export function resolveMaxGuestSlots(
+  mediaType: string | null | undefined,
+  requestedSlots: number | null | undefined,
+): number {
+  const cap =
+    mediaType === "audio"
+      ? mediaConfig.limits.maxGuestSlots.audio
+      : mediaConfig.limits.maxGuestSlots.video;
+
+  return Math.min(requestedSlots ?? cap, cap);
 }
 
 function requireTrack(
@@ -42,7 +62,7 @@ async function getRoom(
   } = await supabase
     .from("rooms")
     .select(
-      "id, host_id, status, max_guest_slots",
+      "id, host_id, status, max_guest_slots, media_type",
     )
     .eq("id", roomId)
     .maybeSingle();
@@ -559,7 +579,7 @@ async subscribeHostToGuests(
       }
 
       const currentGuestCount = Object.keys(state.speakers).length;
-      if (currentGuestCount >= Math.min(room.max_guest_slots ?? 3, 3)) {
+      if (currentGuestCount >= resolveMaxGuestSlots(room.media_type, room.max_guest_slots)) {
         throw new AppError(409, "All guest slots are full", {
           code: "MEDIA_GUEST_SLOTS_FULL",
         });
