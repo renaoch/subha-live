@@ -749,7 +749,7 @@ useEffect(() => {
 
             onClose={() => setGiftSheetOpen(false)}
 
-            onSent={(gift) => setSentGift({ code: gift.code, icon: gift.icon, name: gift.name })}
+            onSent={(gift, position) => setSentGift({ code: gift.code, icon: gift.icon, name: gift.name, position })}
 
           />
 

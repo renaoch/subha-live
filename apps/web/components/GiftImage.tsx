@@ -8,19 +8,21 @@ import { giftImageCandidates } from "@/lib/gift-image";
 interface GiftImageProps {
   gift: { code?: string; icon?: string };
   fallbackIcon: LucideIcon;
+  /** 0-based index of this gift within the catalog list (maps to gift-N.png). */
+  position?: number;
   className?: string;
   imgClassName?: string;
 }
 
 /**
  * Renders the gift's artwork from the Supabase "gift-image" storage
- * bucket. Tries each candidate URL (by code, then icon slug, across a
- * few common extensions) in order; if all of them fail to load (e.g. no
- * image has been uploaded yet for that gift), falls back to the lucide
- * icon that used to be the only visual for gifts.
+ * bucket (files named gift-1.png .. gift-10.png by catalog position).
+ * Tries each candidate URL in order; if all of them fail to load (e.g.
+ * no image uploaded yet for that slot), falls back to the lucide icon
+ * that used to be the only visual for gifts.
  */
-export function GiftImage({ gift, fallbackIcon: Icon, className, imgClassName }: GiftImageProps) {
-  const [candidates] = useState(() => giftImageCandidates(gift));
+export function GiftImage({ gift, fallbackIcon: Icon, position, className, imgClassName }: GiftImageProps) {
+  const [candidates] = useState(() => giftImageCandidates(gift, position));
   const [index, setIndex] = useState(0);
 
   useEffect(() => {

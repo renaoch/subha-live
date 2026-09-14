@@ -17,7 +17,7 @@ interface GiftPickerSheetProps {
    * closes. The room page uses this to trigger the full-screen
    * GiftSendAnimation (with sound) instead of a toast.
    */
-  onSent?: (gift: GiftCatalogItem) => void;
+  onSent?: (gift: GiftCatalogItem, position: number) => void;
 }
 
 // Maps gift_catalog.icon (server-side) to a lucide icon for display. Falls
@@ -71,7 +71,7 @@ export function GiftPickerSheet({ roomId, hostId, onClose, onSent }: GiftPickerS
     };
   }, []);
 
-  const handleSend = async (gift: GiftCatalogItem) => {
+  const handleSend = async (gift: GiftCatalogItem, position: number) => {
     if (sendingGiftId !== null) return;
 
     setSendingGiftId(gift.id);
@@ -86,7 +86,7 @@ export function GiftPickerSheet({ roomId, hostId, onClose, onSent }: GiftPickerS
         // single-shot flow reuses it implicitly since we don't retry here.
         clientRequestId: newClientRequestId(),
       });
-      onSent?.(gift);
+      onSent?.(gift, position);
       onClose();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to send gift";
@@ -125,14 +125,14 @@ export function GiftPickerSheet({ roomId, hostId, onClose, onSent }: GiftPickerS
 
         {gifts && (
           <div className="grid grid-cols-4 gap-2.5">
-            {gifts.map((gift) => {
+            {gifts.map((gift, position) => {
               const Icon = iconFor(gift.icon);
               const isSending = sendingGiftId === gift.id;
               return (
                 <button
                   key={gift.id}
                   type="button"
-                  onClick={() => handleSend(gift)}
+                  onClick={() => handleSend(gift, position)}
                   disabled={sendingGiftId !== null}
                   className="flex flex-col items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 py-3 transition hover:bg-white/10 disabled:opacity-50"
                 >
@@ -141,6 +141,7 @@ export function GiftPickerSheet({ roomId, hostId, onClose, onSent }: GiftPickerS
                   ) : (
                     <GiftImage
                       gift={gift}
+                      position={position}
                       fallbackIcon={Icon}
                       className="flex h-8 w-8 items-center justify-center"
                       imgClassName="h-8 w-8 object-contain text-amber-300"

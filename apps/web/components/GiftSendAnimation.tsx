@@ -10,6 +10,8 @@ export interface SentGift {
   code?: string;
   icon?: string;
   name: string;
+  /** 0-based catalog position — maps to gift-N.png in the bucket. */
+  position?: number;
 }
 
 interface GiftSendAnimationProps {
@@ -73,6 +75,7 @@ export function GiftSendAnimation({ gift, onDone }: GiftSendAnimationProps) {
           <div className="animate-gift-hold-pulse">
             <GiftImage
               gift={gift}
+              position={gift.position}
               fallbackIcon={GiftIcon}
               className="flex h-24 w-24 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-glow-lg backdrop-blur"
               imgClassName="h-16 w-16 object-contain text-amber-300"
