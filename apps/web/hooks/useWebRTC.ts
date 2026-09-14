@@ -4,6 +4,7 @@ import {
   type RoomMediaState,
   type RoomRecord,
 } from "@/lib/api/rooms";
+import { ApiError } from "@/lib/api/client";
 import {
   createPublishTracks,
   createTrackName,
@@ -1696,12 +1697,48 @@ if (signalingState !== "stable") {
               }
             }
 
+            /**
+             * The server tells us via this specific code (see
+             * room-media.service.ts) that our viewer's Cloudflare
+             * session no longer exists on the provider - e.g. it
+             * expired or was torn down while we were mid-negotiation.
+             * There is nothing to roll back to: the whole
+             * RTCPeerConnection is bound to a dead session, so patch
+             * requests against it will keep failing the same way.
+             * Tear it down and redo the full connectViewer() handshake,
+             * which always creates (or safely resumes) a fresh session,
+             * instead of surfacing a dead-end error to the viewer.
+             */
+            if (
+              error instanceof ApiError &&
+              error.code === "MEDIA_VIEWER_SESSION_STALE" &&
+              room
+            ) {
+              console.warn(
+                "[WebRTC][VIEWER] session is stale on the media provider - reconnecting",
+              );
+
+              closeViewerPeer();
+              viewerSpeakerIdsRef.current.clear();
+
+              connectViewer(room).catch((reconnectError) => {
+                console.error(
+                  "[WebRTC][VIEWER] reconnect after stale session failed",
+                  reconnectError,
+                );
+              });
+
+              return;
+            }
+
             throw error;
           }
         },
       );
     },
     [
+      closeViewerPeer,
+      connectViewer,
       createOfferAndWaitForIce,
       isHost,
       room,

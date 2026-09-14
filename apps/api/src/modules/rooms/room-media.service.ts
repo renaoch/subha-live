@@ -3,6 +3,7 @@ import { AppError } from "../../errors/app-error";
 import { mediaService } from "../media";
 import { roomState } from "./room-state.service";
 import { mediaConfig } from "../../config/media.config";
+import { CloudflareRealtimeError } from "../../lib/media/cloudflare/cloudflare.errors";
 import type {
   MediaSession,
   MediaTrack,
@@ -11,6 +12,21 @@ import type {
 
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Cloudflare returns 410 Gone when a sessionId we hold (e.g. reused from
+ * Redis) no longer exists on its side - the session was already torn down
+ * (TTL expiry, disconnect, GC) even though our own state still thinks it's
+ * "connecting"/"connected"/"reconnecting". Redis's view of liveness is not
+ * authoritative; Cloudflare's is. Treat 410 on a *reused* session as a
+ * signal to stop trusting the cached sessionId, not as a terminal failure.
+ */
+function isStaleSessionError(error: unknown): boolean {
+  return (
+    error instanceof CloudflareRealtimeError &&
+    error.statusCode === 410
+  );
 }
 
 /**
@@ -363,27 +379,63 @@ export const roomMediaService = {
 
   const provider = await mediaService.getProvider();
 
-  if (answerSdp) {
-    await provider.renegotiate({
-      sessionId: viewer.sessionId,
-      answerSdp,
-    });
+  /*
+   * Unlike createViewerSession(), this endpoint can't silently swap in a
+   * fresh Cloudflare session on a 410 - the browser's RTCPeerConnection is
+   * already bound to viewer.sessionId, so a session created here would be
+   * orphaned from the client's actual peer connection. Instead, surface a
+   * distinct, actionable error code so the client knows its whole viewer
+   * session is dead and must redo the full connectViewer() handshake
+   * (which does create a fresh session) rather than retrying this call
+   * against the same stale sessionId forever.
+   */
+  try {
+    if (answerSdp) {
+      await provider.renegotiate({
+        sessionId: viewer.sessionId,
+        answerSdp,
+      });
 
-    return {
-      session: { sessionId: viewer.sessionId, generation: viewer.generation, status: viewer.status },
-      answerSdp: undefined,
-      offerSdp: undefined,
-      tracks: [],
-      requiresRenegotiation: false,
-      alreadySubscribed: false,
-    };
+      return {
+        session: { sessionId: viewer.sessionId, generation: viewer.generation, status: viewer.status },
+        answerSdp: undefined,
+        offerSdp: undefined,
+        tracks: [],
+        requiresRenegotiation: false,
+        alreadySubscribed: false,
+      };
+    }
+  } catch (error) {
+    if (isStaleSessionError(error)) {
+      await mediaService.removeViewerSession(roomId, userId).catch(() => {});
+
+      throw new AppError(410, "Viewer session is no longer valid on the media provider", {
+        code: "MEDIA_VIEWER_SESSION_STALE",
+      });
+    }
+
+    throw error;
   }
 
-  const negotiation = await provider.subscribeTracks({
-    sessionId: viewer.sessionId,
-    offerSdp,
-    tracks,
-  });
+  let negotiation: Awaited<ReturnType<typeof provider.subscribeTracks>>;
+
+  try {
+    negotiation = await provider.subscribeTracks({
+      sessionId: viewer.sessionId,
+      offerSdp,
+      tracks,
+    });
+  } catch (error) {
+    if (isStaleSessionError(error)) {
+      await mediaService.removeViewerSession(roomId, userId).catch(() => {});
+
+      throw new AppError(410, "Viewer session is no longer valid on the media provider", {
+        code: "MEDIA_VIEWER_SESSION_STALE",
+      });
+    }
+
+    throw error;
+  }
 
   if (!negotiation.answerSdp && !negotiation.offerSdp) {
     return {
@@ -1017,13 +1069,67 @@ async subscribeHostToGuests(
         };
       }
 
-      const negotiation =
-        await provider.subscribeTracks({
-          sessionId:
-            session.sessionId,
-          offerSdp,
-          tracks,
-        });
+      let negotiation: Awaited<
+        ReturnType<typeof provider.subscribeTracks>
+      >;
+
+      try {
+        negotiation =
+          await provider.subscribeTracks({
+            sessionId:
+              session.sessionId,
+            offerSdp,
+            tracks,
+          });
+      } catch (subscribeError) {
+        /*
+         * The session we just reused (hasReusableSession branch) may be
+         * stale on Cloudflare's side even though Redis still marked it
+         * live. Rather than surfacing a raw MEDIA_PROVIDER_ERROR / 410
+         * to the client - which the viewer's WebRTC layer can't recover
+         * from on its own - create a brand-new Cloudflare session and
+         * retry the negotiation exactly once. If this was already a
+         * freshly-created session, don't retry; a 410 there is a real
+         * provider problem, not a staleness problem.
+         */
+        if (
+          !createdNewSession &&
+          isStaleSessionError(subscribeError)
+        ) {
+          console.warn(
+            "[room-media] stale viewer session on Cloudflare (410) - creating a fresh session",
+            {
+              roomId,
+              userId,
+              staleSessionId: session.sessionId,
+            },
+          );
+
+          const fresh =
+            await provider.createSessionOnly({
+              roomId,
+              userId,
+              role: "viewer",
+              generation,
+            });
+
+          session = fresh.session;
+          session.preview = preview;
+          createdNewSession = true;
+
+          await mediaService.saveViewerSession(session);
+
+          negotiation =
+            await provider.subscribeTracks({
+              sessionId:
+                session.sessionId,
+              offerSdp,
+              tracks,
+            });
+        } else {
+          throw subscribeError;
+        }
+      }
 
       if (
         !negotiation.answerSdp &&
@@ -1180,10 +1286,24 @@ async subscribeHostToGuests(
     const provider =
       await mediaService.getProvider();
 
-    await provider.renegotiate({
-      sessionId,
-      answerSdp,
-    });
+    try {
+      await provider.renegotiate({
+        sessionId,
+        answerSdp,
+      });
+    } catch (error) {
+      if (isStaleSessionError(error)) {
+        if (viewer) {
+          await mediaService.removeViewerSession(roomId, userId).catch(() => {});
+        }
+
+        throw new AppError(410, "Media session is no longer valid on the media provider", {
+          code: "MEDIA_VIEWER_SESSION_STALE",
+        });
+      }
+
+      throw error;
+    }
 
     /*
      * The viewer is only fully connected after Cloudflare has

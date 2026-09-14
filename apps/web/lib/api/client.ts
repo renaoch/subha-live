@@ -5,6 +5,34 @@ import { createClient } from "@/lib/supabase/client";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 /* ==========================================================================
+ * ERRORS
+ * ========================================================================== */
+
+/**
+ * Thrown for any non-ok API response. Preserves the server's machine-readable
+ * `error.code` (e.g. "MEDIA_VIEWER_SESSION_STALE") alongside the plain-text
+ * `message`, so callers can branch on the *reason* a request failed instead
+ * of pattern-matching on message strings, which silently breaks the moment
+ * the server's wording changes.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly details?: unknown;
+
+  constructor(
+    message: string,
+    options: { status: number; code?: string; details?: unknown },
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.status = options.status;
+    this.code = options.code;
+    this.details = options.details;
+  }
+}
+
+/* ==========================================================================
  * FETCH
  * ========================================================================== */
 
@@ -63,6 +91,8 @@ export async function apiFetch<T>(
   if (!response.ok) {
     let message =
       `API request failed: ${response.status}`;
+    let code: string | undefined;
+    let details: unknown;
 
     try {
       const data =
@@ -109,6 +139,19 @@ export async function apiFetch<T>(
           "object"
       ) {
         if (
+          typeof data.error.code ===
+          "string"
+        ) {
+          code = data.error.code;
+        }
+
+        if (
+          "details" in data.error
+        ) {
+          details = data.error.details;
+        }
+
+        if (
           typeof data.error
             .message ===
           "string"
@@ -142,9 +185,11 @@ export async function apiFetch<T>(
       // Response was not JSON.
     }
 
-    throw new Error(
-      message,
-    );
+    throw new ApiError(message, {
+      status: response.status,
+      code,
+      details,
+    });
   }
 
   if (
