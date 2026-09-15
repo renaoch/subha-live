@@ -16,6 +16,7 @@ import { roomTaskService } from "../room-tasks/room-task.service";
 import { hostTaskService } from "../host-task/host-task.service";
 import { pkService } from "../pk/pk.service";
 import { getGiftCatalogItem, sendGiftTransaction } from "../financial/financial.service";
+import { publishGiftToRoomChat } from "../financial/financial-chat";
 
 function toNumber(value: number | null): number {
   return value ?? 0;
@@ -294,13 +295,33 @@ export async function sendGift(
   // diamonds (net of platform/agency share), records the ledger. Throws
   // AppError (e.g. INSUFFICIENT_BALANCE) if it can't be completed — in
   // which case nothing below runs and no gift/charisma record is created.
-  await sendGiftTransaction({
+  const transaction = await sendGiftTransaction({
     senderId,
     recipientId: input.recipientId,
     giftId: input.giftId,
     roomId: input.roomId ?? null,
     clientRequestId: input.clientRequestId,
   });
+
+  // This is the ONLY entry point the client actually calls to send a gift
+  // (see apps/web/lib/api/charisma.ts / GiftPickerSheet.tsx — the room UI
+  // calls POST /api/v1/charisma/send, never /api/v1/financial/gifts/send).
+  // financial.controller.ts's own sendGiftController also publishes to
+  // room chat, but that route is never hit from the live room, so without
+  // this call here a gift's coin/diamond transfer completed successfully
+  // while nothing was ever broadcast to the room: no chat row, no gift
+  // animation for other viewers, and HostGiftMeter (which derives its
+  // running total purely from gift rows seen in chat) never moved.
+  // Fire-and-forget and idempotency-guarded exactly like the other
+  // controller, so a retried/duplicate request never double-posts.
+  if (!transaction.alreadyProcessed && input.roomId) {
+    void publishGiftToRoomChat({
+      roomId: input.roomId,
+      senderId,
+      giftId: input.giftId,
+      giftTransactionId: transaction.giftTransactionId,
+    });
+  }
 
   const {
     data: gift,

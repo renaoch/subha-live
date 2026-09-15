@@ -341,11 +341,24 @@ const handleJoin = useCallback(async () => {
   if (!room) return;
   setActionLoading(true);
   try {
-    // Register the viewer as an active room_participants row FIRST —
-    // requestAudio/createSpeakerRequest requires this row to exist,
-    // and it was never being created anywhere before.
-    await roomsApi.join(room.id);
-    await joinViewer(room);
+    // Register the viewer as an active room_participants row (needed by
+    // requestAudio/createSpeakerRequest) IN PARALLEL with the actual
+    // WebRTC connect, not before it. room-media.controller.ts's
+    // createViewerSession has no dependency on this row existing — it
+    // only reads/writes room media state — so there was no reason for
+    // these to be a sequential chain. Serializing them stacked a full
+    // extra network round-trip in front of the ICE/SDP negotiation on
+    // every single viewer join, which is a large chunk of why joining a
+    // live stream could take 5-10s. joinViewer's own errors are what the
+    // user actually cares about (media failed to connect), so that one
+    // is awaited directly for its rejection; the participant-row write
+    // is best-effort and shouldn't block or fail the join over it.
+    await Promise.all([
+      roomsApi.join(room.id).catch((e) => {
+        console.error('[handleJoin] failed to register room_participants row:', e);
+      }),
+      joinViewer(room),
+    ]);
     toast.success('Connected to the live');
   } catch (e) {
     toast.error(e instanceof Error ? e.message : 'Join failed');

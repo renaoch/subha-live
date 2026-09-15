@@ -102,6 +102,12 @@ const commandAliases: Record<string, string> = {
   hgetall: "hGetAll", hset: "hSet", hget: "hGet", hdel: "hDel", hkeys: "hKeys", hincrby: "hIncrBy",
   sadd: "sAdd", srem: "sRem", smembers: "sMembers", scard: "sCard", sismember: "sIsMember",
   zadd: "zAdd", zrem: "zRem", zrange: "zRange", zscore: "zScore",
+  // Added for financial-chat.ts's hot-history bucket writes (gift ->
+  // room chat persistence). Without this alias, redis.xadd(...) resolves
+  // to `undefined` on the node-redis backend (REDIS_URL set, i.e.
+  // production) exactly like the other multi-word commands above, and
+  // throws "redis.xadd is not a function" the first time a gift is sent.
+  xadd: "xAdd",
 };
 
 function wrapPipeline(pipeline: any): any {
