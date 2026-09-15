@@ -10,6 +10,7 @@ import { ProfileVip } from "./profile-vip";
 import { ProfileWallet } from "./profile-wallet";
 import { ProfileMenu } from "./profile-menu";
 import { ProfileSupport } from "./profile-support";
+import { ProfileLogout } from "./profile-logout";
 import { ProfileLoading } from "./profile-loading";
 import { ProfileError } from "./profile-error";
 
@@ -93,6 +94,8 @@ export function ProfilePage() {
         <ProfileMenu />
 
         <ProfileSupport />
+
+        <ProfileLogout />
       </div>
     </main>
   );

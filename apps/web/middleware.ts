@@ -12,6 +12,23 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
+// Pages that only make sense for a signed-out visitor. If a request with a
+// valid session hits one of these, bounce them straight to /home instead of
+// showing the sign-in screen again.
+// NOTE: "/auth/callback" is intentionally excluded — that route is what
+// establishes the session in the first place and must be allowed to run.
+const AUTH_ONLY_PATHS = [
+  "/auth",
+  "/auth/signup",
+  "/auth/email",
+];
+
+function isAuthOnlyPath(pathname: string): boolean {
+  return AUTH_ONLY_PATHS.some(
+    (path) => pathname === path || pathname === `${path}/`,
+  );
+}
+
 export async function middleware(
   request: NextRequest,
 ) {
@@ -66,7 +83,16 @@ export async function middleware(
     },
   );
 
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Already signed in and trying to view a signed-out-only auth page
+  // (e.g. /auth) → send them to /home instead of leaving them stuck there.
+  if (user && isAuthOnlyPath(request.nextUrl.pathname)) {
+    const homeUrl = new URL("/home", request.url);
+    return NextResponse.redirect(homeUrl);
+  }
 
   return response;
 }
