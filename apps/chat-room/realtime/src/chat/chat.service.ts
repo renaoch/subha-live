@@ -80,6 +80,8 @@ export class ChatService {
       avatar: context.avatar,
       message: text,
       createdAt: Date.now(),
+      level: context.level,
+      tags: context.tags,
     }
 
     await Promise.all([

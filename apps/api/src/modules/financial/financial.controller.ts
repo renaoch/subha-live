@@ -17,6 +17,7 @@ import {
   listPendingWithdrawals,
   assertIsPlatformAdmin,
 } from "./financial.service";
+import { publishGiftToRoomChat } from "./financial-chat";
 
 function requireUser(req: Request) {
   if (!req.user) throw new AppError(401, "Authentication required");
@@ -50,6 +51,18 @@ export async function sendGiftController(req: Request, res: Response, next: Next
       roomId: parsed.data.roomId,
       clientRequestId: parsed.data.clientRequestId,
     });
+
+    // Fire-and-forget: post the gift into the room's live chat feed. Only
+    // for genuinely new sends (not idempotent retries replaying an already-
+    // processed request) and only when it was actually sent in a room.
+    if (!result.alreadyProcessed && parsed.data.roomId) {
+      void publishGiftToRoomChat({
+        roomId: parsed.data.roomId,
+        senderId: user.id,
+        giftId: parsed.data.giftId,
+        giftTransactionId: result.giftTransactionId,
+      });
+    }
 
     res.status(result.alreadyProcessed ? 200 : 201).json({ status: "ok", gift: result });
   } catch (error) {

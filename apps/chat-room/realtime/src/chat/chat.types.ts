@@ -6,6 +6,10 @@ export type ChatMessage = {
   avatar: string | null
   message: string
   createdAt: number
+  /** Wealth/level number shown as the "[Lv]" prefix in front of the name. */
+  level?: number
+  /** Badge labels shown after the name, e.g. ["SVIP", "Agency Owner"]. */
+  tags?: string[]
 }
 
 export type Authorization = {
@@ -19,6 +23,10 @@ export type Authorization = {
   isBanned?: boolean
   /** Whether this user may SEND messages (host + mutual friends only). */
   canChat?: boolean
+  /** Wealth/level number, resolved from Core API's profile lookup. */
+  level?: number
+  /** Badge labels resolved from Core API's profile lookup. */
+  tags?: string[]
 }
 
 export type AuthorizedContext = Authorization & { userId: string }

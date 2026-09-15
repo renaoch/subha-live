@@ -68,6 +68,52 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
           console.warn("[useRoomChat] server error:", msg.code, msg.message);
           return;
         }
+        // "User X joined the stream" system row, broadcast by the realtime
+        // service whenever a viewer's socket is authorized into the room.
+        if (msg && msg.type === "join" && typeof msg.id === "string") {
+          upsert([
+            {
+              id: msg.id,
+              roomId: msg.roomId,
+              userId: msg.userId,
+              username: msg.username,
+              avatar: typeof msg.avatar === "string" ? msg.avatar : null,
+              message: "",
+              createdAt: msg.createdAt,
+              level: typeof msg.level === "number" ? msg.level : undefined,
+              tags: Array.isArray(msg.tags) ? msg.tags : undefined,
+              kind: "join",
+            },
+          ]);
+          return;
+        }
+        // Gift row, published by the financial API once a gift transaction
+        // completes (see apps/api financial-chat.ts). Relayed unchanged by
+        // the realtime service, which never sees coin/diamond amounts.
+        if (msg && msg.type === "gift" && typeof msg.id === "string") {
+          upsert([
+            {
+              id: msg.id,
+              roomId: msg.roomId,
+              userId: msg.userId,
+              username: msg.username,
+              avatar: typeof msg.avatar === "string" ? msg.avatar : null,
+              message: "",
+              createdAt: msg.createdAt,
+              level: typeof msg.level === "number" ? msg.level : undefined,
+              tags: Array.isArray(msg.tags) ? msg.tags : undefined,
+              kind: "gift",
+              gift: {
+                giftId: msg.giftId,
+                name: msg.giftName,
+                icon: typeof msg.giftIcon === "string" ? msg.giftIcon : null,
+                code: msg.giftCode,
+                quantity: typeof msg.quantity === "number" ? msg.quantity : 1,
+              },
+            },
+          ]);
+          return;
+        }
         // Otherwise it's a canonical chat message.
         if (msg && typeof msg.id === "string" && typeof msg.message === "string") {
           // If this is our own message coming back, reconcile it with the
@@ -92,6 +138,9 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
               avatar: typeof msg.avatar === "string" ? msg.avatar : null,
               message: msg.message,
               createdAt: msg.createdAt,
+              level: typeof msg.level === "number" ? msg.level : undefined,
+              tags: Array.isArray(msg.tags) ? msg.tags : undefined,
+              kind: "message",
             },
           ]);
         }

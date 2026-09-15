@@ -11,6 +11,21 @@ export interface RoomChatMessage {
   /** Client-only: true while this message is optimistically shown before the
       server has echoed it back. Never set by the API. */
   pending?: boolean;
+  /** Wealth/level number shown as the "[Lv]" prefix in front of the name. */
+  level?: number;
+  /** Badge labels shown after the name, e.g. ["SVIP", "Agency Owner"]. */
+  tags?: string[];
+  /** Row kind — plain chat text, a "user joined" system row, or a gift row.
+      Defaults to "message" when absent (covers persisted history rows). */
+  kind?: "message" | "join" | "gift";
+  /** Present only when kind === "gift". */
+  gift?: {
+    giftId: string;
+    name: string;
+    icon: string | null;
+    code?: string;
+    quantity: number;
+  };
 }
 
 export interface ChatHistoryPage {

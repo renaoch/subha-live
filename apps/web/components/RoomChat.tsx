@@ -6,6 +6,7 @@ import { SendHorizonal, Gift, Menu, Swords, SlidersHorizontal, Lock } from "luci
 import { cn } from "@/lib/utils";
 import type { RoomChatMessage } from "@/lib/api/chat";
 import { GameIcon } from "@/components/icons";
+import { GiftImage } from "@/components/GiftImage";
 
 interface RoomChatProps {
   messages: RoomChatMessage[];
@@ -60,6 +61,53 @@ function avatarGradient(seed: string) {
 function initials(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || "?";
 }
+
+// Small tag -> color mapping so badges are visually distinct at a glance.
+// Falls back to a neutral slate for any tag not listed here.
+const TAG_COLORS: Record<string, string> = {
+  Engineer: "#A86CFF",
+  "Agency Owner": "#F5B93F",
+  "Host Manager": "#57C2FF",
+  Host: "#5FD9C4",
+  SVIP: "#FF6CA8",
+  VIP: "#FFC24B",
+  Verified: "#5CC8FF",
+};
+
+function tagColor(tag: string) {
+  return TAG_COLORS[tag] ?? "#9AA3B2";
+}
+
+/** "[Lv 12]" pill shown in front of a chat name. */
+function LevelBadge({ level }: { level: number }) {
+  return (
+    <span
+      className="mr-1 inline-flex shrink-0 items-center rounded-[4px] bg-white/12 px-1 py-[1px] align-middle text-[9.5px] font-bold leading-none text-[#FFD24B] [text-shadow:none]"
+      style={{ boxShadow: "inset 0 0 0 1px rgba(255,210,75,0.35)" }}
+    >
+      Lv.{level}
+    </span>
+  );
+}
+
+/** One or more small colored badge chips, e.g. "SVIP", "Agency Owner". */
+function TagBadges({ tags }: { tags: string[] }) {
+  if (!tags.length) return null;
+  return (
+    <span className="mr-1 inline-flex shrink-0 items-center gap-0.5 align-middle">
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="rounded-[4px] px-1 py-[1px] text-[9.5px] font-bold leading-none text-white [text-shadow:none]"
+          style={{ background: tagColor(tag), boxShadow: "0 0 6px rgba(0,0,0,0.35)" }}
+        >
+          {tag}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 
 type RoundButtonProps = {
   label: string;
@@ -154,6 +202,64 @@ export function RoomChat({
           </p>
         ) : (
           messages.map((m) => {
+            const kind = m.kind ?? "message";
+
+            // "User X joined the stream" system row — no avatar link, no
+            // input styling, just a quiet centered-left announcement.
+            if (kind === "join") {
+              return (
+                <div key={m.id} className="chat-row flex items-center gap-2 px-0.5">
+                  <span className="text-[12px] font-medium text-white/70 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">
+                    {m.level ? <LevelBadge level={m.level} /> : null}
+                    {m.tags?.length ? <TagBadges tags={m.tags} /> : null}
+                    <span className="font-bold text-white/85">{m.username}</span>
+                    <span className="text-white/55"> joined the stream</span>
+                  </span>
+                </div>
+              );
+            }
+
+            // Gift row: sender's badges + name, the gift image, and the
+            // gift name/quantity — visually distinct (gold gradient strip)
+            // from a plain chat line.
+            if (kind === "gift") {
+              const gift = m.gift;
+              return (
+                <div
+                  key={m.id}
+                  className="chat-row flex items-center gap-2 rounded-full px-2.5 py-1"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, rgba(245,185,63,0.28), rgba(245,185,63,0.08) 70%, transparent)",
+                    boxShadow: "inset 0 0 0 1px rgba(245,185,63,0.35)",
+                  }}
+                >
+                  {gift && (
+                    <GiftImage
+                      gift={{ code: gift.code, icon: gift.icon ?? undefined }}
+                      fallbackIcon={Gift}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center"
+                      imgClassName="h-7 w-7 object-contain drop-shadow-[0_0_6px_rgba(245,185,63,0.6)]"
+                    />
+                  )}
+                  <p className="min-w-0 flex-1 text-[12.5px] leading-snug [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]">
+                    {m.level ? <LevelBadge level={m.level} /> : null}
+                    {m.tags?.length ? <TagBadges tags={m.tags} /> : null}
+                    <Link
+                      href={`/user/${m.userId}`}
+                      className="mr-1 font-bold text-[#FFD24B] hover:underline"
+                    >
+                      {m.username}
+                    </Link>
+                    <span className="text-white/90">
+                      sent {gift ? gift.name : "a gift"}
+                      {gift && gift.quantity > 1 ? ` ×${gift.quantity}` : ""}
+                    </span>
+                  </p>
+                </div>
+              );
+            }
+
             const mine = !!selfUserId && m.userId === selfUserId;
             const nameColor = mine ? "hsl(var(--accent-cyan))" : colorFor(m.username);
             const avatarEl = m.avatar ? (
@@ -186,6 +292,8 @@ export function RoomChat({
                   </Link>
                 )}
                 <p className="min-w-0 flex-1 text-[12.5px] leading-snug [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]">
+                  {m.level ? <LevelBadge level={m.level} /> : null}
+                  {m.tags?.length ? <TagBadges tags={m.tags} /> : null}
                   {mine ? (
                     <span className="mr-1.5 font-bold" style={{ color: nameColor }}>
                       You

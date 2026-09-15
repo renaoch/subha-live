@@ -395,22 +395,52 @@ export async function getUserById(
 // `username` field on the response body.
 // -----------------------------------------------------------------------------
 
+export interface ChatProfile {
+  username: string;
+  avatar: string | null;
+  /** Wealth/level number shown as the "[Lv]" tag in front of a chat name. */
+  level: number;
+  /**
+   * Ordered badge labels shown after the name, e.g. ["SVIP", "Agency Owner"].
+   * Priority (highest first): Engineer > Agency role > SVIP > VIP > Verified.
+   * Empty array for a plain viewer with no badges.
+   */
+  tags: string[];
+}
+
 export async function getChatProfile(
   userId: UserId,
-): Promise<{ username: string }> {
+): Promise<ChatProfile> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("name, handle")
+    .select("name, handle, avatar, level, vip_level, svip, is_verified, is_admin, role")
     .eq("id", userId)
     .maybeSingle();
 
   if (error) {
     console.error("Failed to fetch chat profile:", error);
-    return { username: "Guest" };
+    return { username: "Guest", avatar: null, level: 1, tags: [] };
   }
 
   const username = data?.name ?? data?.handle ?? "Guest";
-  return { username };
+  const level = typeof data?.level === "number" ? data.level : 1;
+
+  const tags: string[] = [];
+  if (data?.is_admin) {
+    tags.push("Engineer");
+  } else {
+    // Agency relationships take priority over VIP/verified badges, same
+    // ordering used for the profile page's role badge.
+    const agencyRole = await resolveAgencyBadgeRole(userId);
+    if (agencyRole === "agency_owner") tags.push("Agency Owner");
+    else if (agencyRole === "agency_agent") tags.push("Host Manager");
+    else if (agencyRole === "agency_host") tags.push("Host");
+  }
+  if (data?.svip) tags.push("SVIP");
+  else if (typeof data?.vip_level === "number" && data.vip_level > 0) tags.push("VIP");
+  if (data?.is_verified) tags.push("Verified");
+
+  return { username, avatar: data?.avatar ?? null, level, tags };
 }
 
 // -----------------------------------------------------------------------------

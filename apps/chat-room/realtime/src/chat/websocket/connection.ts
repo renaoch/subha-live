@@ -87,7 +87,7 @@ export async function handleConnection(socket: WebSocket, roomId: string, reques
   // a new viewer entered, so the client can show an animated "X entered the
   // room" line in chat. Best-effort / fire-and-forget: a broadcast failure
   // here should never block the connection itself.
-  broadcastJoin(rooms, roomId, context.userId, context.username)
+  broadcastJoin(rooms, roomId, context.userId, context.username, context.avatar, context.level, context.tags)
 
   const inputSchema = chatMessageInputSchema(config)
 
@@ -122,16 +122,29 @@ export async function handleConnection(socket: WebSocket, roomId: string, reques
   })
 }
 
-function broadcastJoin(rooms: RoomRegistry, roomId: string, userId: string, username: string): void {
+function broadcastJoin(
+  rooms: RoomRegistry,
+  roomId: string,
+  userId: string,
+  username: string,
+  avatar?: string | null,
+  level?: number,
+  tags?: string[],
+): void {
   const set = rooms.get(roomId)
   if (!set || !set.size) return
 
+  // Rendered by the client as a system row inside the main chat stream
+  // ("User X joined the stream"), not just the floating join-feed overlay.
   const payload = JSON.stringify({
     type: 'join',
     id: `join-${roomId}-${userId}-${Date.now()}`,
     roomId,
     userId,
     username,
+    avatar: avatar ?? null,
+    level: level ?? 1,
+    tags: tags ?? [],
     createdAt: Date.now(),
   })
 
