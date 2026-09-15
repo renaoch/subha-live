@@ -20,6 +20,38 @@ import { useEffect, useRef, useState } from "react";
 import { roomsApi } from "@/lib/api/rooms";
 import { waitForFirstUsableCandidate } from "@/lib/webrtc-utils";
 
+/*
+ * GLOBAL PREVIEW CONCURRENCY CAP
+ * ================================
+ * Each preview opens a REAL Cloudflare Realtime viewer session — the same
+ * two calls (`/sessions/new` + `/tracks/new`) a genuine viewer join makes.
+ * `RoomCard` mounts this hook for every grid card that is ≥50% visible
+ * (see `useInView(0.5)` in app/home/page.tsx), so a normal scroll on a
+ * 2-3 column grid can bring 4-6+ cards into view at once, each opening its
+ * own preview ~350ms later — a burst of concurrent session creations
+ * against the same Cloudflare app, on top of real viewers joining.
+ *
+ * Cloudflare's edge is known (see media.config.ts retry comments) to take
+ * 11-12s to clear a 425 "session not ready" under load; a burst like this
+ * is exactly what pushes it there, and it can degrade *other* concurrent
+ * Cloudflare calls (real joins, host publishes) too, since they all share
+ * the same app-level quota. Capping how many previews may be connecting
+ * or connected at once — app-wide, not per card — keeps this feature from
+ * competing with real viewer joins for that shared budget.
+ */
+const MAX_CONCURRENT_PREVIEWS = 2;
+let activePreviewCount = 0;
+
+function tryAcquirePreviewSlot(): boolean {
+  if (activePreviewCount >= MAX_CONCURRENT_PREVIEWS) return false;
+  activePreviewCount += 1;
+  return true;
+}
+
+function releasePreviewSlot(): void {
+  activePreviewCount = Math.max(0, activePreviewCount - 1);
+}
+
 let iceServersPromise: Promise<RTCIceServer[]> | null = null;
 
 function getIceServers(): Promise<RTCIceServer[]> {
@@ -56,13 +88,25 @@ export function useRoomPreview(roomId: string | null, active: boolean) {
     }
 
     let cancelled = false;
+    let slotAcquired = false;
     const generation = ++generationRef.current;
 
     // Small settle delay: fast scrolling would otherwise fire off a full
     // connect-then-immediately-disconnect for every card flashed past.
     // Only actually connect once a card has been in view for a moment.
+    // A little random jitter on top spreads out cards that all became
+    // visible in the same scroll/render frame, instead of every one of
+    // them hitting Cloudflare at exactly the same instant.
+    const settleDelay = 350 + Math.floor(Math.random() * 250);
+
     const settleTimer = window.setTimeout(async () => {
       if (cancelled || generation !== generationRef.current) return;
+
+      // Global cap: if too many previews are already connecting/connected
+      // elsewhere in the feed, skip this one — it falls back to the
+      // static cover image. Best-effort by design (see file header).
+      if (!tryAcquirePreviewSlot()) return;
+      slotAcquired = true;
 
       try {
         const peer = new RTCPeerConnection({
@@ -141,7 +185,7 @@ export function useRoomPreview(roomId: string | null, active: boolean) {
         // Previews are best-effort — a card that fails to preview just
         // falls back to its static cover image.
       }
-    }, 350);
+    }, settleDelay);
 
     return () => {
       cancelled = true;
@@ -161,6 +205,11 @@ export function useRoomPreview(roomId: string | null, active: boolean) {
 
       setStream(null);
       setConnected(false);
+
+      if (slotAcquired) {
+        slotAcquired = false;
+        releasePreviewSlot();
+      }
 
       roomsApi.leaveViewer(roomId).catch(() => {
         // Best-effort — a stale preview session will self-expire.
