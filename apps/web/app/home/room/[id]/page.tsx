@@ -55,6 +55,12 @@ import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
 import { GiftSendAnimation, type SentGift } from '@/components/GiftSendAnimation';
 
+import { HostGiftMeter } from '@/components/HostGiftMeter';
+
+import { WalletBalancePill } from '@/components/WalletBalancePill';
+
+import { financialApi, type GiftCatalogItem } from '@/lib/api/financial';
+
 import { AudioStageModal } from '@/components/AudioStageModal';
 
 import { SpeakerDock, type DockSpeaker } from '@/components/SpeakerDock';
@@ -180,6 +186,50 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
 
   const [sentGift, setSentGift] = useState<SentGift | null>(null);
+
+  // Bumped every time this viewer sends a gift, so WalletBalancePill knows
+  // to re-fetch the authoritative balance from the server (never computed
+  // locally — see fin_send_gift() in the financial-system migration).
+  const [walletRefreshToken, setWalletRefreshToken] = useState(0);
+
+  // Public gift catalog (id -> diamondValue), fetched once, used only to
+  // render the live "gifts this stream" meter below — same data the gift
+  // picker already shows, never anything balance/ledger related.
+  const [giftDiamondValues, setGiftDiamondValues] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    financialApi
+      .giftCatalog()
+      .then((catalog: GiftCatalogItem[]) => {
+        if (cancelled) return;
+        const map: Record<string, number> = {};
+        for (const g of catalog) map[g.id] = g.diamondValue;
+        setGiftDiamondValues(map);
+      })
+      .catch(() => {
+        /* Meter just stays hidden if the catalog can't be loaded. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Running total of diamonds represented by gift rows already seen in
+  // this room's live chat feed this session — a read-only crowd meter,
+  // not the source of truth for anyone's actual earnings/balance.
+  const sessionGiftTotals = useMemo(() => {
+    let totalDiamonds = 0;
+    let giftCount = 0;
+    for (const m of chatMessages) {
+      if (m.kind === 'gift' && m.gift) {
+        const value = giftDiamondValues[m.gift.giftId] ?? 0;
+        totalDiamonds += value * (m.gift.quantity || 1);
+        giftCount += 1;
+      }
+    }
+    return { totalDiamonds, giftCount };
+  }, [chatMessages, giftDiamondValues]);
 
   // PK battle (1v1) state + actions.
   const pk = usePk(room?.id ?? '', userId, isHost, room?.status);
@@ -600,6 +650,24 @@ useEffect(() => {
 
         />
 
+        {/* Live "gifts this stream" meter — visible to everyone in the
+            room, host and viewers alike, tallied from the same gift rows
+            already shown in chat. */}
+        <HostGiftMeter
+          totalDiamonds={sessionGiftTotals.totalDiamonds}
+          giftCount={sessionGiftTotals.giftCount}
+        />
+
+        {/* Viewer's own coin balance — visible at a glance in the room,
+            not just inside the gift sheet. Hidden for the host, whose
+            header already shows task/earnings stats. */}
+        {!isHost && (
+          <WalletBalancePill
+            className="absolute right-4 top-[80px] z-30"
+            refreshToken={walletRefreshToken}
+          />
+        )}
+
 
 
         {/* Live indicator for host */}
@@ -768,7 +836,10 @@ useEffect(() => {
 
             onClose={() => setGiftSheetOpen(false)}
 
-            onSent={(gift, position) => setSentGift({ code: gift.code, icon: gift.icon, name: gift.name, position })}
+            onSent={(gift, position) => {
+              setSentGift({ code: gift.code, icon: gift.icon, name: gift.name, position });
+              setWalletRefreshToken((t) => t + 1);
+            }}
 
           />
 
