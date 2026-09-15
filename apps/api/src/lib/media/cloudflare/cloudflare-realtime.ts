@@ -82,8 +82,14 @@ export class CloudflareRealtimeProvider
           appSecret:
             this.appSecret,
 
+          // Cloudflare's own 425 responses have been observed taking
+          // ~11-12s to arrive (see mediaConfig.retry comment). 60s per
+          // attempt was silent dead time that let a single stuck
+          // attempt eat most of the overall deadline below; 20s is
+          // comfortably above the observed worst case without wasting
+          // the whole request budget on one hung attempt.
           timeoutMs:
-            60_000,
+            20_000,
 
           maxAttempts:
             mediaConfig.retry
@@ -96,6 +102,10 @@ export class CloudflareRealtimeProvider
           maxDelayMs:
             mediaConfig.retry
               .maxDelayMs,
+
+          overallDeadlineMs:
+            mediaConfig.retry
+              .overallDeadlineMs,
         });
     } else {
       this.http = null;

@@ -43,6 +43,23 @@ export const mediaConfig = {
     maxAttempts: 6,
     baseDelayMs: 600,
     maxDelayMs: 4_000,
+
+    /*
+     * Ceiling on the TOTAL time one Cloudflare Realtime call (all
+     * attempts + all backoff sleeps combined) is allowed to take.
+     *
+     * 6 attempts against a Cloudflare endpoint that can take ~11-12s
+     * per 425 response, plus backoff between them, can add up to
+     * 80-90+ seconds for a single call — comfortably longer than the
+     * timeout on whatever reverse proxy/gateway sits in front of this
+     * API. When that happens the platform kills the connection first
+     * and the browser sees a bare 502 with no CORS headers, which it
+     * misreports as a CORS error — masking the real cause (this
+     * request ran too long). Keep this well under any realistic
+     * gateway timeout so we always fail cleanly on our own terms
+     * first, with a real, retryable error the client can act on.
+     */
+    overallDeadlineMs: 20_000,
   },
 
   idempotency: {

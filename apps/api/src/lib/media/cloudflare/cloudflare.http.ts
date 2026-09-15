@@ -11,6 +11,26 @@ interface CloudflareHttpClientConfig {
   maxAttempts: number;
   baseDelayMs: number;
   maxDelayMs: number;
+  /**
+   * Hard ceiling on the TOTAL time this.request() is allowed to spend
+   * across every attempt + every backoff sleep combined.
+   *
+   * Without this, `maxAttempts` * (a single 425's real-world ~11-12s
+   * response time) + backoff sleeps adds up to 80-90+ seconds for one
+   * call (observed in production). Whatever sits in front of this API
+   * (App Service's own proxy, a CDN, a load balancer) has its own,
+   * shorter idle/response timeout, and kills the connection before this
+   * ever finishes - the client then sees a bare 502 with no CORS
+   * headers on it, which browsers misreport as a CORS failure. That is
+   * a symptom of THIS request running too long, not a CORS
+   * misconfiguration.
+   *
+   * Keep this comfortably under any realistic upstream gateway timeout
+   * so we always control the failure: return a clean, retryable error
+   * to the client ourselves instead of letting the platform kill the
+   * connection first.
+   */
+  overallDeadlineMs: number;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -48,12 +68,42 @@ export class CloudflareRealtimeHttpClient {
     init: RequestInit = {},
   ): Promise<T> {
     let lastError: unknown;
+    const startedAt = Date.now();
 
     for (
       let attempt = 1;
       attempt <= this.config.maxAttempts;
       attempt++
     ) {
+      // Overall-deadline check, BEFORE spending time on another attempt.
+      // A single Cloudflare 425 has been observed taking ~11-12s to
+      // arrive; without this check, `maxAttempts` of those plus backoff
+      // sleeps can blow past a minute, which is longer than most
+      // upstream gateways will wait — they kill the connection first
+      // and the client gets an opaque 502/CORS failure instead of a
+      // clean error from us.
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= this.config.overallDeadlineMs) {
+        console.error(
+          "[cloudflare-http] OVERALL DEADLINE EXCEEDED",
+          {
+            path,
+            attempt,
+            elapsedMs: elapsed,
+            overallDeadlineMs:
+              this.config.overallDeadlineMs,
+          },
+        );
+
+        throw (
+          lastError ??
+          new CloudflareRealtimeError(
+            "Cloudflare Realtime request exceeded overall deadline",
+            { statusCode: 504, retryable: false },
+          )
+        );
+      }
+
       try {
         return await this.execute<T>(
           path,
@@ -94,16 +144,28 @@ export class CloudflareRealtimeHttpClient {
           this.config.maxDelayMs,
         );
 
+        const remaining =
+          this.config.overallDeadlineMs -
+          (Date.now() - startedAt);
+
+        if (remaining <= 0) {
+          console.error(
+            "[cloudflare-http] OVERALL DEADLINE EXCEEDED (before retry sleep)",
+            { path, attempt },
+          );
+          throw error;
+        }
+
         console.log(
           "[cloudflare-http] RETRYING",
           {
             path,
             attempt: attempt + 1,
-            delayMs: delay,
+            delayMs: Math.min(delay, remaining),
           },
         );
 
-        await sleep(delay);
+        await sleep(Math.min(delay, remaining));
       }
     }
 
