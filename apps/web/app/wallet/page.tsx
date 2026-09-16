@@ -5,19 +5,17 @@ import { api } from "@/lib/api/client";
 import {
   Coins,
   Diamond,
-  Zap,
   ArrowUpRight,
-  Wallet,
-  CreditCard,
-  History,
+  ArrowDownToLine,
   Loader2,
-  Plus,
-  Minus,
-  CheckCircle,
+  CheckCircle2,
   XCircle,
   Clock,
   Copy,
-  Bitcoin,
+  Check,
+  ShieldCheck,
+  ChevronLeft,
+  Lock,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -75,7 +73,9 @@ export default function WalletPage() {
   const [withdrawAccount, setWithdrawAccount] = useState("");
   const [showWithdraw, setShowWithdraw] = useState(false);
 
-  // Crypto (Binance) recharge
+  // Crypto (Binance) recharge — the only recharge rail that is actually
+  // wired up end-to-end (real deposit address, real on-chain
+  // verification against Binance before a single coin is credited).
   const [cryptoPkg, setCryptoPkg] = useState<Package | null>(null);
   const [cryptoQuote, setCryptoQuote] = useState<CryptoQuote | null>(null);
   const [cryptoLoading, setCryptoLoading] = useState(false);
@@ -102,21 +102,6 @@ export default function WalletPage() {
     }
   }
 
-  async function handlePurchase(pkg: Package) {
-    try {
-      setProcessing(true);
-      setError(null);
-      setSuccess(null);
-      await api.post("/api/v1/wallet/purchase", { packageId: pkg.id });
-      setSuccess(`Purchased ${pkg.coins} coins!`);
-      await loadWallet();
-    } catch (err: any) {
-      setError(err?.message || "Purchase failed.");
-    } finally {
-      setProcessing(false);
-    }
-  }
-
   async function openCryptoRecharge(pkg: Package) {
     try {
       setCryptoPkg(pkg);
@@ -129,7 +114,7 @@ export default function WalletPage() {
       )) as ApiResponse<CryptoQuote>;
       setCryptoQuote(response.data);
     } catch (err: any) {
-      setError(err?.message || "Could not load crypto deposit details.");
+      setError(err?.message || "Could not load deposit details.");
       setCryptoPkg(null);
     } finally {
       setCryptoLoading(false);
@@ -138,7 +123,7 @@ export default function WalletPage() {
 
   async function handleVerifyCrypto() {
     if (!cryptoPkg || !cryptoTxId.trim()) {
-      setError("Paste the transaction ID/hash from your send.");
+      setError("Paste the transaction ID / hash from your send.");
       return;
     }
     try {
@@ -149,7 +134,7 @@ export default function WalletPage() {
         packageId: cryptoPkg.id,
         txId: cryptoTxId.trim(),
       });
-      setSuccess(`Confirmed! ${cryptoPkg.coins} coins credited.`);
+      setSuccess(`Confirmed — ${cryptoPkg.coins.toLocaleString()} coins credited.`);
       setCryptoPkg(null);
       setCryptoQuote(null);
       setCryptoTxId("");
@@ -174,7 +159,7 @@ export default function WalletPage() {
 
   async function handleWithdraw() {
     if (!withdrawAmount || !withdrawAccount) {
-      setError("Please fill all fields.");
+      setError("Please fill in every field.");
       return;
     }
     try {
@@ -185,7 +170,7 @@ export default function WalletPage() {
         amount: parseFloat(withdrawAmount),
         [withdrawMethod === "upi" ? "upiId" : "bankAccount"]: withdrawAccount,
       });
-      setSuccess("Withdrawal request submitted!");
+      setSuccess("Withdrawal request submitted.");
       setWithdrawAmount("");
       setWithdrawAccount("");
       setShowWithdraw(false);
@@ -197,119 +182,110 @@ export default function WalletPage() {
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return (
-          <span className="flex items-center gap-1 text-emerald-400">
-            <CheckCircle className="h-3 w-3" /> Completed
-          </span>
-        );
-      case "pending":
-        return (
-          <span className="flex items-center gap-1 text-amber-400">
-            <Clock className="h-3 w-3" /> Pending
-          </span>
-        );
-      case "failed":
-      case "cancelled":
-        return (
-          <span className="flex items-center gap-1 text-red-400">
-            <XCircle className="h-3 w-3" /> {status}
-          </span>
-        );
-      default:
-        return <span>{status}</span>;
-    }
-  };
+  const statusMeta = {
+    completed: { label: "Completed", Icon: CheckCircle2, cls: "text-[hsl(var(--accent-green))]" },
+    pending: { label: "Pending", Icon: Clock, cls: "text-[hsl(var(--accent-gold))]" },
+    failed: { label: "Failed", Icon: XCircle, cls: "text-[hsl(var(--live-red))]" },
+    cancelled: { label: "Cancelled", Icon: XCircle, cls: "text-[hsl(var(--live-red))]" },
+  } as const;
 
   if (loading) {
     return (
-      <div className="min-h-dvh bg-[#17131F] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+      <div className="flex min-h-dvh items-center justify-center bg-[hsl(var(--surface))]">
+        <Loader2 className="h-7 w-7 animate-spin text-[hsl(var(--accent-hot))]" />
       </div>
     );
   }
 
   return (
-    <main className="min-h-dvh bg-[#17131F] px-4 py-6 text-[#F3ECE0]">
-      <div className="mx-auto max-w-lg">
+    <main className="min-h-dvh bg-Subha-gradient pb-14 text-[hsl(var(--ink))]">
+      <div className="mx-auto max-w-lg px-4 pt-6">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
-          <h1 className="text-2xl font-black tracking-tight">Wallet</h1>
+        <div className="flex items-center justify-between">
+          <a
+            href="/profile"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-[hsl(var(--ink-muted))] transition hover:bg-white/5"
+            aria-label="Back to profile"
+          >
+            <ChevronLeft className="h-4.5 w-4.5" />
+          </a>
+          <h1 className="text-base font-bold tracking-tight">Wallet</h1>
           <button
-            onClick={() => setShowWithdraw(!showWithdraw)}
-            className="rounded-xl border border-white/10 px-3 py-1.5 text-xs font-bold text-white/60 hover:bg-white/5"
+            onClick={() => setShowWithdraw((v) => !v)}
+            className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-[hsl(var(--ink-muted))] transition hover:bg-white/5"
           >
             {showWithdraw ? "Cancel" : "Withdraw"}
           </button>
         </div>
 
-        {/* Balance */}
-        <div className="mt-6 grid grid-cols-2 gap-4">
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500/20 to-violet-600/5 p-5">
-            <div className="flex items-center gap-2 text-white/40">
-              <Coins className="h-5 w-5" />
-              <span className="text-xs font-bold uppercase">Coins</span>
+        {/* Balance hero */}
+        <div className="stage-card noise-overlay glow-hot mt-5 p-5">
+          <p className="text-xs font-medium text-[hsl(var(--ink-faint))]">Total balance</p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+              <div className="flex items-center gap-1.5 text-[hsl(var(--accent-gold))]">
+                <Coins className="h-4 w-4" />
+                <span className="text-[11px] font-semibold text-[hsl(var(--ink-faint))]">Coins</span>
+              </div>
+              <p className="mt-1.5 text-2xl font-bold tabular-nums">
+                {balance.coins.toLocaleString()}
+              </p>
             </div>
-            <p className="mt-2 text-3xl font-black">{balance.coins.toLocaleString()}</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-amber-500/20 to-amber-600/5 p-5">
-            <div className="flex items-center gap-2 text-white/40">
-              <Diamond className="h-5 w-5" />
-              <span className="text-xs font-bold uppercase">Diamonds</span>
+            <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+              <div className="flex items-center gap-1.5 text-[hsl(var(--accent-hot-2))]">
+                <Diamond className="h-4 w-4" />
+                <span className="text-[11px] font-semibold text-[hsl(var(--ink-faint))]">Diamonds</span>
+              </div>
+              <p className="mt-1.5 text-2xl font-bold tabular-nums">
+                {balance.diamonds.toLocaleString()}
+              </p>
             </div>
-            <p className="mt-2 text-3xl font-black">{balance.diamonds.toLocaleString()}</p>
           </div>
         </div>
 
         {/* Withdraw form */}
         {showWithdraw && (
-          <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
-            <h3 className="text-sm font-bold">Withdraw Coins</h3>
+          <div className="glass-panel mt-4 rounded-2xl p-5">
+            <h3 className="flex items-center gap-2 text-sm font-bold">
+              <ArrowDownToLine className="h-4 w-4 text-[hsl(var(--ink-muted))]" />
+              Withdraw
+            </h3>
             <div className="mt-3 space-y-3">
               <input
                 type="number"
                 placeholder="Amount (USD)"
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
-                className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-sm outline-none focus:border-violet-400"
+                className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm outline-none transition focus:border-[hsl(var(--accent-hot))]"
               />
               <div className="flex gap-2">
-                <button
-                  onClick={() => setWithdrawMethod("upi")}
-                  className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold ${
-                    withdrawMethod === "upi"
-                      ? "border-violet-400 bg-violet-500/20 text-violet-300"
-                      : "border-white/10 text-white/30"
-                  }`}
-                >
-                  UPI
-                </button>
-                <button
-                  onClick={() => setWithdrawMethod("bank")}
-                  className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold ${
-                    withdrawMethod === "bank"
-                      ? "border-violet-400 bg-violet-500/20 text-violet-300"
-                      : "border-white/10 text-white/30"
-                  }`}
-                >
-                  Bank
-                </button>
+                {(["upi", "bank"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setWithdrawMethod(m)}
+                    className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-wide transition ${
+                      withdrawMethod === m
+                        ? "border-[hsl(var(--accent-hot))]/60 bg-[hsl(var(--accent-hot))]/15 text-[hsl(var(--accent-hot))]"
+                        : "border-white/10 text-[hsl(var(--ink-faint))]"
+                    }`}
+                  >
+                    {m === "upi" ? "UPI" : "Bank"}
+                  </button>
+                ))}
               </div>
               <input
                 type="text"
-                placeholder={withdrawMethod === "upi" ? "UPI ID (e.g., user@upi)" : "Bank Account Number"}
+                placeholder={withdrawMethod === "upi" ? "UPI ID (e.g. name@upi)" : "Bank account number"}
                 value={withdrawAccount}
                 onChange={(e) => setWithdrawAccount(e.target.value)}
-                className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-sm outline-none focus:border-violet-400"
+                className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm outline-none transition focus:border-[hsl(var(--accent-hot))]"
               />
               <button
                 onClick={handleWithdraw}
                 disabled={processing}
-                className="flex h-11 w-full items-center justify-center rounded-xl bg-violet-500 font-bold transition hover:bg-violet-400 disabled:opacity-50"
+                className="grad-brand flex h-11 w-full items-center justify-center rounded-xl text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
               >
-                {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Request Withdrawal"}
+                {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Request withdrawal"}
               </button>
             </div>
           </div>
@@ -317,76 +293,102 @@ export default function WalletPage() {
 
         {/* Crypto recharge panel */}
         {cryptoPkg && (
-          <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-5">
+          <div className="glass-panel mt-4 rounded-2xl p-5">
             <div className="flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-sm font-bold">
-                <Bitcoin className="h-4 w-4 text-emerald-400" /> Pay with USDT
-              </h3>
+              <h3 className="text-sm font-bold">Pay with USDT</h3>
               <button
                 onClick={() => {
                   setCryptoPkg(null);
                   setCryptoQuote(null);
                 }}
-                className="text-xs text-white/30 hover:text-white/60"
+                className="text-xs text-[hsl(var(--ink-faint))] hover:text-[hsl(var(--ink-muted))]"
               >
                 Cancel
               </button>
             </div>
 
             {cryptoLoading || !cryptoQuote ? (
-              <div className="mt-4 flex justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+              <div className="mt-5 flex justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-[hsl(var(--accent-hot))]" />
               </div>
             ) : (
-              <div className="mt-3 space-y-3">
-                <p className="text-xs text-white/50">
-                  Send exactly{" "}
-                  <span className="font-bold text-white">
-                    {cryptoQuote.usdtAmount.toFixed(2)} {cryptoQuote.asset}
-                  </span>{" "}
-                  on the <span className="font-bold text-white">{cryptoQuote.network}</span> network
-                  to get {cryptoQuote.coins} coins.
-                </p>
-
-                <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
-                  <span className="flex-1 truncate font-mono text-xs text-white/80">
-                    {cryptoQuote.depositAddress}
-                  </span>
-                  <button
-                    onClick={copyAddress}
-                    className="shrink-0 rounded-lg border border-white/10 p-1.5 text-white/50 hover:bg-white/5"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
+              <div className="mt-4 space-y-4">
+                {/* Step 1 */}
+                <div className="flex gap-3">
+                  <span className="rank-pill mt-0.5 shrink-0 bg-[hsl(var(--accent-hot))]/20 text-[hsl(var(--accent-hot))]">1</span>
+                  <div className="text-xs text-[hsl(var(--ink-muted))]">
+                    Send exactly{" "}
+                    <span className="font-bold text-[hsl(var(--ink))]">
+                      {cryptoQuote.usdtAmount.toFixed(2)} {cryptoQuote.asset}
+                    </span>{" "}
+                    on the <span className="font-bold text-[hsl(var(--ink))]">{cryptoQuote.network}</span> network
+                    for {cryptoQuote.coins.toLocaleString()} coins.
+                  </div>
                 </div>
-                {copied && <p className="text-[10px] text-emerald-300">Address copied</p>}
-                {cryptoQuote.depositTag && (
-                  <p className="text-xs text-amber-300">
-                    Memo/Tag required: <span className="font-mono">{cryptoQuote.depositTag}</span>
-                  </p>
-                )}
 
-                <p className="text-[11px] text-white/30">
-                  Only send from your own wallet or exchange account. After sending, paste the
-                  transaction ID/hash below to confirm — coins are credited automatically once we
-                  verify it on Binance.
-                </p>
+                {/* Step 2 */}
+                <div className="flex gap-3">
+                  <span className="rank-pill mt-0.5 shrink-0 bg-[hsl(var(--accent-hot))]/20 text-[hsl(var(--accent-hot))]">2</span>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
+                      <span className="flex-1 truncate font-mono text-xs text-[hsl(var(--ink-muted))]">
+                        {cryptoQuote.depositAddress}
+                      </span>
+                      <button
+                        onClick={copyAddress}
+                        className="shrink-0 rounded-lg border border-white/10 p-1.5 text-[hsl(var(--ink-faint))] transition hover:bg-white/5"
+                        aria-label="Copy deposit address"
+                      >
+                        {copied ? (
+                          <Check className="h-3.5 w-3.5 text-[hsl(var(--accent-green))]" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </div>
+                    {cryptoQuote.depositTag && (
+                      <p className="text-xs text-[hsl(var(--accent-gold))]">
+                        Memo / tag required: <span className="font-mono">{cryptoQuote.depositTag}</span>
+                      </p>
+                    )}
+                    <p className="text-[11px] text-[hsl(var(--ink-faint))]">
+                      Only send from a wallet or exchange account you control.
+                    </p>
+                  </div>
+                </div>
 
-                <input
-                  type="text"
-                  placeholder="Transaction ID / hash"
-                  value={cryptoTxId}
-                  onChange={(e) => setCryptoTxId(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-4 font-mono text-xs outline-none focus:border-emerald-400"
-                />
-
-                <button
-                  onClick={handleVerifyCrypto}
-                  disabled={verifying}
-                  className="flex h-11 w-full items-center justify-center rounded-xl bg-emerald-500 font-bold text-black transition hover:bg-emerald-400 disabled:opacity-50"
-                >
-                  {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & Credit Coins"}
-                </button>
+                {/* Step 3 */}
+                <div className="flex gap-3">
+                  <span className="rank-pill mt-0.5 shrink-0 bg-[hsl(var(--accent-hot))]/20 text-[hsl(var(--accent-hot))]">3</span>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Transaction ID / hash"
+                      value={cryptoTxId}
+                      onChange={(e) => setCryptoTxId(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-4 font-mono text-xs outline-none transition focus:border-[hsl(var(--accent-hot))]"
+                    />
+                    <button
+                      onClick={handleVerifyCrypto}
+                      disabled={verifying}
+                      className="grad-brand flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {verifying ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <ShieldCheck className="h-4 w-4" /> Verify & credit coins
+                        </>
+                      )}
+                    </button>
+                    <p className="flex items-start gap-1.5 text-[10.5px] leading-relaxed text-[hsl(var(--ink-faint))]">
+                      <Lock className="mt-0.5 h-3 w-3 shrink-0" />
+                      We check this transaction directly against Binance's own deposit
+                      record — coins are only credited once the amount and network are
+                      confirmed on their side, never on the strength of what's typed here.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -394,88 +396,96 @@ export default function WalletPage() {
 
         {/* Error / Success */}
         {error && (
-          <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-xs text-red-300">
+          <div className="mt-4 rounded-xl border border-[hsl(var(--live-red))]/25 bg-[hsl(var(--live-red))]/10 px-4 py-2.5 text-xs text-[hsl(var(--live-red))]">
             {error}
           </div>
         )}
         {success && (
-          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-xs text-emerald-300">
-            {success}
+          <div className="mt-4 flex items-center gap-2 rounded-xl border border-[hsl(var(--accent-green))]/25 bg-[hsl(var(--accent-green))]/10 px-4 py-2.5 text-xs text-[hsl(var(--accent-green))]">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> {success}
           </div>
         )}
 
-        {/* Coin Packages */}
-        <div className="mt-8">
-          <h2 className="text-sm font-black uppercase tracking-wide text-white/30">Buy Coins</h2>
-          <div className="mt-3 grid gap-3">
+        {/* Recharge packages */}
+        <div className="mt-7">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-bold text-[hsl(var(--ink))]">Add coins</h2>
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-[hsl(var(--ink-faint))]">
+              <ShieldCheck className="h-3 w-3" /> Verified on-chain
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2.5">
             {packages.map((pkg) => (
-              <div
+              <button
                 key={pkg.id}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4"
+                onClick={() => openCryptoRecharge(pkg)}
+                disabled={cryptoLoading}
+                className="stage-card flex items-center justify-between p-4 text-left transition hover:border-[hsl(var(--accent-hot))]/40 active:scale-[0.99] disabled:opacity-50"
               >
-                <div className="flex items-center gap-3">
-                  <Zap className="h-5 w-5 text-amber-400" />
-                  <div>
-                    <p className="font-bold">{pkg.label}</p>
-                    <p className="text-xs text-white/30">${pkg.priceUsd.toFixed(2)}</p>
-                  </div>
+                <div>
+                  <p className="text-sm font-bold text-[hsl(var(--ink))]">{pkg.label}</p>
+                  <p className="text-xs text-[hsl(var(--ink-faint))]">
+                    ${pkg.priceUsd.toFixed(2)} · pay with USDT
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => openCryptoRecharge(pkg)}
-                    disabled={processing || cryptoLoading}
-                    title="Pay with USDT"
-                    className="flex items-center gap-1 rounded-xl border border-white/10 px-2.5 py-1.5 text-xs font-bold text-white/50 hover:border-emerald-400 hover:text-emerald-300 disabled:opacity-50"
-                  >
-                    <Bitcoin className="h-3.5 w-3.5" /> USDT
-                  </button>
-                  <button
-                    onClick={() => handlePurchase(pkg)}
-                    disabled={processing}
-                    className="flex items-center gap-1 text-sm font-bold text-violet-300 disabled:opacity-50"
-                  >
-                    Buy <ArrowUpRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
+                <span className="flex items-center gap-1 text-sm font-bold text-[hsl(var(--accent-hot))]">
+                  Recharge <ArrowUpRight className="h-4 w-4" />
+                </span>
+              </button>
             ))}
+          </div>
+
+          {/* Honest state for the rail that isn't live yet, instead of a
+              button that silently hands out free coins with no payment
+              behind it. */}
+          <div className="mt-2.5 flex items-center justify-between rounded-2xl border border-dashed border-white/10 px-4 py-3.5 opacity-60">
+            <div>
+              <p className="text-sm font-bold text-[hsl(var(--ink-muted))]">Card & UPI</p>
+              <p className="text-xs text-[hsl(var(--ink-faint))]">Coming soon</p>
+            </div>
+            <Lock className="h-4 w-4 text-[hsl(var(--ink-faint))]" />
           </div>
         </div>
 
         {/* Transaction History */}
-        <div className="mt-8">
-          <h2 className="text-sm font-black uppercase tracking-wide text-white/30">History</h2>
+        <div className="mt-7">
+          <h2 className="text-sm font-bold text-[hsl(var(--ink))]">History</h2>
           {transactions.length === 0 ? (
-            <div className="mt-3 rounded-2xl border border-dashed border-white/10 px-6 py-10 text-center text-sm text-white/30">
-              <History className="mx-auto h-6 w-6 text-white/15" />
+            <div className="glass-panel mt-3 rounded-2xl px-6 py-10 text-center text-sm text-[hsl(var(--ink-faint))]">
+              <Clock className="mx-auto h-5 w-5 text-[hsl(var(--ink-faint))]" />
               <p className="mt-2">No transactions yet.</p>
             </div>
           ) : (
             <div className="mt-3 space-y-2">
-              {transactions.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/[0.03] p-4"
-                >
-                  <div>
-                    <p className="font-bold text-white">
-                      {tx.type === "purchase" ? "+" : ""}
-                      {tx.coins} coins
-                    </p>
-                    <p className="text-[10px] text-white/30">
-                      {new Date(tx.created_at).toLocaleDateString()}
-                      {tx.type === "withdrawal" && ` · $${tx.amount.toFixed(2)}`}
-                    </p>
+              {transactions.map((tx) => {
+                const meta = statusMeta[tx.status];
+                return (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between rounded-2xl border border-white/6 bg-white/[0.03] px-4 py-3.5"
+                  >
+                    <div>
+                      <p className="text-sm font-bold text-[hsl(var(--ink))]">
+                        {tx.type === "purchase" ? "+" : "−"}
+                        {tx.coins.toLocaleString()} coins
+                      </p>
+                      <p className="mt-0.5 text-[10.5px] text-[hsl(var(--ink-faint))]">
+                        {new Date(tx.created_at).toLocaleDateString()}
+                        {tx.type === "withdrawal" && ` · $${tx.amount.toFixed(2)}`}
+                      </p>
+                    </div>
+                    <span className={`flex items-center gap-1 text-xs font-semibold ${meta.cls}`}>
+                      <meta.Icon className="h-3 w-3" /> {meta.label}
+                    </span>
                   </div>
-                  <div className="text-xs">{getStatusBadge(tx.status)}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
-        <p className="mt-6 text-center text-[10px] text-white/15">
-          Coins are virtual currency. No real-money value outside the platform.
+        <p className="mt-7 text-center text-[10.5px] text-[hsl(var(--ink-faint))]">
+          Coins are virtual currency with no cash value outside the platform.
         </p>
       </div>
     </main>
