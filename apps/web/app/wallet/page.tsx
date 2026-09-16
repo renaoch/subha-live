@@ -16,6 +16,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Copy,
+  Bitcoin,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -47,6 +49,16 @@ type ApiResponse<T> = {
   data: T;
 };
 
+type CryptoQuote = {
+  packageId: string;
+  coins: number;
+  usdtAmount: number;
+  asset: string;
+  network: string;
+  depositAddress: string;
+  depositTag?: string;
+};
+
 // ─── Component ────────────────────────────────────────────────────
 export default function WalletPage() {
   const [balance, setBalance] = useState({ coins: 0, diamonds: 0 });
@@ -62,6 +74,14 @@ export default function WalletPage() {
   const [withdrawMethod, setWithdrawMethod] = useState<"bank" | "upi">("upi");
   const [withdrawAccount, setWithdrawAccount] = useState("");
   const [showWithdraw, setShowWithdraw] = useState(false);
+
+  // Crypto (Binance) recharge
+  const [cryptoPkg, setCryptoPkg] = useState<Package | null>(null);
+  const [cryptoQuote, setCryptoQuote] = useState<CryptoQuote | null>(null);
+  const [cryptoLoading, setCryptoLoading] = useState(false);
+  const [cryptoTxId, setCryptoTxId] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     loadWallet();
@@ -95,6 +115,61 @@ export default function WalletPage() {
     } finally {
       setProcessing(false);
     }
+  }
+
+  async function openCryptoRecharge(pkg: Package) {
+    try {
+      setCryptoPkg(pkg);
+      setCryptoQuote(null);
+      setCryptoTxId("");
+      setError(null);
+      setCryptoLoading(true);
+      const response = (await api.get(
+        `/api/v1/wallet/crypto/quote/${pkg.id}`
+      )) as ApiResponse<CryptoQuote>;
+      setCryptoQuote(response.data);
+    } catch (err: any) {
+      setError(err?.message || "Could not load crypto deposit details.");
+      setCryptoPkg(null);
+    } finally {
+      setCryptoLoading(false);
+    }
+  }
+
+  async function handleVerifyCrypto() {
+    if (!cryptoPkg || !cryptoTxId.trim()) {
+      setError("Paste the transaction ID/hash from your send.");
+      return;
+    }
+    try {
+      setVerifying(true);
+      setError(null);
+      setSuccess(null);
+      await api.post("/api/v1/wallet/crypto/verify", {
+        packageId: cryptoPkg.id,
+        txId: cryptoTxId.trim(),
+      });
+      setSuccess(`Confirmed! ${cryptoPkg.coins} coins credited.`);
+      setCryptoPkg(null);
+      setCryptoQuote(null);
+      setCryptoTxId("");
+      await loadWallet();
+    } catch (err: any) {
+      setError(
+        err?.message ||
+          "Couldn't verify that transaction yet — it may still be confirming on-chain. Try again in a minute."
+      );
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  function copyAddress() {
+    if (!cryptoQuote) return;
+    navigator.clipboard.writeText(cryptoQuote.depositAddress).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
   }
 
   async function handleWithdraw() {
@@ -240,6 +315,83 @@ export default function WalletPage() {
           </div>
         )}
 
+        {/* Crypto recharge panel */}
+        {cryptoPkg && (
+          <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-sm font-bold">
+                <Bitcoin className="h-4 w-4 text-emerald-400" /> Pay with USDT
+              </h3>
+              <button
+                onClick={() => {
+                  setCryptoPkg(null);
+                  setCryptoQuote(null);
+                }}
+                className="text-xs text-white/30 hover:text-white/60"
+              >
+                Cancel
+              </button>
+            </div>
+
+            {cryptoLoading || !cryptoQuote ? (
+              <div className="mt-4 flex justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+              </div>
+            ) : (
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-white/50">
+                  Send exactly{" "}
+                  <span className="font-bold text-white">
+                    {cryptoQuote.usdtAmount.toFixed(2)} {cryptoQuote.asset}
+                  </span>{" "}
+                  on the <span className="font-bold text-white">{cryptoQuote.network}</span> network
+                  to get {cryptoQuote.coins} coins.
+                </p>
+
+                <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5">
+                  <span className="flex-1 truncate font-mono text-xs text-white/80">
+                    {cryptoQuote.depositAddress}
+                  </span>
+                  <button
+                    onClick={copyAddress}
+                    className="shrink-0 rounded-lg border border-white/10 p-1.5 text-white/50 hover:bg-white/5"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {copied && <p className="text-[10px] text-emerald-300">Address copied</p>}
+                {cryptoQuote.depositTag && (
+                  <p className="text-xs text-amber-300">
+                    Memo/Tag required: <span className="font-mono">{cryptoQuote.depositTag}</span>
+                  </p>
+                )}
+
+                <p className="text-[11px] text-white/30">
+                  Only send from your own wallet or exchange account. After sending, paste the
+                  transaction ID/hash below to confirm — coins are credited automatically once we
+                  verify it on Binance.
+                </p>
+
+                <input
+                  type="text"
+                  placeholder="Transaction ID / hash"
+                  value={cryptoTxId}
+                  onChange={(e) => setCryptoTxId(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 px-4 font-mono text-xs outline-none focus:border-emerald-400"
+                />
+
+                <button
+                  onClick={handleVerifyCrypto}
+                  disabled={verifying}
+                  className="flex h-11 w-full items-center justify-center rounded-xl bg-emerald-500 font-bold text-black transition hover:bg-emerald-400 disabled:opacity-50"
+                >
+                  {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & Credit Coins"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Error / Success */}
         {error && (
           <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-xs text-red-300">
@@ -257,11 +409,9 @@ export default function WalletPage() {
           <h2 className="text-sm font-black uppercase tracking-wide text-white/30">Buy Coins</h2>
           <div className="mt-3 grid gap-3">
             {packages.map((pkg) => (
-              <button
+              <div
                 key={pkg.id}
-                onClick={() => handlePurchase(pkg)}
-                disabled={processing}
-                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:border-violet-400 disabled:opacity-50"
+                className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4"
               >
                 <div className="flex items-center gap-3">
                   <Zap className="h-5 w-5 text-amber-400" />
@@ -270,10 +420,24 @@ export default function WalletPage() {
                     <p className="text-xs text-white/30">${pkg.priceUsd.toFixed(2)}</p>
                   </div>
                 </div>
-                <span className="flex items-center gap-1 text-sm font-bold text-violet-300">
-                  Buy <ArrowUpRight className="h-4 w-4" />
-                </span>
-              </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openCryptoRecharge(pkg)}
+                    disabled={processing || cryptoLoading}
+                    title="Pay with USDT"
+                    className="flex items-center gap-1 rounded-xl border border-white/10 px-2.5 py-1.5 text-xs font-bold text-white/50 hover:border-emerald-400 hover:text-emerald-300 disabled:opacity-50"
+                  >
+                    <Bitcoin className="h-3.5 w-3.5" /> USDT
+                  </button>
+                  <button
+                    onClick={() => handlePurchase(pkg)}
+                    disabled={processing}
+                    className="flex items-center gap-1 text-sm font-bold text-violet-300 disabled:opacity-50"
+                  >
+                    Buy <ArrowUpRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>

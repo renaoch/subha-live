@@ -4,6 +4,11 @@ export const purchasePackageSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
 });
 
+export const cryptoVerifySchema = z.object({
+  packageId: z.string().min(1, "Package ID is required"),
+  txId: z.string().min(6, "Transaction ID looks too short").max(128),
+});
+
 export const withdrawalRequestSchema = z.object({
   amount: z.number().positive("Amount must be positive"),
   bankAccount: z.string().optional(),
