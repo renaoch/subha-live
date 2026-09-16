@@ -110,19 +110,49 @@ export async function binanceSignedRequest<T>(
   }
 
   if (!res.ok) {
-    // Binance error bodies look like { code: -2010, msg: "..." }. Surface
-    // the message but never log/echo the request signature or secret.
-    const msg =
-      typeof parsed === "object" && parsed && "msg" in (parsed as any)
-        ? String((parsed as any).msg)
-        : "Binance request failed";
+    // Binance error bodies normally look like { code: -2010, msg: "..." }.
+    // Surface that message but never log/echo the request signature or
+    // secret. When the body is empty (no `msg`), the request usually
+    // never reached Binance's app layer at all — most often a geo/IP
+    // block (451), a WAF/bot challenge (403), or rate limiting (418/429)
+    // — so give a status-specific hint instead of a useless generic
+    // string, and always include the raw status + body for debugging.
+    const hasMsg = typeof parsed === "object" && parsed !== null && "msg" in (parsed as any);
+    const msg = hasMsg
+      ? String((parsed as any).msg)
+      : emptyBodyHint(res.status);
+
+    console.error("Binance signed request failed", {
+      method,
+      path,
+      status: res.status,
+      statusText: res.statusText,
+      body: raw.slice(0, 500),
+    });
+
     throw new AppError(res.status === 429 || res.status === 418 ? 429 : 502, msg, {
       code: "BINANCE_SIGNED_ERROR",
-      details: parsed,
+      details: { status: res.status, statusText: res.statusText, ...(parsed as any) },
     });
   }
 
   return parsed as T;
+}
+
+function emptyBodyHint(status: number): string {
+  if (status === 451) {
+    return "Binance rejected the request (451) with no body — this almost always means the server's IP/region is blocked by Binance (e.g. hosted in a country/cloud range Binance restricts). Try from a different region/host or a proxy Binance allows.";
+  }
+  if (status === 403) {
+    return "Binance rejected the request (403) with no body — likely a WAF/bot check on Binance's edge blocking this server's IP, rather than an API key problem.";
+  }
+  if (status === 418 || status === 429) {
+    return "Binance rate-limited or temporarily banned this IP (418/429) with no body. Back off and retry later; check for excessive request rates.";
+  }
+  if (status === 401) {
+    return "Binance rejected the request (401) with no body — check that BINANCE_API_KEY/BINANCE_API_SECRET are correct and the key's IP allowlist (if set) includes this server's IP.";
+  }
+  return `Binance request failed with status ${status} and an empty response body (likely blocked upstream of Binance's API, e.g. by a proxy, CDN, or firewall).`;
 }
 
 export function isBinanceConfigured() {
