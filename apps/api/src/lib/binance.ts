@@ -158,3 +158,19 @@ function emptyBodyHint(status: number): string {
 export function isBinanceConfigured() {
   return Boolean(process.env.BINANCE_API_KEY && process.env.BINANCE_API_SECRET);
 }
+
+/**
+ * True when BINANCE_BASE_URL points at the Spot Testnet
+ * (testnet.binance.vision) rather than production Binance.
+ *
+ * Important: the testnet only implements the core `api/v3/*` spot
+ * endpoints (account, order, ticker/price, allOrders). It does NOT
+ * implement the `sapi/v1/capital/*` wallet endpoints (deposit address,
+ * deposit history, withdrawals, etc.) — calling those against
+ * testnet.binance.vision will always 404, no matter how the request is
+ * signed. Callers that need those endpoints should check this flag and
+ * return mocked data in test mode instead of calling Binance.
+ */
+export function isBinanceTestnet() {
+  return BINANCE_BASE_URL.includes("testnet.binance.vision");
+}
