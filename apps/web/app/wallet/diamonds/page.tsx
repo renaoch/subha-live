@@ -224,7 +224,7 @@ export default function DiamondsPage() {
               <div className="flex items-baseline justify-between">
                 <p className="text-xs font-semibold text-[hsl(var(--ink-faint))]">Diamonds to withdraw</p>
                 <p className="text-[10.5px] text-[hsl(var(--ink-faint))]">
-                  100,000 diamonds ≈ ${(10 * DIAMOND_TO_USD_RATE).toFixed(2)}
+                  100,000 diamonds ≈ ${(1000 * DIAMOND_TO_USD_RATE).toFixed(2)}
                 </p>
               </div>
               <div className="relative mt-2">
