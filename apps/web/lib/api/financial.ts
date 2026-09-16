@@ -67,6 +67,22 @@ interface WithdrawalResponse {
   withdrawal: WithdrawalResult;
 }
 
+export interface WithdrawalRecord {
+  id: string;
+  currency: "coins" | "diamonds";
+  amount: number;
+  status: "pending" | "approved" | "rejected";
+  requested_at: string;
+  processed_at: string | null;
+  note: string | null;
+  admin_note: string | null;
+}
+
+interface MyWithdrawalsResponse {
+  status: string;
+  withdrawals: WithdrawalRecord[];
+}
+
 /**
  * Generates a fresh idempotency key for one user action (one tap on
  * "send"). The SAME value must be reused if that exact action is
@@ -132,5 +148,11 @@ export const financialApi = {
       body: JSON.stringify(input),
     });
     return response.withdrawal;
+  },
+
+  /** This user's own withdrawal requests, newest first — the real, per-currency record (coins AND diamonds), unlike the legacy /wallet/withdraw history which only ever reflects coins. */
+  async myWithdrawals(): Promise<WithdrawalRecord[]> {
+    const response = await apiFetch<MyWithdrawalsResponse>("/api/v1/financial/withdrawals/me");
+    return response.withdrawals;
   },
 };

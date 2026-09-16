@@ -19,24 +19,26 @@ export function ProfileWallet({
       label: "Coins",
       value: coins,
       color: "#CBA35C",
+      href: "/wallet",
+      aria: "Open Coins",
     },
     {
       label: "Diamonds",
       value: diamonds,
       color: "#D98FA0",
+      href: "/wallet/diamonds",
+      aria: "Open Diamonds",
     },
   ];
 
   return (
     <div className="space-y-2">
-      <Link
-        href="/wallet"
-        className="grid grid-cols-2 gap-3"
-        aria-label="Open wallet"
-      >
+      <div className="grid grid-cols-2 gap-3">
         {items.map((item) => (
-          <div
+          <Link
             key={item.label}
+            href={item.href}
+            aria-label={item.aria}
             className="rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 px-4 py-3.5 transition hover:border-[#CBA35C]/50 active:scale-[0.98]"
           >
             <p className="text-xs text-[#9088A0]">
@@ -54,9 +56,9 @@ export function ProfileWallet({
 
               {numberFormat.format(item.value)}
             </p>
-          </div>
+          </Link>
         ))}
-      </Link>
+      </div>
 
       <Link
         href="/wallet"
