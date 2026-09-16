@@ -24,6 +24,7 @@ import pkRoutes from "./modules/pk/pk.routes";
 import quizRoutes from "./modules/quiz/quiz.routes";
 import messagesRoutes from "./modules/messages/messages.routes";
 import financialRoutes from "./modules/financial/financial.routes";
+import binanceRoutes from "./modules/binance/binance.routes";
     import { errorMiddleware } from "./middleware/error.middleware";
 
 
@@ -73,6 +74,7 @@ import financialRoutes from "./modules/financial/financial.routes";
     app.use("/api/v1/wallet", walletRoutes);
     app.use("/api/v1/charisma", charismaRoutes);
     app.use("/api/v1/financial", financialRoutes);
+    app.use("/api/v1/binance", binanceRoutes);
     app.use("/api/v1", hostTaskRoutes);
     app.use("/api/v1", pkRoutes);
     app.use("/api/v1", quizRoutes);
