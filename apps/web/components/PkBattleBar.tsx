@@ -67,7 +67,9 @@ export function PkBattleBar({ state, onOpen, roomHostId, hostName, hostAvatar }:
     <button
       type="button"
       onClick={onOpen}
-      className="absolute inset-x-0 top-[118px] z-40 mx-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/45 px-2.5 py-2 backdrop-blur-xl transition hover:bg-black/55 active:scale-[0.99]"
+      /* Sits flush under the contained PK video block (top-[96px] + h-[38svh]
+         in PkDualVideo), not at a fixed pixel offset meant for full-bleed video. */
+      className="absolute inset-x-0 top-[calc(96px+38svh+8px)] z-40 mx-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/45 px-2.5 py-2 backdrop-blur-xl transition hover:bg-black/55 active:scale-[0.99]"
     >
       {/* Side A */}
       <span className="flex min-w-0 flex-1 items-center gap-1.5">

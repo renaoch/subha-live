@@ -46,7 +46,10 @@ export function PkDualVideo({
   }, [opponentStream]);
 
   return (
-    <div className="absolute inset-0 z-10 grid grid-cols-2">
+    // Contained battle block, not a full-bleed background: PK video sits in
+    // a fixed-height strip below the header (see reference layout), instead
+    // of stretching each pane to the full screen height at 50% width.
+    <div className="absolute inset-x-0 top-[96px] z-10 grid h-[38svh] grid-cols-2 overflow-hidden">
       {/* Primary (self room host, or self preview) */}
       <div className="relative h-full overflow-hidden border-r border-black/40">
         <video
