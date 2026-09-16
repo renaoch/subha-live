@@ -195,7 +195,7 @@ export default function WalletPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <Link
-            href="/profile"
+            href="/profile/me"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-[hsl(var(--ink-muted))] transition hover:bg-white/5"
             aria-label="Back to profile"
           >
