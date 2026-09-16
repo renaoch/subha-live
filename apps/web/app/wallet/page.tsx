@@ -8,7 +8,6 @@ import {
   Diamond,
   Loader2,
   CheckCircle2,
-  XCircle,
   Clock,
   Copy,
   Check,
@@ -27,19 +26,39 @@ type Package = {
   label: string;
 };
 
-type Transaction = {
+// The real shape returned by GET /api/v1/wallet/me — it's the
+// financial_ledger, not a legacy "purchase/withdrawal" record, so it has
+// no `coins` or `status` field. Every wallet type (coins AND diamonds)
+// comes back in one list; this page filters down to coins entries.
+type LedgerEntry = {
   id: string;
-  type: "purchase" | "withdrawal" | "bonus";
+  wallet_type: "coins" | "diamonds";
+  direction: "credit" | "debit";
   amount: number;
-  coins: number;
-  status: "pending" | "completed" | "failed" | "cancelled";
+  balance_after: number | null;
+  reason: string;
+  reference_type: string;
+  reference_id: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
 };
+
+const REASON_LABELS: Record<string, string> = {
+  recharge: "Recharge",
+  gift_sent: "Gift sent",
+  gift_received: "Gift received",
+  withdrawal: "Withdrawal",
+  admin_adjustment: "Adjustment",
+};
+
+function formatReason(reason: string) {
+  return REASON_LABELS[reason] ?? reason.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
 
 type WalletData = {
   coins: number;
   diamonds: number;
-  history: Transaction[];
+  history: LedgerEntry[];
   packages: Package[];
 };
 
@@ -70,7 +89,7 @@ const TABS: { id: ChannelTab; label: string }[] = [
 // ─── Component ────────────────────────────────────────────────────
 export default function WalletPage() {
   const [balance, setBalance] = useState({ coins: 0, diamonds: 0 });
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<LedgerEntry[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +117,7 @@ export default function WalletPage() {
       const response = (await api.get("/api/v1/wallet/me")) as ApiResponse<WalletData>;
       const { data } = response;
       setBalance({ coins: data.coins || 0, diamonds: data.diamonds || 0 });
-      setTransactions(data.history || []);
+      setTransactions((data.history || []).filter((entry) => entry.wallet_type === "coins"));
       setPackages(data.packages || []);
     } catch (err: any) {
       setError(err?.message || "Failed to load wallet.");
@@ -161,13 +180,6 @@ export default function WalletPage() {
       setTimeout(() => setCopied(false), 1500);
     });
   }
-
-  const statusMeta = {
-    completed: { label: "Completed", Icon: CheckCircle2, cls: "text-[hsl(var(--accent-green))]" },
-    pending: { label: "Pending", Icon: Clock, cls: "text-[hsl(var(--accent-gold))]" },
-    failed: { label: "Failed", Icon: XCircle, cls: "text-[hsl(var(--live-red))]" },
-    cancelled: { label: "Cancelled", Icon: XCircle, cls: "text-[hsl(var(--live-red))]" },
-  } as const;
 
   if (loading) {
     return (
@@ -423,7 +435,7 @@ export default function WalletPage() {
           ) : (
             <div className="mt-3 space-y-2">
               {transactions.map((tx) => {
-                const meta = statusMeta[tx.status];
+                const isCredit = tx.direction === "credit";
                 return (
                   <div
                     key={tx.id}
@@ -431,16 +443,19 @@ export default function WalletPage() {
                   >
                     <div>
                       <p className="text-sm font-bold text-[hsl(var(--ink))]">
-                        {tx.type === "purchase" ? "+" : "−"}
-                        {tx.coins.toLocaleString()} coins
+                        {isCredit ? "+" : "−"}
+                        {tx.amount.toLocaleString()} coins
                       </p>
                       <p className="mt-0.5 text-[10.5px] text-[hsl(var(--ink-faint))]">
-                        {new Date(tx.created_at).toLocaleDateString()}
-                        {tx.type === "withdrawal" && ` · $${tx.amount.toFixed(2)}`}
+                        {formatReason(tx.reason)} · {new Date(tx.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <span className={`flex items-center gap-1 text-xs font-semibold ${meta.cls}`}>
-                      <meta.Icon className="h-3 w-3" /> {meta.label}
+                    <span
+                      className={`text-xs font-semibold ${
+                        isCredit ? "text-[hsl(var(--accent-green))]" : "text-[hsl(var(--ink-faint))]"
+                      }`}
+                    >
+                      {isCredit ? "Credit" : "Debit"}
                     </span>
                   </div>
                 );

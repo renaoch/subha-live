@@ -20,6 +20,14 @@ type ApiResponse<T> = { status: string; data: T };
 type WalletData = { coins: number; diamonds: number };
 type IncomeTab = "withdraw" | "exchange";
 
+// No exchange rate or minimum is defined anywhere on the backend today —
+// there's no rate table and fin_request_withdrawal doesn't reject small
+// amounts. These are placeholders so the UI isn't silently wrong; confirm
+// the real numbers with finance/backend and move them server-side (so the
+// server enforces the minimum, not just this screen) before launch.
+const DIAMOND_TO_USD_RATE = 0.01; // placeholder: 100 diamonds ≈ $1
+const MIN_WITHDRAWAL_DIAMONDS = 100_000; // 1,00,000
+
 export default function DiamondsPage() {
   const [diamonds, setDiamonds] = useState(0);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([]);
@@ -62,6 +70,10 @@ export default function DiamondsPage() {
     const parsed = parseInt(amount, 10);
     if (!parsed || parsed <= 0) {
       setError("Enter how many diamonds you'd like to withdraw.");
+      return;
+    }
+    if (parsed < MIN_WITHDRAWAL_DIAMONDS) {
+      setError(`Minimum withdrawal is ${MIN_WITHDRAWAL_DIAMONDS.toLocaleString("en-IN")} diamonds.`);
       return;
     }
     if (!account.trim()) {
@@ -209,11 +221,16 @@ export default function DiamondsPage() {
             </div>
 
             <div className="mt-4">
-              <p className="text-xs font-semibold text-[hsl(var(--ink-faint))]">Diamonds to withdraw</p>
+              <div className="flex items-baseline justify-between">
+                <p className="text-xs font-semibold text-[hsl(var(--ink-faint))]">Diamonds to withdraw</p>
+                <p className="text-[10.5px] text-[hsl(var(--ink-faint))]">
+                  1,000 diamonds ≈ ${(1000 * DIAMOND_TO_USD_RATE).toFixed(2)}
+                </p>
+              </div>
               <div className="relative mt-2">
                 <input
                   type="number"
-                  placeholder="Enter amount"
+                  placeholder={`Min. ${MIN_WITHDRAWAL_DIAMONDS.toLocaleString("en-IN")}`}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   className="h-11 w-full rounded-xl border border-white/10 bg-black/20 px-4 pr-14 text-sm outline-none transition focus:border-[hsl(var(--accent-hot))]"
@@ -225,6 +242,17 @@ export default function DiamondsPage() {
                   All
                 </button>
               </div>
+              {Number(amount) > 0 && (
+                <p className="mt-1.5 text-[10.5px] text-[hsl(var(--ink-faint))]">
+                  You'll receive ≈ ${(Number(amount) * DIAMOND_TO_USD_RATE).toFixed(2)}
+                  {Number(amount) < MIN_WITHDRAWAL_DIAMONDS && (
+                    <span className="text-[hsl(var(--live-red))]">
+                      {" "}
+                      · below the {MIN_WITHDRAWAL_DIAMONDS.toLocaleString("en-IN")} minimum
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
 
             {error && (
@@ -240,13 +268,14 @@ export default function DiamondsPage() {
 
             <button
               onClick={handleWithdraw}
-              disabled={processing}
+              disabled={processing || Number(amount) < MIN_WITHDRAWAL_DIAMONDS}
               className="grad-brand mt-5 flex h-12 w-full items-center justify-center rounded-2xl text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-50"
             >
               {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Request withdrawal"}
             </button>
             <p className="mt-2 text-center text-[10.5px] text-[hsl(var(--ink-faint))]">
-              Every request is reviewed by our team before funds are released — nothing is deducted automatically.
+              Minimum {MIN_WITHDRAWAL_DIAMONDS.toLocaleString("en-IN")} diamonds per request · reviewed by our
+              team before funds are released, nothing is deducted automatically.
             </p>
           </>
         )}
