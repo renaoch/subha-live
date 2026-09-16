@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/ui/avatar";
 import type { PkState } from "@/lib/api/pk";
 
 function formatCoins(n: number): string {
@@ -21,13 +22,22 @@ function formatRemaining(ms: number): string {
 interface PkBattleBarProps {
   state: PkState | null;
   onOpen?: () => void;
+  /** This room's host — known locally, so their side always gets a real
+      name/avatar. The other side stays a generic "Opponent" pane, same
+      as PkDualVideo, since the opponent's profile isn't resolved here. */
+  roomHostId?: string | null;
+  hostName?: string | null;
+  hostAvatar?: string | null;
 }
 
 /**
  * Compact always-on battle bar, shown while a PK is active/finished so the
- * score + timer are visible without opening the PK sheet.
+ * score + timer are visible without opening the PK sheet. Styled like the
+ * rest of the in-room glass chrome (RoomHeader's pills, RoomChat's frosted
+ * bar) rather than a standalone card, so it reads as part of the same
+ * screen instead of a different product.
  */
-export function PkBattleBar({ state, onOpen }: PkBattleBarProps) {
+export function PkBattleBar({ state, onOpen, roomHostId, hostName, hostAvatar }: PkBattleBarProps) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -42,41 +52,74 @@ export function PkBattleBar({ state, onOpen }: PkBattleBarProps) {
   if (!active && !finished) return null;
 
   const remaining = state.endsAt != null ? state.endsAt - now : 0;
+  const hostIsA = roomHostId != null && roomHostId === state.hostA;
+  const hostIsB = roomHostId != null && roomHostId === state.hostB;
+
+  const sideAName = hostIsA ? hostName || "Host" : "Host A";
+  const sideAAvatar = hostIsA ? hostAvatar ?? undefined : undefined;
+  const sideBName = hostIsB ? hostName || "Host" : "Opponent";
+  const sideBAvatar = hostIsB ? hostAvatar ?? undefined : undefined;
+
+  const aWinning = finished ? state.winner === "A" : state.scoreA > state.scoreB;
+  const bWinning = finished ? state.winner === "B" : state.scoreB > state.scoreA;
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="absolute inset-x-0 top-[118px] z-40 mx-4 flex items-center justify-between rounded-2xl border border-[#F5B93F]/30 bg-black/55 px-3 py-2 backdrop-blur-xl"
+      className="absolute inset-x-0 top-[118px] z-40 mx-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/45 px-2.5 py-2 backdrop-blur-xl transition hover:bg-black/55 active:scale-[0.99]"
     >
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F5B93F]/20 text-[#F5B93F]">
-          <Swords className="h-3.5 w-3.5" />
-        </span>
-        <span className="truncate text-[12px] font-bold text-white">
-          PK Battle
-        </span>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2.5">
-        {active && (
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-black tabular-nums text-white">
-            {formatRemaining(remaining)}
-          </span>
-        )}
+      {/* Side A */}
+      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        <Avatar
+          name={sideAName}
+          src={sideAAvatar}
+          size="sm"
+          className={cn("h-6 w-6 shrink-0", aWinning && "ring-2 ring-[#F5B93F]")}
+        />
         <span
           className={cn(
-            "text-[12px] font-black tabular-nums",
-            finished ? "text-[#F5B93F]" : "text-white",
+            "truncate text-[11px] font-black tabular-nums",
+            finished ? (aWinning ? "text-[#F5B93F]" : "text-white/50") : "text-white",
           )}
         >
-          {finished
-            ? state.winner === "DRAW"
-              ? "Draw"
-              : `${state.winner === "A" ? "A" : "B"} wins`
-            : `${formatCoins(state.scoreA)} : ${formatCoins(state.scoreB)}`}
+          {formatCoins(state.scoreA)}
         </span>
-      </div>
+      </span>
+
+      {/* Center: icon + timer/result */}
+      <span className="flex shrink-0 flex-col items-center gap-0.5 px-1">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F5B93F]/20 text-[#F5B93F]">
+          <Swords className="h-3 w-3" />
+        </span>
+        {active ? (
+          <span className="rounded-full bg-white/10 px-1.5 text-[9px] font-bold tabular-nums text-white/80">
+            {formatRemaining(remaining)}
+          </span>
+        ) : (
+          <span className="text-[9px] font-bold uppercase tracking-wide text-[#F5B93F]">
+            {state.winner === "DRAW" ? "Draw" : "Result"}
+          </span>
+        )}
+      </span>
+
+      {/* Side B */}
+      <span className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+        <span
+          className={cn(
+            "truncate text-[11px] font-black tabular-nums",
+            finished ? (bWinning ? "text-[#F5B93F]" : "text-white/50") : "text-white",
+          )}
+        >
+          {formatCoins(state.scoreB)}
+        </span>
+        <Avatar
+          name={sideBName}
+          src={sideBAvatar}
+          size="sm"
+          className={cn("h-6 w-6 shrink-0", bWinning && "ring-2 ring-[#F5B93F]")}
+        />
+      </span>
     </button>
   );
 }

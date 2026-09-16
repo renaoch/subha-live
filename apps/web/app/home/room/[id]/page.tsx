@@ -787,7 +787,13 @@ useEffect(() => {
 
         {/* PK battle bar (score + timer, active/finished) */}
 
-        <PkBattleBar state={pk.state} onOpen={() => setPkOpen(true)} />
+        <PkBattleBar
+          state={pk.state}
+          onOpen={() => setPkOpen(true)}
+          roomHostId={room.host_id}
+          hostName={room.host?.name}
+          hostAvatar={room.host?.avatar}
+        />
 
         {/* "X joined" pulses, top-left, above the chat stream */}
 
