@@ -9,6 +9,8 @@ import {
   getOrderStatus,
   getRecentOrders,
   getBinanceStatus,
+  getDepositAddress,
+  verifyAndCreditDeposit,
 } from "./binance.service";
 
 function requireUser(req: Request) {
@@ -53,6 +55,47 @@ export async function pricesController(req: Request, res: Response, next: NextFu
     if (symbols.length === 0) throw new AppError(400, "symbols query param required");
     const data = await getSymbolPrices(symbols);
     res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── User-facing: automated crypto recharge ─────────────────────
+// No admin ever touches these two. Deposit address comes straight from
+// the platform's own Binance account; crediting only ever happens after
+// verifyAndCreditDeposit() independently confirms the deposit against
+// Binance's own record for the txId (see binance.service.ts for the full
+// trust model).
+
+// GET /api/v1/binance/recharge/deposit-address?coin=USDT&network=TRC20
+export async function depositAddressController(req: Request, res: Response, next: NextFunction) {
+  try {
+    requireUser(req);
+    const coin = String(req.query.coin || "USDT").toUpperCase();
+    const network = req.query.network ? String(req.query.network) : undefined;
+    const data = await getDepositAddress(coin, network);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/v1/binance/recharge/verify { coin, txId }
+// Automatically credits coins the moment Binance's own deposit history
+// confirms the transaction — nobody approves this by hand.
+export async function verifyRechargeController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = requireUser(req);
+    const { coin, txId } = req.body ?? {};
+    if (!coin || !txId) {
+      throw new AppError(400, "coin and txId are required");
+    }
+    const result = await verifyAndCreditDeposit({
+      userId: user.id,
+      coin: String(coin),
+      txId: String(txId),
+    });
+    res.status(result.confirmed ? 200 : 202).json(result);
   } catch (err) {
     next(err);
   }

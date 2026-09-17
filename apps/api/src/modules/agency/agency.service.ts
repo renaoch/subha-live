@@ -194,6 +194,7 @@ function toAgencySummary(
 ): AgencySummary {
   return {
     id: agency.id,
+    code: agency.code,
     name: agency.name,
     ownerId: agency.owner_id,
     commissionRate:

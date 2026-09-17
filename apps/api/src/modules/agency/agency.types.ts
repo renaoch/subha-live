@@ -35,6 +35,8 @@ export type AgencyHost =
 export interface AgencySummary {
   id: string;
 
+  code: string;
+
   name: string;
 
   ownerId: string;

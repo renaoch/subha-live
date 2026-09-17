@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api/client";
-import { Coins, Loader2, Wallet, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Coins, Loader2, Wallet, Clock, CheckCircle, XCircle, Copy, Zap } from "lucide-react";
+import { CryptoRechargePanel } from "@/components/CryptoRechargePanel";
 
 type RechargeRequest = {
   id: string;
@@ -119,6 +120,16 @@ export default function OfflineRechargePage() {
         <p className="mt-3 text-sm text-white/40">
           Submit your offline payment details. Once verified, your coins will be added.
         </p>
+
+        {/* Instant crypto recharge — fully automated, verified straight
+            against Binance's own deposit ledger. No admin approval step. */}
+        <CryptoRechargePanel onCredited={loadRequests} />
+
+        <div className="mt-8 flex items-center gap-3 text-[10px] font-bold uppercase tracking-wide text-white/20">
+          <span className="h-px flex-1 bg-white/10" />
+          Or submit for manual review
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
 
         {/* Request Form */}
         <form

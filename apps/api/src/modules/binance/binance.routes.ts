@@ -8,6 +8,8 @@ import {
   placeOrderController,
   orderStatusController,
   recentOrdersController,
+  depositAddressController,
+  verifyRechargeController,
 } from "./binance.controller";
 
 const router = Router();
@@ -16,6 +18,12 @@ const router = Router();
 router.get("/status", authMiddleware, statusController);
 router.get("/price/:symbol", authMiddleware, priceController);
 router.get("/prices", authMiddleware, pricesController);
+
+// User-facing: automated crypto recharge. Fully backend-verified against
+// Binance's own deposit ledger — no admin approval step anywhere in this
+// path (see binance.controller.ts / binance.service.ts).
+router.get("/recharge/deposit-address", authMiddleware, depositAddressController);
+router.post("/recharge/verify", authMiddleware, verifyRechargeController);
 
 // Admin-only (checked inside controllers via assertIsPlatformAdmin):
 // these sign and send real requests against the platform's Binance
