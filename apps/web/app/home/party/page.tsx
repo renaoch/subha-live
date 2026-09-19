@@ -16,6 +16,8 @@ import {
   PartyPopper,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { BannerCarousel } from "@/components/BannerCarousel";
+import { getPromoBanners } from "@/lib/promo-banners";
 import { useRooms, useCreateRoom } from "@/hooks/queries/use-rooms";
 import { useActivePkBattles } from "@/hooks/queries/use-pk";
 import type { RoomRecord } from "@/lib/api/rooms";
@@ -82,6 +84,8 @@ export default function PartyPage() {
     return map;
   }, [rooms]);
 
+  const promoBanners = useMemo(() => getPromoBanners(), []);
+
   const liveRooms = useMemo(
     () => (rooms ?? []).filter((r) => r.status === "live"),
     [rooms],
@@ -131,6 +135,10 @@ export default function PartyPage() {
           Join a PK battle, play a game, or catch a live event.
         </p>
       </header>
+
+      <div className="px-4 pt-4">
+        <BannerCarousel items={promoBanners} />
+      </div>
 
       <section className="px-4 pt-5">
         {/* Go Party — one tap creates a 10-seat audio party room and jumps

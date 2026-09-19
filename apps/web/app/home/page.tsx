@@ -22,6 +22,8 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Avatar } from "@/components/ui/avatar";
+import { BannerCarousel } from "@/components/BannerCarousel";
+import { getPromoBanners } from "@/lib/promo-banners";
 import { useCreateRoom, useRooms } from "@/hooks/queries/use-rooms";
 import { useRoomPreview } from "@/hooks/useRoomPreview";
 import type { RoomRecord } from "@/lib/api/rooms";
@@ -94,6 +96,7 @@ function LivePageInner() {
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const promoBanners = useMemo(() => getPromoBanners(), []);
   const [createOpen, setCreateOpen] = useState(false);
 
   // Shared room-discovery hook (React Query) — same query/polling logic Party
@@ -261,6 +264,10 @@ function LivePageInner() {
           ))}
         </div>
       </header>
+
+      <div className="relative z-10 px-4 pt-4">
+        <BannerCarousel items={promoBanners} />
+      </div>
 
       <section className="relative z-10 px-4 pb-8 pt-5">
         {loading ? (
