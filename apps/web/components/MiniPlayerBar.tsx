@@ -107,7 +107,7 @@ export function MiniPlayerBar() {
         </div>
 
         <div className="relative mt-auto flex items-center gap-1.5 p-1.5">
-          <Avatar name={room.host?.name} src={room.host?.avatar ?? undefined} size="sm" className="h-5 w-5 shrink-0" />
+          <Avatar name={room.host?.name || "Host"} src={room.host?.avatar ?? undefined} size="sm" className="h-5 w-5 shrink-0" />
           <span className="truncate text-[10px] font-bold text-white">{title}</span>
         </div>
 
