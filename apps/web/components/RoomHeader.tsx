@@ -10,6 +10,7 @@ import { HostTaskCard } from "@/components/HostTaskCard";
 import type { HostTaskStats, ViewerHostTask } from "@/lib/api/host-task";
 import {
   BadgeCheck,
+  ChevronDown,
   Crown,
   Users,
   UsersRound,
@@ -32,6 +33,9 @@ interface RoomHeaderProps {
   viewerCount: number;
   isLive: boolean;
   onLeave: () => void;
+  /** Optional: drop into the floating mini player instead of closing
+   * outright. Only rendered when provided. */
+  onMinimize?: () => void;
   /** Currently logged-in user, so we can hide Follow on your own room. */
   currentUserId?: string | null;
   /** Host's live task/reward, if one is active for this user. */
@@ -178,6 +182,7 @@ export function RoomHeader({
   viewerCount,
   isLive,
   onLeave,
+  onMinimize,
   currentUserId,
   task,
   isHost,
@@ -258,6 +263,17 @@ export function RoomHeader({
               {formatCount(viewerCount)}
             </span>
           </button>
+
+          {onMinimize && (
+            <button
+              type="button"
+              onClick={onMinimize}
+              aria-label="Minimize to mini player"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white/80 backdrop-blur-sm transition hover:bg-black/60 hover:text-white"
+            >
+              <ChevronDown className="h-5 w-5" strokeWidth={1.75} />
+            </button>
+          )}
 
           <button
             type="button"

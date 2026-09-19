@@ -27,13 +27,14 @@ function isBackendUnconfigured(error: unknown): boolean {
   );
 }
 
-export function useRoom(id: string) {
+export function useRoom(id: string | null | undefined) {
   const query = useQuery({
-    queryKey: ["rooms", "detail", id],
+    queryKey: ["rooms", "detail", id || "none"],
+    enabled: !!id,
     queryFn: async () => {
       try {
-        const data = await roomsApi.get(id);
-        return isValidRoom(data) ? data : createFallbackRoom(id);
+        const data = await roomsApi.get(id as string);
+        return isValidRoom(data) ? data : createFallbackRoom(id as string);
       } catch (error) {
         // Only fabricate a demo room when there's genuinely no backend to
         // call. Any real failure (room not found, unauthorized, network
@@ -44,7 +45,7 @@ export function useRoom(id: string) {
         // "join failed" errors (or a permanently stuck loading state)
         // with no sign that the actual problem was this GET failing.
         if (isBackendUnconfigured(error)) {
-          return createFallbackRoom(id);
+          return createFallbackRoom(id as string);
         }
         throw error;
       }

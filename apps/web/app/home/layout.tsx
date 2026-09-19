@@ -5,6 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { BottomNav } from "@/components/nav/bottom-nav";
 import { useAuthStore } from "@/store/auth-store";
+import { RoomSessionProvider } from "@/lib/room-session-context";
+import { MiniPlayerBar } from "@/components/MiniPlayerBar";
 
 export default function HomeLayout({
   children,
@@ -48,9 +50,12 @@ export default function HomeLayout({
   if (!isAuthed) return null;
 
   return (
-    <div className={isFullScreenRoute ? "min-h-dvh bg-surface" : "min-h-dvh bg-surface pb-24"}>
-      {children}
-      {!isFullScreenRoute && <BottomNav />}
-    </div>
+    <RoomSessionProvider>
+      <div className={isFullScreenRoute ? "min-h-dvh bg-surface" : "min-h-dvh bg-surface pb-24"}>
+        {children}
+        {!isFullScreenRoute && <BottomNav />}
+        <MiniPlayerBar />
+      </div>
+    </RoomSessionProvider>
   );
 }

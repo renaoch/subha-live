@@ -10,13 +10,7 @@ import { toast } from 'sonner';
 
 import { Loader2, Mic, MicOff } from 'lucide-react';
 
-import { createClient } from '@/lib/supabase/client';
-
-import { roomsApi } from '@/lib/api/rooms';
-
-import { useRoom } from '@/hooks/useRoom';
-
-import { useWebRTC } from '@/hooks/useWebRTC';
+import { useRoomSession } from '@/lib/room-session-context';
 
 import { useSpeakerRequests } from '@/hooks/useSpeakerRequests';
 
@@ -97,65 +91,67 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
   const router = useRouter();
 
+  // ---- Shared room session (survives navigation — see room-session-context) ----
 
-
-  // ---- User ----
-
-  const [userId, setUserId] = useState<string | null>(null);
+  const { openRoom, minimize, closeRoom, runtime } = useRoomSession();
 
   useEffect(() => {
+    openRoom(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
-    const supabase = createClient();
+  // If the shared session was closed out from under this route (host ended
+  // the room, or it was explicitly left from the mini player), there's
+  // nothing left to show here — bounce back to Home instead of rendering a
+  // broken screen.
+  useEffect(() => {
+    if (runtime === null) router.replace('/home');
+  }, [runtime, router]);
 
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  const userId = runtime?.userId ?? null;
+  const room = runtime?.room ?? null;
+  const isLoading = runtime?.roomLoading ?? true;
+  const isError = runtime?.roomError ?? false;
+  const refetch = runtime?.refetchRoom ?? (() => {});
+  const isHost = runtime?.isHost ?? false;
+  const isLive = runtime?.isLive ?? false;
+  const isWaiting = runtime?.isWaiting ?? false;
 
-  }, []);
+  const hostPublishing = runtime?.hostPublishing ?? false;
+  const hostMediaReady = runtime?.hostMediaReady ?? false;
+  const viewerConnected = runtime?.viewerConnected ?? false;
+  const speakerPublishing = runtime?.speakerPublishing ?? false;
+  const mediaError = runtime?.mediaError ?? '';
+  const mediaState = runtime?.mediaState;
+  const speakingSpeakerIds = runtime?.speakingSpeakerIds;
+  const localStreamRef = runtime?.localStreamRef ?? { current: null };
+  const remoteStreamRef = runtime?.remoteStreamRef ?? { current: null };
+  const publishGuestAudio = runtime?.publishGuestAudio ?? (async () => {});
+
+  // Connection lifecycle now lives in the shared session (room-session-
+  // context) so it survives navigating away from this route. This page
+  // just calls into it and handles its own navigation on top.
+  const actionLoading = runtime?.actionLoading ?? false;
+  const handleStart = runtime?.handleStart ?? (async () => {});
+  const handleJoin = runtime?.handleJoin ?? (async () => {});
+  const handleEnd = runtime?.handleEnd ?? (async () => {});
+
+  // Full leave: disconnect, clear the shared session, and navigate home.
+  // Contrast with "minimize" below, which keeps the connection alive.
+  const handleLeave = useCallback(async () => {
+    await (runtime?.handleLeave ?? (async () => {}))();
+    closeRoom();
+    router.push('/home');
+  }, [runtime, closeRoom, router]);
+
+  // Minimize: keep the connection alive in RoomSessionProvider and drop
+  // into the floating mini player instead of disconnecting.
+  const handleMinimize = useCallback(() => {
+    minimize();
+    router.push('/home');
+  }, [minimize, router]);
 
 
-
-  // ---- Room ----
-
-  const { room, isLoading, isError, refetch } = useRoom(id);
-
-  const isHost = !!room && userId === room.host_id;
-
-  const isLive = room?.status === 'live';
-
-  const isWaiting = room?.status === 'created';
-
-
-
-  // ---- WebRTC ----
-
-  const {
-
-    hostPublishing,
-
-    hostMediaReady,
-
-    viewerConnected,
-
-    speakerPublishing,
-
-    mediaError,
-
-    mediaState,
-
-    speakingSpeakerIds,
-
-    localStreamRef,
-
-    remoteStreamRef,
-
-    startHost,
-
-    joinViewer,
-
-    leave,
-
-    publishGuestAudio
-
-  } = useWebRTC(room, userId);
 
 
 
@@ -302,8 +298,6 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
 
   const [guestMicEnabled, setGuestMicEnabled] = useState(true);
 
-  const [actionLoading, setActionLoading] = useState(false);
-
   // Cache of userId -> {name, avatar} picked up from speaker requests, so
   // approved speakers still show a real name/avatar (instead of "Guest N")
   // once they leave the pending-requests list.
@@ -329,104 +323,10 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
 
 
   // ---- Handlers ----
-const handleStart = useCallback(async () => {
-  if (!room) return;
-  setActionLoading(true);
-  try {
-    // Flip the room to "live" on the server FIRST. Every downstream
-    // call (publishHost, speaker-requests polling, viewer join) is
-    // gated on room.status === "live" and will 409 until this succeeds.
-    const startedRoom = await roomsApi.start(room.id);
-    await refetch();
-
-    // Now that the room is live, actually publish the host's media.
-    await startHost(startedRoom ?? room);
-
-    toast.success("You're live");
-  } catch (e) {
-    toast.error(e instanceof Error ? e.message : 'Start failed');
-  } finally {
-    setActionLoading(false);
-  }
-}, [room, startHost, refetch]);
-
-const handleJoin = useCallback(async () => {
-  if (!room) return;
-  setActionLoading(true);
-  try {
-    // Register the viewer as an active room_participants row (needed by
-    // requestAudio/createSpeakerRequest) IN PARALLEL with the actual
-    // WebRTC connect, not before it. room-media.controller.ts's
-    // createViewerSession has no dependency on this row existing — it
-    // only reads/writes room media state — so there was no reason for
-    // these to be a sequential chain. Serializing them stacked a full
-    // extra network round-trip in front of the ICE/SDP negotiation on
-    // every single viewer join, which is a large chunk of why joining a
-    // live stream could take 5-10s. joinViewer's own errors are what the
-    // user actually cares about (media failed to connect), so that one
-    // is awaited directly for its rejection; the participant-row write
-    // is best-effort and shouldn't block or fail the join over it.
-    await Promise.all([
-      roomsApi.join(room.id).catch((e) => {
-        console.error('[handleJoin] failed to register room_participants row:', e);
-      }),
-      joinViewer(room),
-    ]);
-    toast.success('Connected to the live');
-  } catch (e) {
-    toast.error(e instanceof Error ? e.message : 'Join failed');
-  } finally {
-    setActionLoading(false);
-  }
-}, [room, joinViewer]);
-
-  const handleLeave = useCallback(async () => {
-
-    await leave();
-
-    router.push('/home');
-
-  }, [leave, router]);
-
-
-
-  const handleEnd = useCallback(async () => {
-
-    if (!room) return;
-
-    setActionLoading(true);
-
-    try {
-
-      await roomsApi.end(room.id);
-
-      toast.success('Live ended');
-
-      refetch();
-
-    } catch (e) {
-
-      toast.error(e instanceof Error ? e.message : 'End failed');
-
-    } finally {
-
-      setActionLoading(false);
-
-    }
-
-  }, [room, refetch]);
-
-
-
-  // ---- Auto-join for viewers ----
-
-  useEffect(() => {
-
-    if (!room || isHost || room.status !== 'live') return;
-
-    handleJoin();
-
-  }, [room?.id, room?.status, isHost, handleJoin]);
+  // Connect/disconnect + start/join/end now live in RoomSessionProvider
+  // (handleStart/handleJoin/handleEnd/handleLeave defined above) so they
+  // survive navigating away from this route. Only per-route UI effects
+  // stay here.
 
 useEffect(() => {
   if (isHost || !viewerRequestAccepted || speakerPublishing) return;
@@ -435,24 +335,6 @@ useEffect(() => {
     console.error('[handleGuestAutoPublish] failed:', e);
   });
 }, [isHost, viewerRequestAccepted, speakerPublishing, publishGuestAudio]);
-
-  // ---- Auto-leave when room ends ----
-
-  useEffect(() => {
-
-    if (!room || isHost) return;
-
-    if (room.status === 'ended') {
-
-      toast.info('The host ended this live');
-
-      handleLeave();
-
-    }
-
-  }, [room?.status, isHost, handleLeave]);
-
-
 
   // ---- Derived ----
 
@@ -659,6 +541,8 @@ useEffect(() => {
           isLive={isLive}
 
           onLeave={handleLeave}
+
+          onMinimize={handleMinimize}
 
           currentUserId={userId}
 
