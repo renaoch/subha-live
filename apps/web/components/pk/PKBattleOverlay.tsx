@@ -41,16 +41,21 @@ export function PKBattleOverlay({ state, roomHostId, hostName, hostAvatar }: PKB
       return;
     }
 
-    const justStarted =
-      state.status === "ACTIVE" &&
-      prevStatus.current !== "ACTIVE" &&
-      prevStatus.current !== "FINALIZING" &&
-      prevStatus.current !== "FINISHED";
+    // The backend transitions straight to ACTIVE with no observable
+    // "STARTING" REST state, so everyone — including the host who just
+    // started it — sees status "ACTIVE" the very first time they read this
+    // battle at all. That means "did we see a different status before
+    // this?" can't distinguish a fresh start from a late join (prevStatus
+    // is null in both cases). Use how fresh `startedAt` is instead: a
+    // battle that started in roughly the last few seconds is a real start;
+    // anything older means we're joining a fight already in progress.
+    const startedRecently =
+      state.startedAt != null && Date.now() - state.startedAt < 8_000;
 
-    // Only play the intro for a battle we watched transition INTO active —
-    // never for one that was already active when this component mounted
-    // (e.g. a viewer joining mid-fight), so refreshing never re-triggers it.
-    if (justStarted && prevStatus.current != null && introShownForBattle.current !== battleId) {
+    const justStarted =
+      state.status === "ACTIVE" && prevStatus.current !== "ACTIVE" && startedRecently;
+
+    if (justStarted && introShownForBattle.current !== battleId) {
       introShownForBattle.current = battleId;
       setShowIntro(true);
     }

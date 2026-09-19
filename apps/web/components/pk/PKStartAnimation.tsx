@@ -92,14 +92,14 @@ export function PKStartAnimation({
 
   if (prefersReducedMotion) {
     return (
-      <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/80">
+      <div className="absolute inset-0 z-[85] flex items-center justify-center bg-black/80">
         <span className="text-2xl font-black tracking-wide text-white">PK START!</span>
       </div>
     );
   }
 
   return (
-    <div className="absolute inset-0 z-[70] overflow-hidden bg-black">
+    <div className="absolute inset-0 z-[85] overflow-hidden bg-black">
       {/* Two color fields racing in from each side, clashing at center. */}
       <motion.div
         className="absolute inset-y-0 left-0 w-1/2"

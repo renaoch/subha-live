@@ -56,7 +56,7 @@ export function PKResultAnimation({
       type="button"
       onClick={onDone}
       aria-label="Dismiss PK result"
-      className="absolute inset-0 z-[70] flex flex-col items-center justify-center bg-black/90 px-6 text-center"
+      className="absolute inset-0 z-[85] flex flex-col items-center justify-center bg-black/90 px-6 text-center"
     >
       {!prefersReducedMotion && !isDraw && <ResultGlow color={aWins ? PK_SIDE_A_COLOR : PK_SIDE_B_COLOR} />}
 

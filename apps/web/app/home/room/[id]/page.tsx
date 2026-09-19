@@ -239,6 +239,15 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const pk = usePk(room?.id ?? '', userId, isHost, room?.status);
   const [pkOpen, setPkOpen] = useState(false);
 
+  // Once the battle actually goes ACTIVE, the sheet's job (invite/accept/
+  // start) is done — close it so it doesn't sit on top of (and hide) the
+  // start animation and the clean active-battle UI underneath. Reopening
+  // is still one tap away via the score bar or the "Last PK" card.
+  useEffect(() => {
+    if (pk.state?.status === 'ACTIVE') setPkOpen(false);
+  }, [pk.state?.status]);
+
+
   // Opponent's stream for the dual-video PK view (client-side side-by-side).
   const { opponentStream, opponentConnected } = usePkMedia(room, userId, pk.state);
 
