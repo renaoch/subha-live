@@ -103,9 +103,19 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   // If the shared session was closed out from under this route (host ended
   // the room, or it was explicitly left from the mini player), there's
   // nothing left to show here — bounce back to Home instead of rendering a
-  // broken screen.
+  // broken screen. Guarded by `hadRuntimeRef` because `runtime` starts out
+  // null for one render too — openRoom() above updates the provider's
+  // state asynchronously, so on the very first render here it hasn't
+  // landed yet. Without the guard, that transient null looked identical
+  // to "session closed" and redirected home immediately after every room
+  // was created/opened.
+  const hadRuntimeRef = useRef(false);
   useEffect(() => {
-    if (runtime === null) router.replace('/home');
+    if (runtime) {
+      hadRuntimeRef.current = true;
+      return;
+    }
+    if (hadRuntimeRef.current) router.replace('/home');
   }, [runtime, router]);
 
   const userId = runtime?.userId ?? null;
