@@ -50,6 +50,10 @@ import { PkBattleSheet } from '@/components/PkBattleSheet';
 
 import { PkDualVideo } from '@/components/PkDualVideo';
 
+import { PKBattleOverlay } from '@/components/pk/PKBattleOverlay';
+
+import { LastPKCard } from '@/components/pk/LastPKCard';
+
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
@@ -794,6 +798,23 @@ useEffect(() => {
           hostName={room.host?.name}
           hostAvatar={room.host?.avatar}
         />
+
+        {/* One-shot PK animations: start intro/countdown and end-of-battle
+            result, driven by the real PK lifecycle. Renders nothing while
+            no PK is active/finishing. */}
+        <PKBattleOverlay
+          state={pk.state}
+          roomHostId={room.host_id}
+          hostName={room.host?.name}
+          hostAvatar={room.host?.avatar}
+        />
+
+        {/* "Last PK" achievement card, only while live and no PK is running. */}
+        {isLive && !pk.state && (
+          <div className="absolute inset-x-0 top-[104px] z-30 mx-4">
+            <LastPKCard hostId={room.host_id} onView={() => setPkOpen(true)} />
+          </div>
+        )}
 
         {/* "X joined" pulses, top-left, above the chat stream */}
 

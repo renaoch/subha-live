@@ -52,6 +52,28 @@ export interface PkState {
   winner?: PkWinner | null;
 }
 
+export interface PkHistoryEntry {
+  battleId: string;
+  opponentId: string;
+  opponentName: string;
+  opponentAvatar: string | null;
+  result: "WIN" | "LOSS" | "DRAW";
+  myScore: number;
+  opponentScore: number;
+  durationMs: number | null;
+  endedAt: string | null;
+}
+
+export interface PkStats {
+  totalBattles: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  currentStreak: number;
+  highestScore: number;
+  totalCoins: number;
+}
+
 export const pkApi = {
   invite(roomId: string, opponentHostId: string) {
     return apiFetch<PkEnvelope<PkBattle>>("/api/v1/pk/invite", {
@@ -99,6 +121,24 @@ export const pkApi = {
   /** Currently active/pending battles, for Party's PK discovery surface. */
   listActive() {
     return apiFetch<PkEnvelope<PkBattle[]>>("/api/v1/pk/active").then(
+      (r) => r.data,
+    );
+  },
+
+  history(hostId: string, limit = 20) {
+    return apiFetch<PkEnvelope<PkHistoryEntry[]>>(
+      `/api/v1/pk/history/${hostId}?limit=${limit}`,
+    ).then((r) => r.data);
+  },
+
+  last(hostId: string) {
+    return apiFetch<PkEnvelope<PkHistoryEntry | null>>(
+      `/api/v1/pk/last/${hostId}`,
+    ).then((r) => r.data);
+  },
+
+  stats(hostId: string) {
+    return apiFetch<PkEnvelope<PkStats>>(`/api/v1/pk/stats/${hostId}`).then(
       (r) => r.data,
     );
   },

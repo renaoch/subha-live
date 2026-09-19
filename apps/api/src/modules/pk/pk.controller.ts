@@ -103,3 +103,34 @@ export async function getPkForRoom(req: Request<{ roomId: string }>, res: Respon
     next(error);
   }
 }
+
+export async function getPkHistory(req: Request<{ hostId: string }>, res: Response, next: NextFunction) {
+  try {
+    requireUser(req);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const history = await pkService.getHistory(req.params.hostId, limit);
+    res.status(200).json({ success: true, data: history });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getLastPk(req: Request<{ hostId: string }>, res: Response, next: NextFunction) {
+  try {
+    requireUser(req);
+    const last = await pkService.getLastForHost(req.params.hostId);
+    res.status(200).json({ success: true, data: last });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPkStats(req: Request<{ hostId: string }>, res: Response, next: NextFunction) {
+  try {
+    requireUser(req);
+    const stats = await pkService.getStats(req.params.hostId);
+    res.status(200).json({ success: true, data: stats });
+  } catch (error) {
+    next(error);
+  }
+}

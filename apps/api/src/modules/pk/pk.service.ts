@@ -362,4 +362,121 @@ export const pkService = {
   async listActive(): Promise<PkBattleRow[]> {
     return pkRepository.listActive();
   },
+
+  /** PK history for a host: finished battles with the opponent's name/avatar
+   * resolved, newest first. Pure read of durable rows — never touches Redis
+   * hot state, since finished battles no longer have any. */
+  async getHistory(hostId: string, limit = 20): Promise<PkHistoryEntry[]> {
+    const rows = await pkRepository.listFinishedForHost(hostId, limit);
+    return attachOpponents(rows, hostId);
+  },
+
+  /** Most recent finished battle for a host, for the in-room "Last PK" card. */
+  async getLastForHost(hostId: string): Promise<PkHistoryEntry | null> {
+    const rows = await pkRepository.listFinishedForHost(hostId, 1);
+    const [entry] = await attachOpponents(rows, hostId);
+    return entry ?? null;
+  },
+
+  /** Aggregate PK record for a host, derived from finished battles — never
+   * hardcoded, always computed from the same durable rows as history. */
+  async getStats(hostId: string): Promise<PkStats> {
+    // 200 is generous headroom for an accurate lifetime record without an
+    // unbounded scan; if hosts routinely exceed it, move this to a SQL
+    // aggregate instead of computing in JS.
+    const rows = await pkRepository.listFinishedForHost(hostId, 200);
+    let wins = 0;
+    let losses = 0;
+    let highestScore = 0;
+    let totalCoins = 0;
+    let currentStreak = 0;
+    let streakBroken = false;
+
+    for (const row of rows) {
+      const isA = row.host_a_id === hostId;
+      const myScore = isA ? row.score_a : row.score_b;
+      const won = row.winner_host_id === hostId;
+      const isDraw = row.winner_side === "DRAW";
+      if (won) wins += 1;
+      else if (!isDraw) losses += 1;
+      highestScore = Math.max(highestScore, myScore);
+      totalCoins += row.score_a + row.score_b;
+      if (!streakBroken) {
+        if (won) currentStreak += 1;
+        else streakBroken = true;
+      }
+    }
+
+    const total = rows.length;
+    return {
+      totalBattles: total,
+      wins,
+      losses,
+      winRate: total > 0 ? Math.round((wins / total) * 100) : 0,
+      currentStreak,
+      highestScore,
+      totalCoins,
+    };
+  },
 };
+
+export interface PkHistoryEntry {
+  battleId: string;
+  opponentId: string;
+  opponentName: string;
+  opponentAvatar: string | null;
+  result: "WIN" | "LOSS" | "DRAW";
+  myScore: number;
+  opponentScore: number;
+  durationMs: number | null;
+  endedAt: string | null;
+}
+
+export interface PkStats {
+  totalBattles: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  currentStreak: number;
+  highestScore: number;
+  totalCoins: number;
+}
+
+async function attachOpponents(rows: PkBattleRow[], hostId: string): Promise<PkHistoryEntry[]> {
+  if (rows.length === 0) return [];
+
+  const opponentIds = Array.from(
+    new Set(rows.map((row) => (row.host_a_id === hostId ? row.host_b_id : row.host_a_id))),
+  );
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, name, avatar")
+    .in("id", opponentIds);
+  const profileById = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+
+  return rows.map((row) => {
+    const isA = row.host_a_id === hostId;
+    const opponentId = isA ? row.host_b_id : row.host_a_id;
+    const myScore = isA ? row.score_a : row.score_b;
+    const opponentScore = isA ? row.score_b : row.score_a;
+    const profile = profileById.get(opponentId);
+    const result: "WIN" | "LOSS" | "DRAW" =
+      row.winner_side === "DRAW" ? "DRAW" : row.winner_host_id === hostId ? "WIN" : "LOSS";
+    const durationMs =
+      row.started_at && row.ended_at
+        ? new Date(row.ended_at).getTime() - new Date(row.started_at).getTime()
+        : null;
+
+    return {
+      battleId: row.id,
+      opponentId,
+      opponentName: profile?.name ?? "Opponent",
+      opponentAvatar: profile?.avatar ?? null,
+      result,
+      myScore,
+      opponentScore,
+      durationMs,
+      endedAt: row.ended_at,
+    };
+  });
+}

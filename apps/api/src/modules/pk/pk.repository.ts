@@ -161,6 +161,26 @@ export const pkRepository = {
     });
   },
 
+  /** Finished/cancelled battles a host took part in, newest first — the raw
+   * material for PK history, "last PK" and streak/stat rollups. Cancelled
+   * battles are excluded: they never had a real result. */
+  async listFinishedForHost(hostId: string, limit = 20): Promise<PkBattleRow[]> {
+    const { data, error } = await db
+      .from("pk_battles")
+      .select("*")
+      .or(`host_a_id.eq.${hostId},host_b_id.eq.${hostId}`)
+      .eq("status", "FINISHED")
+      .order("ended_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      throw new AppError(500, "Failed to list PK history", {
+        code: "PK_HISTORY_FAILED",
+        details: error.message,
+      });
+    }
+    return (data ?? []) as PkBattleRow[];
+  },
+
   async upsertParticipant(battleId: string, userId: string, side: PkSide): Promise<void> {
     const { error } = await db.from("pk_participants").upsert(
       { battle_id: battleId, user_id: userId, side, joined_at: new Date().toISOString() },
