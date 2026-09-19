@@ -703,13 +703,9 @@ useEffect(() => {
           <div className="absolute left-1/2 top-[46px] z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/40 px-2 py-1 text-[9px] font-semibold tracking-wide backdrop-blur-xl">
 
             <span
-
               className={`mr-2 inline-block h-2 w-2 rounded-full ${
-
-                hostMediaReady ? 'animate-pulse bg-red-400' : 'animate-pulse bg-amber-300'
-
+                hostMediaReady ? 'bg-emerald-400' : 'animate-pulse bg-amber-300'
               }`}
-
             />
 
             {hostMediaReady ? 'LIVE' : 'CONNECTING'}
