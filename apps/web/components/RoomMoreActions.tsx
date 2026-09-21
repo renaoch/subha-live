@@ -3,12 +3,9 @@
 
 import { useEffect } from "react";
 import {
-  Video,
-  VideoOff,
   SlidersHorizontal,
   Link2,
   Menu,
-  ThumbsUp,
   Mic,
   MicOff,
   X,
@@ -29,19 +26,24 @@ interface RoomMoreActionsProps {
   open: boolean;
   onClose: () => void;
   isHost: boolean;
-  cameraEnabled?: boolean;
-  onToggleCamera?: () => void;
   filterOpen?: boolean;
-  onToggleFilter?: () => void;  micEnabled?: boolean;
+  onToggleFilter?: () => void;
+  micEnabled?: boolean;
   onToggleMic?: () => void;
   onShare?: () => void;
   onOpenMenu?: () => void;
-  onLike?: () => void;
   isAudioRoom?: boolean;
+  /** @deprecated "Hide video" and "Like" were removed from this menu.
+   * Accepted (and ignored) only so older call sites keep compiling. */
+  cameraEnabled?: boolean;
+  /** @deprecated see `cameraEnabled`. */
+  onToggleCamera?: () => void;
+  /** @deprecated see `cameraEnabled`. */
+  onLike?: () => void;
 }
 
 /**
- * Bottom sheet of secondary room actions (mic, camera, share, menu, like).
+ * Bottom sheet of secondary room actions (mic, filters, share, menu).
  * Keeps the primary chat bar uncluttered — PK/Games/Gift/Filters live in the
  * main action row now.
  */
@@ -49,15 +51,12 @@ export function RoomMoreActions({
   open,
   onClose,
   isHost,
-  cameraEnabled = true,
-  onToggleCamera,
   filterOpen = false,
   onToggleFilter,
   micEnabled = true,
   onToggleMic,
   onShare,
   onOpenMenu,
-  onLike,
   isAudioRoom = false,
 }: RoomMoreActionsProps) {
   // Lock body scroll while open
@@ -84,13 +83,6 @@ export function RoomMoreActions({
             ? []
             : [
                 {
-                  key: "camera",
-                  label: cameraEnabled ? "Hide video" : "Show video",
-                  icon: cameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />,
-                  onClick: onToggleCamera,
-                  active: !cameraEnabled,
-                },
-                {
                   key: "filters",
                   label: "Filters",
                   icon: <SlidersHorizontal className="h-5 w-5" />,
@@ -105,12 +97,6 @@ export function RoomMoreActions({
       label: "Share link",
       icon: <Link2 className="h-5 w-5" />,
       onClick: onShare,
-    },
-    {
-      key: "like",
-      label: "Like",
-      icon: <ThumbsUp className="h-5 w-5" />,
-      onClick: onLike,
     },
     {
       key: "menu",

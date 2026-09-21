@@ -26,7 +26,9 @@ import { LiveVideo } from '@/components/LiveVideo';
 
 import { RoomMoreActions } from '@/components/RoomMoreActions';
 
-import { HostControls } from '@/components/HostControls';
+import { GoLiveSetup } from '@/components/GoLiveSetup';
+import { FilterPicker } from '@/components/FilterPicker';
+import { ContributorsModal } from '@/components/ContributorsModal';
 
 import { RoomChat } from '@/components/RoomChat';
 
@@ -64,24 +66,7 @@ import { AudioStageModal } from '@/components/AudioStageModal';
 import { SpeakerDock, type DockSpeaker } from '@/components/SpeakerDock';
 
 import { ViewerListSheet } from '@/components/ViewerListSheet';
-
-
-
-const filterPresets = {
-
-  Natural: 'none',
-
-  Glow: 'brightness(1.08) saturate(1.08) contrast(0.96)',
-
-  Warm: 'sepia(0.16) saturate(1.18) brightness(1.04)',
-
-  Cool: 'hue-rotate(10deg) saturate(0.88) brightness(1.04)',
-
-  Noir: 'grayscale(1) contrast(1.18) brightness(0.94)',
-
-  Vintage: 'sepia(0.28) saturate(0.82) contrast(0.94) brightness(1.04)',
-
-};
+import { cameraFilterCss } from '@/lib/camera-filters';
 
 
 
@@ -137,6 +122,13 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const localStreamRef = runtime?.localStreamRef ?? { current: null };
   const remoteStreamRef = runtime?.remoteStreamRef ?? { current: null };
   const publishGuestAudio = runtime?.publishGuestAudio ?? (async () => {});
+  const cameraFilter = runtime?.cameraFilter ?? 'Natural';
+  const cameraFilterBaked = runtime?.cameraFilterBaked ?? false;
+  const setCameraFilter = runtime?.setCameraFilter ?? (() => {});
+  // The filter is baked into the published video (see filtered-camera.ts),
+  // so the host's <video> already shows it — applying the CSS filter on top
+  // would double it. Only fall back to CSS when the browser has no WebGL.
+  const localPreviewFilter = cameraFilterBaked ? 'none' : cameraFilterCss(cameraFilter);
 
   // Connection lifecycle now lives in the shared session (room-session-
   // context) so it survives navigating away from this route. This page
@@ -293,14 +285,14 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
 
   // ---- UI state ----
 
-  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [contributorsOpen, setContributorsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
 
   const [micEnabled, setMicEnabled] = useState(true);
 
   const [filterOpen, setFilterOpen] = useState(false);
 
-  const [selectedFilter, setSelectedFilter] = useState('Natural');
+
 
   const [speakerPanelOpen, setSpeakerPanelOpen] = useState(false);
 
@@ -478,7 +470,7 @@ useEffect(() => {
             remoteStream={remoteStreamRef.current}
             opponentStream={opponentStream}
             opponentConnected={opponentConnected}
-            filter={filterPresets[selectedFilter as keyof typeof filterPresets]}
+            filter={localPreviewFilter}
             primaryLabel={isHost ? 'You' : room.host?.name || 'Host'}
             opponentLabel="Opponent"
           />
@@ -495,7 +487,7 @@ useEffect(() => {
 
             remoteStream={remoteStreamRef.current}
 
-            filter={filterPresets[selectedFilter as keyof typeof filterPresets]}
+            filter={localPreviewFilter}
 
             isAudioRoom={room.media_type === "audio"}
 
@@ -526,21 +518,8 @@ useEffect(() => {
 
 
 
-        {/* Error message */}
-
-        {mediaError && isHost && isWaiting && (
-
-          <div className="absolute left-5 right-5 top-5 z-50 rounded-2xl border border-red-300/20 bg-black/70 px-4 py-3 text-xs text-red-100 backdrop-blur-xl">
-
-            {mediaError}
-
-          </div>
-
-        )}
-
-
-
-        {/* Header */}
+        {/* Header (the pre-live setup screen has its own top bar) */}
+        {!(isHost && isWaiting) && (
 
         <RoomHeader
 
@@ -567,16 +546,21 @@ useEffect(() => {
           taskStats={stats}
 
           onOpenViewers={() => setViewersOpen(true)}
-
+          onOpenContributors={
+            room.host?.id ? () => setContributorsOpen(true) : undefined
+          }
         />
+        )}
 
         {/* Live "gifts this stream" meter — visible to everyone in the
             room, host and viewers alike, tallied from the same gift rows
             already shown in chat. */}
-        <HostGiftMeter
-          totalDiamonds={sessionGiftTotals.totalDiamonds}
-          giftCount={sessionGiftTotals.giftCount}
-        />
+        {!(isHost && isWaiting) && (
+          <HostGiftMeter
+            totalDiamonds={sessionGiftTotals.totalDiamonds}
+            giftCount={sessionGiftTotals.giftCount}
+          />
+        )}
 
         {/* Viewer's own coin balance — visible at a glance in the room,
             not just inside the gift sheet. Hidden for the host, whose
@@ -612,7 +596,8 @@ useEffect(() => {
 
         {/* Audio stage button */}
 
-        <button
+        {!(isHost && isWaiting) && (
+<button
 
           type="button"
 
@@ -649,6 +634,7 @@ useEffect(() => {
           )}
 
         </button>
+        )}
 
 
 
@@ -657,7 +643,7 @@ useEffect(() => {
             seat inline as the stage background (see LiveVideo), so the
             dock would just duplicate it there. */}
 
-        {room.media_type !== "audio" && (
+        {room.media_type !== "audio" && !(isHost && isWaiting) && (
           <SpeakerDock speakers={dockSpeakers} topOffset={100} />
         )}
 
@@ -669,10 +655,11 @@ useEffect(() => {
           open={moreOpen}
           onClose={() => setMoreOpen(false)}
           isHost={isHost}
-          cameraEnabled={cameraEnabled}
-          onToggleCamera={() => setCameraEnabled((v) => !v)}
           filterOpen={filterOpen}
-          onToggleFilter={() => setFilterOpen((v) => !v)}
+          onToggleFilter={() => {
+            setMoreOpen(false);
+            setFilterOpen((v) => !v);
+          }}
           micEnabled={micEnabled}
           onToggleMic={isHost ? () => setMicEnabled((v) => !v) : undefined}
           isAudioRoom={room.media_type === "audio"}
@@ -685,7 +672,7 @@ useEffect(() => {
               toast.success('Room link copied');
             }
           }}
-          onLike={() => toast.success('❤️')}
+
         />
 
         {/* PK battle bar (score + timer, active/finished) */}
@@ -717,18 +704,18 @@ useEffect(() => {
 
         {/* "X joined" pulses, top-left, above the chat stream */}
 
-        {(isLive || isWaiting) && <RoomJoinFeed events={joinEvents} />}
+        {(isLive || (isWaiting && !isHost)) && <RoomJoinFeed events={joinEvents} />}
 
         {/* Live room chat (message stream + input) */}
 
-        {(isLive || isWaiting) && (
+        {(isLive || (isWaiting && !isHost)) && (
           <RoomChat
             messages={chatMessages}
             selfUserId={selfUserId}
             connected={chatState === 'connected'}
             canChat={canChat}
             isHost={isHost}
-            raised={isHost && isWaiting}
+
             onSend={sendChat}
             onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
             onOpenMore={() => setMoreOpen(true)}
@@ -741,27 +728,22 @@ useEffect(() => {
 
 
 
-        {/* Host controls */}
-
+        {/* Pre-live setup: camera preview + filters + the big Start button */}
         {isHost && isWaiting && (
-
-          <HostControls
-
-            isWaiting={isWaiting}
-
-            isLive={isLive}
-
+          <GoLiveSetup
+            title={room.title}
+            isAudioRoom={room.media_type === 'audio'}
+            hostAvatar={room.host?.avatar}
+            filter={cameraFilter}
+            onFilterChange={setCameraFilter}
+            filterBaked={cameraFilterBaked}
+            ready={!!localStreamRef.current}
+            starting={actionLoading}
+            error={mediaError}
             onStart={handleStart}
-
-            actionLoading={actionLoading}
-
-            localStreamReady={!!localStreamRef.current}
-
+            onClose={handleLeave}
           />
-
         )}
-
-
 
         {/* Gift picker (viewers) */}
 
@@ -796,57 +778,24 @@ useEffect(() => {
 
 
 
-        {/* Filter popup */}
-
-        {filterOpen && isHost && (
-
-          <div className="absolute bottom-[92px] left-1/2 z-50 w-[min(280px,calc(100%-32px))] -translate-x-1/2 rounded-2xl border border-white/15 bg-black/75 p-3 shadow-2xl backdrop-blur-2xl">
-
-            <div className="mb-2 flex items-center justify-between px-1">
-
-              <p className="text-xs font-semibold text-white">Streamer filter</p>
-
-              <span className="text-[10px] text-white/45">Live preview</span>
-
+        {/* Filter popup (host, while live). The filter is baked into the
+            published video, so changes show up for viewers immediately. */}
+        {filterOpen && isHost && !isWaiting && room.media_type !== 'audio' && (
+          <div className="absolute inset-x-3 bottom-[92px] z-50 rounded-3xl border border-white/15 bg-black/75 px-4 pb-3 pt-3 shadow-2xl backdrop-blur-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold text-white">Filters</p>
+              <span className="text-[10px] text-white/50">
+                {cameraFilterBaked ? 'Viewers see this too' : 'Preview only on this device'}
+              </span>
             </div>
-
-            <div className="grid grid-cols-3 gap-2">
-
-              {Object.keys(filterPresets).map((filter) => (
-
-                <button
-
-                  key={filter}
-
-                  type="button"
-
-                  onClick={() => setSelectedFilter(filter)}
-
-                  className={`rounded-xl border px-2 py-2 text-[11px] transition ${
-
-                    selectedFilter === filter
-
-                      ? 'border-white bg-white text-black'
-
-                      : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
-
-                  }`}
-
-                >
-
-                  {filter}
-
-                </button>
-
-              ))}
-
-            </div>
-
+            <FilterPicker
+              value={cameraFilter}
+              onChange={setCameraFilter}
+              sampleSrc={room.host?.avatar}
+              size="sm"
+            />
           </div>
-
         )}
-
-
 
         {/* Viewer loading overlay */}
 
@@ -921,6 +870,15 @@ useEffect(() => {
         )}
 
 
+
+        {/* Top contributors (opened from the trophy icon in the header) */}
+        {contributorsOpen && room.host?.id && (
+          <ContributorsModal
+            hostId={room.host.id}
+            hostName={room.host.name || 'Host'}
+            onClose={() => setContributorsOpen(false)}
+          />
+        )}
 
         {/* Viewer list */}
 

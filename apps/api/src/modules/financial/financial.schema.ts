@@ -56,3 +56,15 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
+
+export const CONTRIBUTOR_PERIODS = ["daily", "weekly", "monthly", "overall"] as const;
+export type ContributorPeriod = (typeof CONTRIBUTOR_PERIODS)[number];
+
+export const hostContributorsParamsSchema = z.object({
+  hostId: z.string().uuid(),
+});
+
+export const hostContributorsQuerySchema = z.object({
+  period: z.enum(CONTRIBUTOR_PERIODS).default("daily"),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});

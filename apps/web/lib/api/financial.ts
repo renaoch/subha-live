@@ -83,6 +83,32 @@ interface MyWithdrawalsResponse {
   withdrawals: WithdrawalRecord[];
 }
 
+export type ContributorPeriod = "daily" | "weekly" | "monthly" | "overall";
+
+/** One row of a host's gift leaderboard. */
+export interface HostContributor {
+  rank: number;
+  userId: string;
+  name: string;
+  handle: string | null;
+  avatar: string | null;
+  level: number;
+  charismaLevel: number;
+  vipLevel: number;
+  svip: boolean;
+  isVerified: boolean;
+  /** Coins this user spent on gifts to the host in the period. */
+  totalCoins: number;
+  giftCount: number;
+}
+
+interface HostContributorsResponse {
+  status: string;
+  hostId: string;
+  period: ContributorPeriod;
+  contributors: HostContributor[];
+}
+
 /**
  * Generates a fresh idempotency key for one user action (one tap on
  * "send"). The SAME value must be reused if that exact action is
@@ -126,6 +152,18 @@ export const financialApi = {
       body: JSON.stringify(input),
     });
     return response.gift;
+  },
+
+  /** Top gift senders to a host for a window, ranked by coins spent. */
+  async hostContributors(
+    hostId: string,
+    period: ContributorPeriod,
+    limit = 50,
+  ): Promise<HostContributor[]> {
+    const response = await apiFetch<HostContributorsResponse>(
+      `/api/v1/financial/hosts/${hostId}/contributors?period=${period}&limit=${limit}`,
+    );
+    return response.contributors;
   },
 
   async ledger(limit = 50, offset = 0): Promise<LedgerEntry[]> {

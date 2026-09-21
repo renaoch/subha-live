@@ -17,6 +17,7 @@ import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { logAudit } from "../../lib/audit";
 import { FINANCIAL_ERROR_MAP, extractFinancialErrorCode } from "./financial.logic";
+import type { ContributorPeriod } from "./financial.schema";
 import type {
   ClaimAgencyTaskRewardResult,
   ConfirmPaymentResult,
@@ -366,6 +367,74 @@ export async function claimAgencyTaskRewardTransaction(input: {
 }
 
 // ─── Read models ──────────────────────────────────────────────────────────
+
+export interface HostContributor {
+  rank: number;
+  userId: string;
+  name: string;
+  handle: string | null;
+  avatar: string | null;
+  level: number;
+  charismaLevel: number;
+  vipLevel: number;
+  svip: boolean;
+  isVerified: boolean;
+  totalCoins: number;
+  giftCount: number;
+}
+
+/**
+ * Top gift senders to `hostId` for a window (daily / weekly / monthly /
+ * overall). Aggregated in Postgres by host_top_contributors() — see
+ * supabase/migrations/20260921120000_host_top_contributors.sql.
+ */
+export async function getHostContributors(
+  hostId: string,
+  period: ContributorPeriod,
+  limit = 50,
+): Promise<HostContributor[]> {
+  const { data, error } = await supabase.rpc("host_top_contributors" as any, {
+    p_host_id: hostId,
+    p_period: period,
+    p_limit: limit,
+  });
+
+  if (error) {
+    throw new AppError(500, "Could not load contributors", {
+      code: "CONTRIBUTORS_LOAD_FAILED",
+      details: error.message,
+    });
+  }
+
+  const rows = (data ?? []) as Array<{
+    user_id: string;
+    name: string;
+    handle: string | null;
+    avatar: string | null;
+    level: number | null;
+    charisma_level: number | null;
+    vip_level: number | null;
+    svip: boolean | null;
+    is_verified: boolean | null;
+    total_coins: number | string;
+    gift_count: number | string;
+  }>;
+
+  return rows.map((row, index) => ({
+    rank: index + 1,
+    userId: row.user_id,
+    name: row.name,
+    handle: row.handle,
+    avatar: row.avatar,
+    level: row.level ?? 1,
+    charismaLevel: row.charisma_level ?? 1,
+    vipLevel: row.vip_level ?? 0,
+    svip: Boolean(row.svip),
+    isVerified: Boolean(row.is_verified),
+    totalCoins: Number(row.total_coins),
+    giftCount: Number(row.gift_count),
+  }));
+}
 
 export async function getLedgerHistory(userId: string, limit = 50, offset = 0) {
   const { data, error } = await (supabase.from("financial_ledger" as any) as any)

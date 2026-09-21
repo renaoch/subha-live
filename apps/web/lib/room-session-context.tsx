@@ -48,6 +48,13 @@ interface RoomSessionRuntime {
   localStreamRef: RefObject<MediaStream | null>;
   remoteStreamRef: RefObject<MediaStream | null>;
 
+  /** Host camera filter name (see lib/camera-filters). */
+  cameraFilter: string;
+  /** True when the filter is baked into the published video, i.e. viewers
+   * see it too. False only on browsers without WebGL. */
+  cameraFilterBaked: boolean;
+  setCameraFilter: (name: string) => void;
+
   handleStart: () => Promise<void>;
   handleJoin: () => Promise<void>;
   handleLeave: () => Promise<void>;
@@ -225,6 +232,9 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
         speakingSpeakerIds: webrtc.speakingSpeakerIds,
         localStreamRef: webrtc.localStreamRef,
         remoteStreamRef: webrtc.remoteStreamRef,
+        cameraFilter: webrtc.cameraFilter,
+        cameraFilterBaked: webrtc.cameraFilterBaked,
+        setCameraFilter: webrtc.setCameraFilter,
         handleStart,
         handleJoin,
         handleLeave,

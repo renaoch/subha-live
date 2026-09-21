@@ -5,6 +5,8 @@ import {
   withdrawalRequestSchema,
   processWithdrawalSchema,
   paginationSchema,
+  hostContributorsParamsSchema,
+  hostContributorsQuerySchema,
 } from "./financial.schema";
 import {
   getActiveGiftCatalog,
@@ -16,6 +18,7 @@ import {
   getUserWithdrawals,
   listPendingWithdrawals,
   assertIsPlatformAdmin,
+  getHostContributors,
 } from "./financial.service";
 import { publishGiftToRoomChat } from "./financial-chat";
 
@@ -161,6 +164,42 @@ export async function processWithdrawalController(req: Request<{ id: string }>, 
     });
 
     res.status(200).json({ status: "ok", withdrawal: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Leaderboard of who has gifted a host the most (daily / weekly / monthly /
+ * overall). Readable by any signed-in user — it powers the live-room
+ * "Top contributors" modal, which hosts and viewers both see.
+ */
+export async function getHostContributorsController(
+  req: Request<{ hostId: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    requireUser(req);
+    const params = hostContributorsParamsSchema.safeParse(req.params);
+    const query = hostContributorsQuerySchema.safeParse(req.query);
+    if (!params.success || !query.success) {
+      throw new AppError(400, "Invalid contributors request", {
+        code: "INVALID_CONTRIBUTORS_REQUEST",
+      });
+    }
+
+    const contributors = await getHostContributors(
+      params.data.hostId,
+      query.data.period,
+      query.data.limit,
+    );
+    res.status(200).json({
+      status: "ok",
+      hostId: params.data.hostId,
+      period: query.data.period,
+      contributors,
+    });
   } catch (error) {
     next(error);
   }

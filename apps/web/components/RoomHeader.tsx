@@ -12,6 +12,7 @@ import {
   BadgeCheck,
   ChevronDown,
   Crown,
+  Trophy,
   Users,
   UsersRound,
   Wrench,
@@ -49,6 +50,8 @@ interface RoomHeaderProps {
   taskStats?: HostTaskStats | null;
   /** Tapping the viewer count opens the live viewer list. Omit to keep it static. */
   onOpenViewers?: () => void;
+  /** Opens the "Top contributors" modal. Omit to hide the trophy icon. */
+  onOpenContributors?: () => void;
 }
 
 type Tag = {
@@ -190,6 +193,7 @@ export function RoomHeader({
   claimingTask,
   taskStats,
   onOpenViewers,
+  onOpenContributors,
 }: RoomHeaderProps) {
   const hostName = host?.name || "Host";
   const avatarUrl = host?.avatar || undefined;
@@ -264,6 +268,16 @@ export function RoomHeader({
             </span>
           </button>
 
+          {onOpenContributors && (
+            <button
+              type="button"
+              onClick={onOpenContributors}
+              aria-label="Top contributors"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-b from-[#FFE08A]/25 to-[#F2A81D]/15 text-[#FFC94A] ring-1 ring-inset ring-[#FFC94A]/40 backdrop-blur-sm transition hover:from-[#FFE08A]/35 active:scale-90"
+            >
+              <Trophy className="h-[18px] w-[18px]" strokeWidth={2.1} />
+            </button>
+          )}
           {onMinimize && (
             <button
               type="button"

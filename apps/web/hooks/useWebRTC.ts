@@ -5,6 +5,8 @@ import {
   type RoomRecord,
 } from "@/lib/api/rooms";
 import { ApiError } from "@/lib/api/client";
+import { createFilteredCamera, type FilteredCamera } from "@/lib/filtered-camera";
+import { DEFAULT_CAMERA_FILTER } from "@/lib/camera-filters";
 import {
   createPublishTracks,
   createTrackName,
@@ -332,6 +334,11 @@ export function useWebRTC(
   const [mediaError, setMediaError] = useState("");
   const [mediaState, setMediaState] = useState<RoomMediaState | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  // Host camera filter. Baked into the published video track (see
+  // filtered-camera.ts) so viewers see it too. `cameraFilterBaked` is false
+  // only when WebGL is unavailable, in which case the filter is preview-only.
+  const [cameraFilter, setCameraFilterState] = useState<string>(DEFAULT_CAMERA_FILTER);
+  const [cameraFilterBaked, setCameraFilterBaked] = useState(false);
   const [speakingSpeakerIds, setSpeakingSpeakerIds] = useState<Set<string>>(
     new Set(),
   );
@@ -357,6 +364,9 @@ export function useWebRTC(
   const mountedRef = useRef(true);
 
   const localStreamRef = useRef<MediaStream | null>(null);
+  const filteredCameraRef = useRef<FilteredCamera | null>(null);
+  const cameraFilterRef = useRef<string>(DEFAULT_CAMERA_FILTER);
+  const localPreviewPromiseRef = useRef<Promise<MediaStream> | null>(null);
 
   const hostPeerRef = useRef<RTCPeerConnection | null>(null);
   const viewerPeerRef = useRef<RTCPeerConnection | null>(null);
@@ -465,6 +475,12 @@ export function useWebRTC(
   // ---------------------------------------------------------------------------
 
   const stopLocalMedia = useCallback(() => {
+    // Tear the filter pipeline down first: it owns the raw camera track,
+    // which is NOT part of localStreamRef when a filtered stream is in use.
+    filteredCameraRef.current?.destroy();
+    filteredCameraRef.current = null;
+    localPreviewPromiseRef.current = null;
+
     const stream = localStreamRef.current;
 
     if (stream) {
@@ -481,66 +497,112 @@ export function useWebRTC(
 
     if (mountedRef.current) {
       setLocalStream(null);
+      setCameraFilterBaked(false);
     }
   }, []);
 
   const isAudioRoom = room?.media_type === "audio";
 
-  const ensureLocalPreview = useCallback(async () => {
+  const ensureLocalPreview = useCallback((): Promise<MediaStream> => {
     const existing = localStreamRef.current;
 
     if (existing) {
-      return existing;
+      return Promise.resolve(existing);
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-      // Audio rooms never request the camera at all — not just "hidden",
-      // genuinely never asked for, so there's no camera permission prompt
-      // and no video track to ever accidentally publish.
-      video: isAudioRoom
-        ? false
-        : {
-            facingMode: "user",
-            width: { ideal: 720 },
-            height: { ideal: 1280 },
-            aspectRatio: { ideal: 9 / 16 },
-            frameRate: { ideal: 30, min: 24 },
-            // "crop-and-scale" (the default) tells the browser it's allowed to
-            // digitally crop into the sensor to force the exact aspect ratio
-            // above, which is what was causing the zoomed-in look. "none" uses
-            // the camera's native field of view instead; CSS object-cover on
-            // <video> still fills the frame, it just isn't the sensor itself
-            // cropping first.
-            // Cast needed: `resizeMode` is part of the MediaTrackConstraints
-            // spec but isn't in the currently installed TS DOM lib typings.
-            ...({ resizeMode: "none" } as MediaTrackConstraints),
-          },
-    });
+    // Two callers (preview effect + publish) can race here; share one
+    // getUserMedia so we never open the camera twice.
+    if (localPreviewPromiseRef.current) {
+      return localPreviewPromiseRef.current;
+    }
 
-    // Hints the browser's encoder to prioritize sharpness/detail over
-    // motion smoothness for this track — helps avoid the soft/blocky look
-    // on a talking-head camera feed.
-    for (const track of stream.getVideoTracks()) {
-      try {
-        track.contentHint = "detail";
-      } catch {
-        // Not supported in every browser; safe to ignore.
+    const pending = (async () => {
+      const rawStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        // Audio rooms never request the camera at all — not just "hidden",
+        // genuinely never asked for, so there's no camera permission prompt
+        // and no video track to ever accidentally publish.
+        video: isAudioRoom
+          ? false
+          : {
+              facingMode: "user",
+              width: { ideal: 720 },
+              height: { ideal: 1280 },
+              aspectRatio: { ideal: 9 / 16 },
+              frameRate: { ideal: 30, min: 24 },
+              // "crop-and-scale" (the default) tells the browser it's allowed to
+              // digitally crop into the sensor to force the exact aspect ratio
+              // above, which is what was causing the zoomed-in look. "none" uses
+              // the camera's native field of view instead; CSS object-cover on
+              // <video> still fills the frame, it just isn't the sensor itself
+              // cropping first.
+              // Cast needed: `resizeMode` is part of the MediaTrackConstraints
+              // spec but isn't in the currently installed TS DOM lib typings.
+              ...({ resizeMode: "none" } as MediaTrackConstraints),
+            },
+      });
+
+      // Hints the browser's encoder to prioritize sharpness/detail over
+      // motion smoothness for this track — helps avoid the soft/blocky look
+      // on a talking-head camera feed.
+      for (const track of rawStream.getVideoTracks()) {
+        try {
+          track.contentHint = "detail";
+        } catch {
+          // Not supported in every browser; safe to ignore.
+        }
       }
-    }
 
-    localStreamRef.current = stream;
+      // Video rooms: run the camera through the filter pipeline so the track
+      // we publish is already filtered. Falls back to the raw stream if the
+      // browser can't do it (then the filter is local-preview only).
+      let stream = rawStream;
+      let baked = false;
+      if (!isAudioRoom) {
+        const filtered = createFilteredCamera(rawStream, cameraFilterRef.current);
+        if (filtered) {
+          filteredCameraRef.current = filtered;
+          stream = filtered.stream;
+          baked = true;
+        }
+      }
 
-    if (mountedRef.current) {
-      setLocalStream(stream);
-    }
+      localStreamRef.current = stream;
 
-    return stream;
+      if (mountedRef.current) {
+        setLocalStream(stream);
+        setCameraFilterBaked(baked);
+      }
+
+      return stream;
+    })();
+
+    localPreviewPromiseRef.current = pending;
+    pending.then(
+      () => {
+        if (localPreviewPromiseRef.current === pending) {
+          localPreviewPromiseRef.current = null;
+        }
+      },
+      () => {
+        if (localPreviewPromiseRef.current === pending) {
+          localPreviewPromiseRef.current = null;
+        }
+      },
+    );
+
+    return pending;
   }, [isAudioRoom]);
+
+  const setCameraFilter = useCallback((name: string) => {
+    cameraFilterRef.current = name;
+    setCameraFilterState(name);
+    filteredCameraRef.current?.setFilter(name);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Peer cleanup
@@ -2300,6 +2362,9 @@ if (signalingState !== "stable") {
       viewerPeerRef.current = null;
       guestPeerRef.current = null;
 
+      filteredCameraRef.current?.destroy();
+      filteredCameraRef.current = null;
+
       const streams = [
         localStreamRef.current,
         guestStreamRef.current,
@@ -2346,6 +2411,9 @@ if (signalingState !== "stable") {
     mediaState,
     localStream,
     speakingSpeakerIds,
+    cameraFilter,
+    cameraFilterBaked,
+    setCameraFilter,
 
     localStreamRef,
     remoteStreamRef,

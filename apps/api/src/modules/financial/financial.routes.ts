@@ -9,6 +9,7 @@ import {
   getMyWithdrawalsController,
   listPendingWithdrawalsController,
   processWithdrawalController,
+  getHostContributorsController,
 } from "./financial.controller";
 
 const router = Router();
@@ -21,6 +22,9 @@ router.post("/gifts/send", authMiddleware, sendGiftController);
 
 router.get("/ledger", authMiddleware, getLedgerController);
 router.get("/earnings/me", authMiddleware, getMyEarningsController);
+
+// Live-room leaderboard: top gift senders to a host, by period.
+router.get("/hosts/:hostId/contributors", authMiddleware, getHostContributorsController);
 
 router.post("/withdrawals", authMiddleware, requestWithdrawalController);
 router.get("/withdrawals/me", authMiddleware, getMyWithdrawalsController);
