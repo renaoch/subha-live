@@ -70,6 +70,10 @@ host: {
     | "failed";
   videoTrackName: string;
   audioTrackName: string;
+  /** Epoch ms when the 60s reconnect grace period ends. Only present
+   * while status === "reconnecting" — drives the "please wait" countdown
+   * viewers see instead of a silent freeze. */
+  reconnectDeadline?: number;
 } | null;
   speakers: Record<
     string,

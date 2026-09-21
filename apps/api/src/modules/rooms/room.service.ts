@@ -307,4 +307,32 @@ export const roomService = {
 
     return data;
   },
+
+  /**
+   * System-initiated end, used when the host's 60s reconnect grace period
+   * expires with no reconnect (see room-media.service.ts's host-grace
+   * check) — there is no authenticated host request driving this, so it
+   * skips endRoom()'s host-identity check. Best-effort and idempotent:
+   * the `.eq("status", "live")` guard means calling this on an
+   * already-ended room is a silent no-op rather than an error, since two
+   * concurrent state reads could both notice the same expired host.
+   */
+  async forceEndRoom(roomId: string): Promise<Room | null> {
+    const { data, error } = await supabase
+      .from("rooms")
+      .update({
+        status: "ended",
+        ended_at: new Date().toISOString(),
+      })
+      .eq("id", roomId)
+      .eq("status", "live")
+      .select()
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    await pkService.endForRoom(roomId).catch(() => {});
+
+    return data;
+  },
 };

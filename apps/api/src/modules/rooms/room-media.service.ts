@@ -2,12 +2,14 @@ import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { mediaService } from "../media";
 import { roomState } from "./room-state.service";
+import { roomService } from "./room.service";
 import { mediaConfig } from "../../config/media.config";
 import { CloudflareRealtimeError } from "../../lib/media/cloudflare/cloudflare.errors";
 import type {
   MediaSession,
   MediaTrack,
   RemoteMediaTrack,
+  RoomMediaState,
 } from "../media/media.types";
 
 function stringValue(value: unknown): string {
@@ -130,9 +132,11 @@ export const roomMediaService = {
   async getState(
     roomId: string,
   ) {
-    return mediaService.getRoomState(
+    const state = await mediaService.getRoomState(
       roomId,
     );
+
+    return applyHostReconnectGrace(roomId, state);
   },
 
   async publishHost(
@@ -1654,3 +1658,58 @@ async subscribeHostToGuests(
     );
   },
 };
+
+/**
+ * Enforces the host's 60s reconnect grace window on every state read
+ * (there's no separate scheduled job — this file's `getState` is already
+ * polled continuously by every viewer and the host's own client, so a
+ * lazy, read-time check is sufficient and matches how stale
+ * speaker/viewer sessions are already reaped elsewhere in this codebase).
+ *
+ * Note this does NOT open any loophole around who can be host: publishHost
+ * above only ever accepts a caller whose userId equals this room's own
+ * `rooms.host_id` — that's fixed at room creation and is never touched
+ * here. This function only decides how long a *silent* legitimate host
+ * gets before the room gives up on them; it can never hand the room to
+ * anyone else.
+ */
+async function applyHostReconnectGrace(
+  roomId: string,
+  state: RoomMediaState,
+): Promise<RoomMediaState> {
+  if (!state.host) return state;
+
+  const lastHeartbeatAt = state.host.lastHeartbeatAt || state.host.connectedAt || 0;
+  const elapsed = Date.now() - lastHeartbeatAt;
+
+  if (elapsed <= mediaConfig.heartbeat.timeoutMs) {
+    // Heartbeating normally within the last beat window — nothing to do.
+    return state;
+  }
+
+  const deadline = lastHeartbeatAt + mediaConfig.session.hostReconnectGraceMs;
+
+  if (Date.now() >= deadline) {
+    // Grace period fully spent with no reconnect — the host is really
+    // gone. End the room for real and drop the stale session so it can't
+    // sit "live" with nobody ever broadcasting again. Best-effort and
+    // idempotent: forceEndRoom's status="live" guard means two concurrent
+    // reads racing here just both no-op past whichever wins first.
+    await mediaService.removeHostSession(roomId).catch(() => {});
+    await roomService.forceEndRoom(roomId).catch(() => {});
+    return { ...state, host: null };
+  }
+
+  // Within the grace window: same underlying session (still reusable by
+  // publishHost the instant the real host reconnects) — just flagged here
+  // so viewers can render a "reconnecting, Xs left" countdown instead of a
+  // silent freeze or a hard error.
+  return {
+    ...state,
+    host: {
+      ...state.host,
+      status: "reconnecting",
+      reconnectDeadline: deadline,
+    },
+  };
+}

@@ -131,6 +131,15 @@ export interface HostMediaState {
   connectedAt: number;
 
   lastHeartbeatAt: number;
+
+  /**
+   * Epoch ms when the host's 60s reconnect grace period expires, present
+   * only while `status === "reconnecting"` (heartbeat has gone quiet but
+   * the room hasn't been auto-ended yet). Lets viewers render a live
+   * countdown instead of a vague "reconnecting" spinner. Absent/undefined
+   * whenever the host is actually connected.
+   */
+  reconnectDeadline?: number;
 }
 
 /* ============================================================

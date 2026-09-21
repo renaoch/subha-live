@@ -18,6 +18,7 @@ import {
 import { Avatar } from "@/components/ui/avatar";
 import { BannerCarousel } from "@/components/BannerCarousel";
 import { getPromoBanners } from "@/lib/promo-banners";
+import { useRoomEntryGuard } from "@/lib/room-session-context";
 import { useRooms, useCreateRoom } from "@/hooks/queries/use-rooms";
 import { useActivePkBattles } from "@/hooks/queries/use-pk";
 import type { RoomRecord } from "@/lib/api/rooms";
@@ -101,8 +102,10 @@ export default function PartyPage() {
     : undefined;
 
   const loading = roomsLoading || battlesLoading;
+  const { guardCreate } = useRoomEntryGuard();
 
   async function goParty() {
+    if (!guardCreate()) return;
     setLaunching(true);
     try {
       const room = await createRoomMutation.mutateAsync({
@@ -218,12 +221,15 @@ function FeaturedActivity({
   room?: RoomRecord;
   roomsById: Map<string, RoomRecord>;
 }) {
+  const { guardLinkClick } = useRoomEntryGuard();
+
   if (battle) {
     const roomA = roomsById.get(battle.room_a_id);
     const roomB = roomsById.get(battle.room_b_id);
     return (
       <Link
         href={`/home/room/${battle.room_a_id}`}
+        onClick={guardLinkClick(battle.room_a_id)}
         className="grad-brand animate-gradient-shift glow-hot-lg relative block overflow-hidden rounded-[28px] px-5 py-6 text-white"
       >
         <Swords className="absolute -right-3 -top-3 h-24 w-24 text-white/15" />
@@ -244,6 +250,7 @@ function FeaturedActivity({
     return (
       <Link
         href={`/home/room/${room.id}`}
+        onClick={guardLinkClick(room.id)}
         className="grad-brand animate-gradient-shift glow-hot-lg relative block overflow-hidden rounded-[28px] px-5 py-6 text-white"
       >
         <Sparkles className="absolute -right-3 -top-3 h-24 w-24 text-white/15" />
@@ -304,6 +311,8 @@ function PkSection({
   roomsById: Map<string, RoomRecord>;
   onRetry: () => void;
 }) {
+  const { guardLinkClick } = useRoomEntryGuard();
+
   return (
     <section>
       <SectionHeader
@@ -338,6 +347,7 @@ function PkSection({
               <Link
                 key={battle.id}
                 href={`/home/room/${battle.room_a_id}`}
+                onClick={guardLinkClick(battle.room_a_id)}
                 className="stage-card flex items-center gap-3 p-3 transition-colors hover:border-accent-hot/40"
               >
                 <div className="flex -space-x-3">

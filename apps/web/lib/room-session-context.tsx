@@ -16,9 +16,11 @@ import {
   useEffect,
   useMemo,
   useState,
+  type MouseEvent,
   type ReactNode,
   type RefObject,
 } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { roomsApi, type RoomRecord } from "@/lib/api/rooms";
@@ -72,11 +74,15 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+      setAuthChecked(true);
+    });
   }, []);
 
   const { room, isLoading: roomLoading, isError: roomError, refetch: refetchRoom } =
@@ -158,11 +164,35 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
   // Auto-join for viewers, exactly once per room going live — lives here
   // (not the route) so it fires correctly even if the room was opened,
   // minimized, and re-entered rather than freshly mounted.
+  //
+  // Gated on `authChecked`, not just `userId`: room data can resolve
+  // before supabase.auth.getUser() does, and userId briefly reads `null`
+  // either way (before auth resolves, or if the person is genuinely
+  // logged out). Without this gate, isHost is momentarily false for the
+  // *actual host* on a refresh, this effect fires handleJoin() for them,
+  // and the backend correctly rejects it with "Host cannot join as a
+  // viewer" — a real bug, not a false alarm from the backend.
   useEffect(() => {
-    if (!room || isHost || room.status !== "live") return;
+    if (!authChecked || !room || isHost || room.status !== "live") return;
     handleJoin();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.id, room?.status, isHost]);
+  }, [authChecked, room?.id, room?.status, isHost]);
+
+  // Auto-resume host publishing after a refresh/reconnect while the room
+  // is already "live" in the DB. The "Start" button (handleStart, above)
+  // only ever applies to the very first publish out of the waiting room —
+  // it also flips the room to live via roomsApi.start, which would
+  // correctly reject with ROOM_INVALID_STATUS on a room that's already
+  // live. This calls the WebRTC connect directly instead, and is exactly
+  // what lets the real host reclaim their room within the reconnect grace
+  // period (see media.config.ts's hostReconnectGraceMs) instead of being
+  // stuck live with nothing actually broadcasting.
+  useEffect(() => {
+    if (!authChecked || !room || !isHost || room.status !== "live") return;
+    if (webrtc.hostPublishing || webrtc.hostMediaReady) return;
+    startHost(room).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked, room?.id, room?.status, isHost, webrtc.hostPublishing, webrtc.hostMediaReady]);
 
   // If the host ends the room while a viewer is watching (full-screen or
   // minimized), tear the session down instead of leaving it dangling.
@@ -218,4 +248,61 @@ export function useRoomSession() {
     throw new Error("useRoomSession must be used within a RoomSessionProvider");
   }
   return ctx;
+}
+
+/**
+ * Guards entering or starting a room while another one is already
+ * live/minimized in the mini player. Only one live session can run at a
+ * time (same as the mini player itself only ever holding one), so both
+ * "join/open a room" and "create a new room" route through this instead of
+ * navigating directly.
+ */
+export function useRoomEntryGuard() {
+  const { activeRoomId, minimized, expand } = useRoomSession();
+  const router = useRouter();
+
+  const returnToActive = useCallback(() => {
+    toast.info("You're already in a live — close it first to join another");
+    if (minimized) expand();
+    if (activeRoomId) router.push(`/home/room/${activeRoomId}`);
+  }, [activeRoomId, minimized, expand, router]);
+
+  /** Call before navigating into a specific room. Returns false (and
+   * redirects back to the active session) if blocked. */
+  const enterRoom = useCallback(
+    (roomId: string) => {
+      if (activeRoomId && activeRoomId !== roomId) {
+        returnToActive();
+        return false;
+      }
+      router.push(`/home/room/${roomId}`);
+      return true;
+    },
+    [activeRoomId, router, returnToActive],
+  );
+
+  /** Call before opening the "create a room" flow. Returns false (and
+   * redirects back to the active session) if blocked. */
+  const guardCreate = useCallback(() => {
+    if (activeRoomId) {
+      returnToActive();
+      return false;
+    }
+    return true;
+  }, [activeRoomId, returnToActive]);
+
+  /** Same guard as `enterRoom`, but for a plain <Link> (so the href still
+   * works for prefetch/middle-click/etc.) — prevents the navigation and
+   * redirects back to the active session instead of following the link. */
+  const guardLinkClick = useCallback(
+    (roomId: string) => (e: MouseEvent) => {
+      if (activeRoomId && activeRoomId !== roomId) {
+        e.preventDefault();
+        returnToActive();
+      }
+    },
+    [activeRoomId, returnToActive],
+  );
+
+  return { enterRoom, guardLinkClick, guardCreate, hasActiveSession: !!activeRoomId };
 }

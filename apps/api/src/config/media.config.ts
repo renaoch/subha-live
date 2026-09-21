@@ -22,6 +22,16 @@ export const mediaConfig = {
 
   session: {
     staleAfterMs: 30_000,
+
+    /**
+     * Total time (from the host's last heartbeat) that a room is allowed
+     * to sit with a silent host before it's treated as truly gone and the
+     * room is auto-ended. Kept generous relative to heartbeat.timeoutMs
+     * (30s) so a refresh, a brief network blip, or a tab backgrounding on
+     * mobile doesn't cost the host their room — but the room can't stay
+     * "live" forever with nobody actually broadcasting either.
+     */
+    hostReconnectGraceMs: 60_000,
   },
 
   retry: {

@@ -1,671 +1,998 @@
-"use client";
+'use client';
 
-import {
-  Suspense,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  Camera,
-  ChevronRight,
-  Loader2,
-  Plus,
-  Radio,
-  RotateCcw,
-  Search,
-  Users,
-  X,
-} from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
-import { Avatar } from "@/components/ui/avatar";
-import { BannerCarousel } from "@/components/BannerCarousel";
-import { getPromoBanners } from "@/lib/promo-banners";
-import { useCreateRoom, useRooms } from "@/hooks/queries/use-rooms";
-import { useRoomPreview } from "@/hooks/useRoomPreview";
-import type { RoomRecord } from "@/lib/api/rooms";
-import type { RoomMediaType } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
-/**
- * True while `ref`'s element is at least 50% visible in the viewport.
- * Used to drive the home-feed live previews: a card starts previewing as
- * it scrolls into view and stops the instant it scrolls back out, in
- * either direction.
- */
-function useInView<T extends Element>(threshold = 0.5) {
-  const ref = useRef<T | null>(null);
-  const [inView, setInView] = useState(false);
 
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
+import { use, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
-    const observer = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting),
-      { threshold },
-    );
+import { useRouter } from 'next/navigation';
 
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [threshold]);
+import { toast } from 'sonner';
 
-  return { ref, inView };
-}
+import { Loader2, Mic, MicOff } from 'lucide-react';
 
-const TABS = [
-  { key: "all", label: "All" },
-  { key: "nearby", label: "Nearby" },
-  { key: "popular", label: "Popular" },
-  { key: "featured", label: "Featured" },
-  { key: "explore", label: "Explore" },
-] as const;
+import { useRoomSession } from '@/lib/room-session-context';
 
-type Tab = (typeof TABS)[number]["key"];
+import { useSpeakerRequests } from '@/hooks/useSpeakerRequests';
 
-function roomCategory(room: RoomRecord): Tab {
-  const category = room.category?.toLowerCase();
-  return TABS.some((tab) => tab.key === category)
-    ? (category as Tab)
-    : "explore";
-}
+import { useHostTask } from '@/hooks/useHostTask';
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
+import { useRoomHeartbeat } from '@/hooks/useRoomHeartbeat';
 
-export default function LivePage() {
-  return (
-    <Suspense fallback={null}>
-      <LivePageInner />
-    </Suspense>
-  );
-}
+import { useViewerRequestStatus } from '@/hooks/useViewerRequestStatus';
 
-function LivePageInner() {
+import { RoomHeader } from '@/components/RoomHeader';
+
+import { LiveVideo } from '@/components/LiveVideo';
+
+import { RoomMoreActions } from '@/components/RoomMoreActions';
+
+import { HostControls } from '@/components/HostControls';
+
+import { RoomChat } from '@/components/RoomChat';
+
+import { RoomJoinFeed, type RoomJoinEvent } from '@/components/RoomJoinFeed';
+
+import { useRoomChat } from '@/hooks/useRoomChat';
+
+import { usePk } from '@/hooks/usePk';
+
+import { usePkMedia } from '@/hooks/usePkMedia';
+
+import { PkBattleBar } from '@/components/PkBattleBar';
+
+import { PkBattleSheet } from '@/components/PkBattleSheet';
+
+import { PkDualVideo } from '@/components/PkDualVideo';
+
+import { PKBattleOverlay } from '@/components/pk/PKBattleOverlay';
+
+import { HostReconnectingOverlay } from '@/components/HostReconnectingOverlay';
+
+import { LastPKCard } from '@/components/pk/LastPKCard';
+
+
+import { GiftPickerSheet } from '@/components/GiftPickerSheet';
+
+import { GiftSendAnimation, type SentGift } from '@/components/GiftSendAnimation';
+
+import { HostGiftMeter } from '@/components/HostGiftMeter';
+
+import { WalletBalancePill } from '@/components/WalletBalancePill';
+
+import { financialApi, type GiftCatalogItem } from '@/lib/api/financial';
+
+import { AudioStageModal } from '@/components/AudioStageModal';
+
+import { SpeakerDock, type DockSpeaker } from '@/components/SpeakerDock';
+
+import { ViewerListSheet } from '@/components/ViewerListSheet';
+
+
+
+const filterPresets = {
+
+  Natural: 'none',
+
+  Glow: 'brightness(1.08) saturate(1.08) contrast(0.96)',
+
+  Warm: 'sepia(0.16) saturate(1.18) brightness(1.04)',
+
+  Cool: 'hue-rotate(10deg) saturate(0.88) brightness(1.04)',
+
+  Noir: 'grayscale(1) contrast(1.18) brightness(0.94)',
+
+  Vintage: 'sepia(0.28) saturate(0.82) contrast(0.94) brightness(1.04)',
+
+};
+
+
+
+export default function RoomStagePage({ params }: { params: Promise<{ id: string }> }) {
+
+  const { id } = use(params);
+
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [tab, setTab] = useState<Tab>("all");
-  const [query, setQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const promoBanners = useMemo(() => getPromoBanners(), []);
-  const [createOpen, setCreateOpen] = useState(false);
 
-  // Shared room-discovery hook (React Query) — same query/polling logic Party
-  // and any other surface uses, so there's one source of truth for "list
-  // rooms" instead of a page-local fetch+setInterval.
-  const {
-    data,
-    isLoading: loading,
-    isError,
-    refetch,
-  } = useRooms();
-  const rooms = useMemo<RoomRecord[]>(() => data ?? [], [data]);
-  const createRoomMutation = useCreateRoom();
+  // ---- Shared room session (survives navigation — see room-session-context) ----
+
+  const { openRoom, minimize, closeRoom, runtime } = useRoomSession();
 
   useEffect(() => {
-    if (isError) {
-      toast.error("Couldn't load live rooms");
-    }
-  }, [isError]);
+    openRoom(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
-  // Deep link from the bottom nav's "Go Live" button (`/home?create=1`).
+  // If the shared session was closed out from under this route (host ended
+  // the room, or it was explicitly left from the mini player), there's
+  // nothing left to show here — bounce back to Home instead of rendering a
+  // broken screen. Guarded by `hadRuntimeRef` because `runtime` starts out
+  // null for one render too — openRoom() above updates the provider's
+  // state asynchronously, so on the very first render here it hasn't
+  // landed yet. Without the guard, that transient null looked identical
+  // to "session closed" and redirected home immediately after every room
+  // was created/opened.
+  const hadRuntimeRef = useRef(false);
   useEffect(() => {
-    if (searchParams.get("create") === "1") {
-      setCreateOpen(true);
-    }
-  }, [searchParams]);
-
-  const filteredRooms = useMemo(() => {
-    const q = query.trim().toLowerCase();
-
-    return rooms.filter((room) => {
-      const matchesTab = tab === "all" || roomCategory(room) === tab;
-      if (!matchesTab) return false;
-
-      if (!q) return true;
-
-      return (
-        room.title.toLowerCase().includes(q) ||
-        room.host?.name?.toLowerCase().includes(q) ||
-        room.host?.handle?.toLowerCase().includes(q)
-      );
-    });
-  }, [rooms, tab, query]);
-
-  const liveRooms = rooms.filter((room) => room.status === "live");
-  const waitingRooms = rooms.filter((room) => room.status === "created");
-
-  async function createRoom(input: {
-    title: string;
-    description: string;
-    category: string;
-    mediaType: RoomMediaType;
-  }) {
-    try {
-      const room = await createRoomMutation.mutateAsync({
-        title: input.title,
-        description: input.description || null,
-        category: input.category,
-        livekit_room_name: `subha-${crypto.randomUUID()}`,
-        max_guest_slots: 3,
-        cover: null,
-        media_type: input.mediaType,
-      });
-
-      setCreateOpen(false);
-      router.push(`/home/room/${room.id}`);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Couldn't create room",
-      );
-    }
-  }
-
-  return (
-    <main className="relative mx-auto min-h-dvh w-full max-w-[680px] bg-surface">
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-0 h-72 bg-brand-radial" />
-
-      <header className="glass-panel sticky top-0 z-30 rounded-none border-x-0 border-t-0 px-4 pb-3 pt-5">
-        <div className="flex items-center justify-between gap-3">
-          <AnimatePresence mode="wait" initial={false}>
-            {searchOpen ? (
-              <motion.div
-                key="search"
-                initial={{ opacity: 0, width: "65%" }}
-                animate={{ opacity: 1, width: "100%" }}
-                exit={{ opacity: 0, width: "65%" }}
-                className="flex items-center gap-2 rounded-2xl border border-white/10 bg-surface-raised px-3.5 py-2.5"
-              >
-                <Search className="h-4 w-4 text-accent-hot" />
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search rooms or hosts"
-                  className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
-                />
-                <button
-                  onClick={() => {
-                    setSearchOpen(false);
-                    setQuery("");
-                  }}
-                  className="text-ink-faint"
-                  aria-label="Close search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </motion.div>
-            ) : (
-              <div>
-                <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-accent-hot">
-                  <Radio className="h-3 w-3 animate-live-dot" />
-                  Subha Live
-                </p>
-                <h1 className="mt-0.5 font-display text-[1.8rem] font-black tracking-[-0.04em] text-ink">
-                  Live rooms
-                </h1>
-              </div>
-            )}
-          </AnimatePresence>
-
-          {!searchOpen && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-surface-raised text-ink-muted transition hover:text-accent-hot active:scale-95"
-                aria-label="Search"
-              >
-                <Search className="h-4 w-4" />
-              </button>
-              <motion.button
-                whileTap={{ scale: 0.94 }}
-                onClick={() => setCreateOpen(true)}
-                className="grad-brand animate-gradient-shift glow-hot flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-bold text-white"
-              >
-                <Plus className="h-4 w-4" />
-                Go Live
-              </motion.button>
-            </div>
-          )}
-        </div>
-
-        <div className="stage-card mt-4 flex gap-1 overflow-x-auto p-1">
-          {TABS.map((item) => (
-            <button
-              key={item.key}
-              onClick={() => setTab(item.key)}
-              className="relative shrink-0 rounded-xl px-4 py-2 text-xs font-bold"
-            >
-              {tab === item.key && (
-                <motion.span
-                  layoutId="live-tab"
-                  className="grad-brand absolute inset-0 rounded-xl"
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                />
-              )}
-              <span
-                className={cn(
-                  "relative z-10",
-                  tab === item.key ? "text-white" : "text-ink-faint",
-                )}
-              >
-                {item.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </header>
-
-      <div className="relative z-10 px-4 pt-4">
-        <BannerCarousel items={promoBanners} />
-      </div>
-
-      <section className="relative z-10 px-4 pb-8 pt-5">
-        {loading ? (
-          <div className="flex min-h-[45vh] items-center justify-center">
-            <div className="flex items-center gap-2 text-sm text-ink-muted">
-              <Loader2 className="h-4 w-4 animate-spin text-accent-hot" />
-              Loading live rooms…
-            </div>
-          </div>
-        ) : isError && rooms.length === 0 ? (
-          <div className="flex min-h-[45vh] flex-col items-center justify-center text-center">
-            <p className="text-sm font-semibold text-ink">
-              Couldn&apos;t load live rooms
-            </p>
-            <button
-              onClick={() => refetch()}
-              className="mt-3 flex items-center gap-2 rounded-full border border-white/10 bg-surface-raised px-4 py-2 text-xs font-bold text-ink transition hover:border-accent-hot/40"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Retry
-            </button>
-          </div>
-        ) : filteredRooms.length === 0 ? (
-          <EmptyRooms onCreate={() => setCreateOpen(true)} query={query} />
-        ) : (
-          <div className="space-y-7">
-            {liveRooms.length > 0 && tab === "all" && !query && (
-              <section>
-                <div className="mb-3 flex items-end justify-between">
-                  <div>
-                    <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-accent-hot">
-                      <span className="h-1.5 w-1.5 rounded-full bg-live animate-live-dot" />
-                      Happening now
-                    </p>
-                    <h2 className="mt-0.5 text-xl font-black tracking-tight text-ink">
-                      Live now
-                    </h2>
-                  </div>
-                  <span className="grad-brand rounded-full px-2.5 py-1 text-[10px] font-bold text-white">
-                    {liveRooms.length} live
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {liveRooms.map((room, index) => (
-                    <RoomCard key={room.id} room={room} index={index} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {waitingRooms.length > 0 && tab === "all" && !query && (
-              <section>
-                <div className="mb-3">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-accent-violet">
-                    Coming up
-                  </p>
-                  <h2 className="mt-0.5 text-xl font-black tracking-tight text-ink">
-                    Rooms waiting for the host
-                  </h2>
-                </div>
-                <div className="space-y-2">
-                  {waitingRooms.map((room) => (
-                    <WaitingRoomCard key={room.id} room={room} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {(tab !== "all" || query) && (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {filteredRooms.map((room, index) => (
-                  <RoomCard key={room.id} room={room} index={index} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-      {createOpen && (
-        <CreateRoomModal
-          onClose={() => setCreateOpen(false)}
-          onCreate={createRoom}
-        />
-      )}
-    </main>
-  );
-}
-
-function RoomCard({ room, index }: { room: RoomRecord; index: number }) {
-  const hostName = room.host?.name || "Subha host";
-  const viewerCount = room.viewerCount ?? 0;
-  const isLive = room.status === "live";
-  const isAudioRoom = room.media_type === "audio";
-
-  const { ref: viewRef, inView } = useInView<HTMLButtonElement>(0.5);
-  const { stream, connected } = useRoomPreview(
-    // Audio rooms never publish a camera, so there's nothing to preview —
-    // skip connecting a preview session for them entirely.
-    isLive && !isAudioRoom ? room.id : null,
-    isLive && !isAudioRoom && inView,
-  );
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.srcObject = stream ?? null;
-  }, [stream]);
-
-  const showPreview = isLive && !isAudioRoom && connected && !!stream;
-
-  return (
-    <motion.button
-      ref={viewRef}
-      onClick={() => window.location.assign(`/home/room/${room.id}`)}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.035 }}
-      className="group relative aspect-[3/4] overflow-hidden rounded-[26px] border border-white/10 bg-surface-raised text-left shadow-sm transition-shadow duration-300 hover:glow-hot hover:border-accent-hot/40"
-    >
-      {isAudioRoom ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-[linear-gradient(160deg,#3a2e5c,#1c1430_55%,#0a0714)]">
-          <span className="absolute h-24 w-24 rounded-full bg-accent-violet/25 blur-2xl animate-float-slow" />
-          <Avatar
-            name={hostName}
-            src={room.host?.avatar ?? undefined}
-            size="lg"
-            className="relative ring-2 ring-white/25"
-          />
-        </div>
-      ) : room.cover ? (
-        <img
-          src={room.cover}
-          alt=""
-          className={cn(
-            "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
-            showPreview ? "opacity-0" : "opacity-100 group-hover:scale-105 transition-transform duration-500",
-          )}
-        />
-      ) : (
-        <div
-          className={cn(
-            "absolute inset-0 bg-[linear-gradient(145deg,#272727,#111111_55%,#050505)] transition-opacity duration-300",
-            showPreview && "opacity-0",
-          )}
-        />
-      )}
-
-      {/* Live preview — muted, silent viewer session (not counted toward
-          viewerCount). Only mounted/connected while the card is scrolled
-          into view; see useRoomPreview. Audio rooms never render this. */}
-      {!isAudioRoom && (
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className={cn(
-            "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
-            showPreview ? "opacity-100" : "opacity-0",
-          )}
-        />
-      )}
-
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-black/5" />
-
-      <div
-        className={cn(
-          "absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-bold text-white backdrop-blur-md",
-          isLive ? "grad-brand glow-hot" : "bg-black/45",
-        )}
-      >
-        <span
-          className={cn(
-            "h-1.5 w-1.5 rounded-full bg-white",
-            isLive && "animate-live-dot",
-          )}
-        />
-        {isLive ? (isAudioRoom ? "LIVE AUDIO" : "LIVE") : "WAITING"}
-      </div>
-
-      <div className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full bg-black/45 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-md">
-        <Users className="h-2.5 w-2.5" />
-        {viewerCount}
-      </div>
-
-      <div className="absolute inset-x-0 bottom-0 p-3">
-        <div className="flex items-center gap-2.5">
-          <span className="avatar-ring shrink-0">
-            <Avatar
-              name={hostName}
-              src={room.host?.avatar ?? undefined}
-              size="sm"
-              className="ring-2 ring-surface"
-            />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-white">{hostName}</p>
-            <p className="truncate text-[11px] text-white/65">{room.title}</p>
-          </div>
-        </div>
-      </div>
-    </motion.button>
-  );
-}
-
-function WaitingRoomCard({ room }: { room: RoomRecord }) {
-  const hostName = room.host?.name || "Subha host";
-
-  return (
-    <button
-      onClick={() => window.location.assign(`/home/room/${room.id}`)}
-      className="stage-card flex w-full items-center gap-3 p-3 text-left transition hover:border-accent-hot/40 hover:glow-hot"
-    >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-surface-overlay text-accent-violet">
-        <Radio className="h-5 w-5" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold text-ink">{room.title}</p>
-        <p className="truncate text-xs text-ink-muted">
-          {hostName} · waiting to start
-        </p>
-      </div>
-      <ChevronRight className="h-4 w-4 text-ink-faint" />
-    </button>
-  );
-}
-
-function EmptyRooms({
-  onCreate,
-  query,
-}: {
-  onCreate: () => void;
-  query: string;
-}) {
-  return (
-    <div className="flex min-h-[48vh] flex-col items-center justify-center text-center">
-      <div className="relative flex h-20 w-20 items-center justify-center rounded-[28px] bg-surface-raised text-accent-hot">
-        <span className="absolute inset-0 rounded-[28px] bg-accent-hot/10 animate-glow-pulse" />
-        <Users className="relative h-8 w-8" />
-      </div>
-      <h2 className="mt-5 text-lg font-bold text-ink">
-        {query ? "No rooms found" : "Nothing is live yet"}
-      </h2>
-      <p className="mt-1 max-w-xs text-sm leading-6 text-ink-muted">
-        {query
-          ? "Try another room title or host."
-          : "Create the first room and it will appear here for other users."}
-      </p>
-      {!query && (
-        <motion.button
-          whileTap={{ scale: 0.95 }}
-          onClick={onCreate}
-          className="grad-brand glow-hot mt-5 rounded-full px-5 py-2.5 text-sm font-bold text-white"
-        >
-          Create a room
-        </motion.button>
-      )}
-    </div>
-  );
-}
-
-function CreateRoomModal({
-  onClose,
-  onCreate,
-}: {
-  onClose: () => void;
-  onCreate: (input: {
-    title: string;
-    description: string;
-    category: string;
-    mediaType: RoomMediaType;
-  }) => Promise<void>;
-}) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("explore");
-  const mediaType: RoomMediaType = "video";
-  const [creating, setCreating] = useState(false);
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!title.trim()) {
-      toast.error("Give the room a title");
+    if (runtime) {
+      hadRuntimeRef.current = true;
       return;
     }
+    if (hadRuntimeRef.current) router.replace('/home');
+  }, [runtime, router]);
 
-    try {
-      setCreating(true);
-      await onCreate({
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        mediaType,
+  const userId = runtime?.userId ?? null;
+  const room = runtime?.room ?? null;
+  const isLoading = runtime?.roomLoading ?? true;
+  const isError = runtime?.roomError ?? false;
+  const refetch = runtime?.refetchRoom ?? (() => {});
+  const isHost = runtime?.isHost ?? false;
+  const isLive = runtime?.isLive ?? false;
+  const isWaiting = runtime?.isWaiting ?? false;
+
+  const hostPublishing = runtime?.hostPublishing ?? false;
+  const hostMediaReady = runtime?.hostMediaReady ?? false;
+  const viewerConnected = runtime?.viewerConnected ?? false;
+  const speakerPublishing = runtime?.speakerPublishing ?? false;
+  const mediaError = runtime?.mediaError ?? '';
+  const mediaState = runtime?.mediaState;
+  const speakingSpeakerIds = runtime?.speakingSpeakerIds;
+  const localStreamRef = runtime?.localStreamRef ?? { current: null };
+  const remoteStreamRef = runtime?.remoteStreamRef ?? { current: null };
+  const publishGuestAudio = runtime?.publishGuestAudio ?? (async () => {});
+
+  // Connection lifecycle now lives in the shared session (room-session-
+  // context) so it survives navigating away from this route. This page
+  // just calls into it and handles its own navigation on top.
+  const actionLoading = runtime?.actionLoading ?? false;
+  const handleStart = runtime?.handleStart ?? (async () => {});
+  const handleJoin = runtime?.handleJoin ?? (async () => {});
+  const handleEnd = runtime?.handleEnd ?? (async () => {});
+
+  // Full leave: disconnect, clear the shared session, and navigate home.
+  // Contrast with "minimize" below, which keeps the connection alive.
+  const handleLeave = useCallback(async () => {
+    await (runtime?.handleLeave ?? (async () => {}))();
+    closeRoom();
+    router.push('/home');
+  }, [runtime, closeRoom, router]);
+
+  // Minimize: keep the connection alive in RoomSessionProvider and drop
+  // into the floating mini player instead of disconnecting.
+  const handleMinimize = useCallback(() => {
+    minimize();
+    router.push('/home');
+  }, [minimize, router]);
+
+
+
+
+
+  // ---- Speaker Requests (host) ----
+
+  const {
+
+    requests,
+
+    pending: hostRequestPending,
+
+    requestAudio,
+
+    approve,
+
+    reject,
+
+} = useSpeakerRequests(room?.id ?? '', isHost, room?.status);
+
+  const { task, stats, claim, claiming } = useHostTask(
+    room?.id ?? '',
+    room?.status,
+    isHost,
+  );
+
+  // Accrue streaming/watch hours toward the active host task.
+  useRoomHeartbeat(room?.id ?? '', room?.status);
+
+  // Live room chat over the realtime service.
+  const { messages: chatMessages, state: chatState, selfUserId, canChat, send: sendChat } =
+    useRoomChat(room?.id ?? '', room?.status);
+  const [giftSheetOpen, setGiftSheetOpen] = useState(false);
+
+  const [sentGift, setSentGift] = useState<SentGift | null>(null);
+
+  // Bumped every time this viewer sends a gift, so WalletBalancePill knows
+  // to re-fetch the authoritative balance from the server (never computed
+  // locally — see fin_send_gift() in the financial-system migration).
+  const [walletRefreshToken, setWalletRefreshToken] = useState(0);
+
+  // Public gift catalog (id -> diamondValue), fetched once, used only to
+  // render the live "gifts this stream" meter below — same data the gift
+  // picker already shows, never anything balance/ledger related.
+  const [giftDiamondValues, setGiftDiamondValues] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    financialApi
+      .giftCatalog()
+      .then((catalog: GiftCatalogItem[]) => {
+        if (cancelled) return;
+        const map: Record<string, number> = {};
+        for (const g of catalog) map[g.id] = g.diamondValue;
+        setGiftDiamondValues(map);
+      })
+      .catch(() => {
+        /* Meter just stays hidden if the catalog can't be loaded. */
       });
-    } finally {
-      setCreating(false);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Running total of diamonds represented by gift rows already seen in
+  // this room's live chat feed this session — a read-only crowd meter,
+  // not the source of truth for anyone's actual earnings/balance.
+  const sessionGiftTotals = useMemo(() => {
+    let totalDiamonds = 0;
+    let giftCount = 0;
+    for (const m of chatMessages) {
+      if (m.kind === 'gift' && m.gift) {
+        const value = giftDiamondValues[m.gift.giftId] ?? 0;
+        totalDiamonds += value * (m.gift.quantity || 1);
+        giftCount += 1;
+      }
     }
+    return { totalDiamonds, giftCount };
+  }, [chatMessages, giftDiamondValues]);
+
+  // PK battle (1v1) state + actions.
+  const pk = usePk(room?.id ?? '', userId, isHost, room?.status);
+  const [pkOpen, setPkOpen] = useState(false);
+
+  // Once the battle actually goes ACTIVE, the sheet's job (invite/accept/
+  // start) is done — close it so it doesn't sit on top of (and hide) the
+  // start animation and the clean active-battle UI underneath. Reopening
+  // is still one tap away via the score bar or the "Last PK" card.
+  useEffect(() => {
+    if (pk.state?.status === 'ACTIVE') setPkOpen(false);
+  }, [pk.state?.status]);
+
+
+  // Opponent's stream for the dual-video PK view (client-side side-by-side).
+  const { opponentStream, opponentConnected } = usePkMedia(room, userId, pk.state);
+
+  // "Someone joined" pulses for RoomJoinFeed. The realtime service doesn't
+  // currently emit a per-user join event with a username (only the polled
+  // aggregate viewerCount on the room record), so each detected increase in
+  // viewerCount fires one generic pulse. Swap this for a real presence/WS
+  // event (with username + avatar) as soon as the backend exposes one —
+  // RoomJoinFeed already accepts that richer shape via RoomJoinEvent.
+  const [joinEvents, setJoinEvents] = useState<RoomJoinEvent[]>([]);
+  const lastViewerCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const count = room?.viewerCount;
+    if (typeof count !== 'number') return;
+    const prev = lastViewerCountRef.current;
+    lastViewerCountRef.current = count;
+    if (prev === null || count <= prev) return;
+    const gained = Math.min(count - prev, 3); // cap so a big jump doesn't spam the feed
+    setJoinEvents((existing) => [
+      ...existing,
+      ...Array.from({ length: gained }).map((_, i) => ({
+        id: `join-${Date.now()}-${i}`,
+        username: 'New viewer',
+        subtitle: 'joined the room',
+      })),
+    ].slice(-20));
+  }, [room?.viewerCount]);
+
+
+
+  // ---- Viewer's own request status ----
+
+const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
+  useViewerRequestStatus(room?.id ?? '', isHost, userId);
+
+
+
+  // ---- UI state ----
+
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const [micEnabled, setMicEnabled] = useState(true);
+
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const [selectedFilter, setSelectedFilter] = useState('Natural');
+
+  const [speakerPanelOpen, setSpeakerPanelOpen] = useState(false);
+
+  const [viewersOpen, setViewersOpen] = useState(false);
+
+  const [guestMicEnabled, setGuestMicEnabled] = useState(true);
+
+  // Cache of userId -> {name, avatar} picked up from speaker requests, so
+  // approved speakers still show a real name/avatar (instead of "Guest N")
+  // once they leave the pending-requests list.
+  const [speakerProfiles, setSpeakerProfiles] = useState<
+    Record<string, { name: string; avatar: string | null }>
+  >({});
+
+  useEffect(() => {
+    if (requests.length === 0) return;
+    setSpeakerProfiles((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const r of requests) {
+        if (r.user && !next[r.user_id]) {
+          next[r.user_id] = { name: r.user.name, avatar: r.user.avatar };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [requests]);
+
+
+
+  // ---- Handlers ----
+  // Connect/disconnect + start/join/end now live in RoomSessionProvider
+  // (handleStart/handleJoin/handleEnd/handleLeave defined above) so they
+  // survive navigating away from this route. Only per-route UI effects
+  // stay here.
+
+useEffect(() => {
+  if (isHost || !viewerRequestAccepted || speakerPublishing) return;
+  console.log('[GUEST-DEBUG] page.tsx effect triggering publishGuestAudio (viewerRequestAccepted=true)');
+  publishGuestAudio().catch((e) => {
+    console.error('[handleGuestAutoPublish] failed:', e);
+  });
+}, [isHost, viewerRequestAccepted, speakerPublishing, publishGuestAudio]);
+
+  // ---- Derived ----
+
+  const activeSpeakers = useMemo(() => {
+
+    return mediaState ? Object.values(mediaState.speakers) : [];
+
+  }, [mediaState]);
+
+  const seatCount = room?.max_guest_slots ?? 3;
+
+  // Real connected viewer ids from the room's live media state (SFU
+  // presence), excluding the host and any on-stage speakers so this list
+  // is purely "people watching" as advertised — no invented names.
+  const viewerIds = useMemo(() => {
+    if (!mediaState?.viewers) return [];
+    const speakerIds = new Set(activeSpeakers.map((s) => s.userId));
+    return Object.keys(mediaState.viewers).filter(
+      (id) => id !== room?.host_id && !speakerIds.has(id),
+    );
+  }, [mediaState, activeSpeakers, room?.host_id]);
+
+  const occupiedSeats = Math.min(activeSpeakers.length, seatCount);
+
+  const dockSpeakers: DockSpeaker[] = useMemo(
+    () =>
+      activeSpeakers.map((speaker, index) => {
+        const profile = speakerProfiles[speaker.userId];
+        return {
+          userId: speaker.userId,
+          name: profile?.name || `Guest ${index + 1}`,
+          avatar: profile?.avatar ?? undefined,
+          speaking: speakingSpeakerIds?.has(speaker.userId) ?? false,
+        };
+      }),
+    [activeSpeakers, speakerProfiles, speakingSpeakerIds],
+  );
+
+  // Only the host sees pending requests, so only the host gets the
+  // notification dot on the audio-stage button.
+  const pendingRequestCount = isHost ? requests.length : 0;
+
+
+
+  // ---- Loading ----
+
+  if (isLoading) {
+
+    return (
+
+      <main className="flex min-h-dvh items-center justify-center bg-black text-white">
+
+        <Loader2 className="h-3 w-3 animate-spin" />
+
+      </main>
+
+    );
+
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 backdrop-blur-md sm:items-center">
-      <motion.div
-        initial={{ opacity: 0, y: 40, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: "spring", stiffness: 340, damping: 32 }}
-        className="stage-card glow-hot-lg w-full max-w-[520px] overflow-hidden rounded-[28px]"
-      >
-        <div className="grad-brand relative flex items-start justify-between px-5 py-5">
-          <div className="absolute inset-0 opacity-20 animate-gradient-shift" />
-          <div className="relative">
-            <p className="text-lg font-black text-white">Start a live room</p>
-            <p className="mt-0.5 text-xs text-white/75">
-              Camera and microphone connect when you press Start Live.
+
+
+  if (!room) {
+
+    return (
+
+      <main className="flex min-h-dvh items-center justify-center bg-black px-6 text-center text-white">
+
+        <div>
+
+          <p className="text-lg font-bold">
+            {isError ? "Couldn't load this room" : 'Room not found'}
+          </p>
+
+          {isError && (
+            <p className="mt-1 text-sm text-white/60">
+              Check your connection and try again.
             </p>
+          )}
+
+          <div className="mt-3 flex items-center justify-center gap-2">
+            {isError && (
+              <button
+                onClick={() => refetch()}
+                className="rounded-full bg-white/10 px-5 py-2 text-sm font-semibold text-white"
+              >
+                Retry
+              </button>
+            )}
+
+            <button
+
+              onClick={() => router.push('/home')}
+
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-black"
+
+            >
+
+              Back home
+
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="relative flex h-9 w-9 items-center justify-center rounded-full bg-black/20 text-white transition hover:bg-black/35"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+
         </div>
 
-        <form onSubmit={submit} className="space-y-4 p-5">
-          <div className="flex items-center gap-2 rounded-2xl border border-accent-hot/40 bg-accent-hot/10 px-4 py-3">
-            <Camera className="h-4 w-4 text-accent-hot" />
-            <div>
-              <span className="block text-sm font-bold text-ink">Video room</span>
-              <span className="text-[11px] text-ink-muted">
-                Camera + mic, like going live. Want an audio-only party
-                instead? Head to the Party tab.
-              </span>
-            </div>
+      </main>
+
+    );
+
+  }
+
+
+
+  // ---- Render ----
+
+  return (
+
+    <main className="min-h-[100svh] w-full overflow-hidden bg-black text-white">
+
+      <section className="relative mx-auto h-[100svh] w-full max-w-[430px] overflow-hidden bg-black shadow-2xl">
+
+        {/* Video layer */}
+
+        {pk.state &&
+        (pk.state.status === 'ACTIVE' ||
+          pk.state.status === 'FINALIZING' ||
+          pk.state.status === 'FINISHED') ? (
+          <PkDualVideo
+            isHost={isHost}
+            localStream={localStreamRef.current}
+            remoteStream={remoteStreamRef.current}
+            opponentStream={opponentStream}
+            opponentConnected={opponentConnected}
+            filter={filterPresets[selectedFilter as keyof typeof filterPresets]}
+            primaryLabel={isHost ? 'You' : room.host?.name || 'Host'}
+            opponentLabel="Opponent"
+          />
+        ) : (
+          <LiveVideo
+
+            isHost={isHost}
+
+            isWaiting={isWaiting}
+
+            isLive={isLive}
+
+            localStream={localStreamRef.current}
+
+            remoteStream={remoteStreamRef.current}
+
+            filter={filterPresets[selectedFilter as keyof typeof filterPresets]}
+
+            isAudioRoom={room.media_type === "audio"}
+
+            hostName={room.host?.name}
+
+            hostAvatar={room.host?.avatar}
+
+            speakers={dockSpeakers}
+
+            seatCount={seatCount}
+
+            hostSpeaking={!!room.host_id && (speakingSpeakerIds?.has(room.host_id) ?? false)}
+
+            onOpenSeats={() => setSpeakerPanelOpen(true)}
+
+          />
+        )}
+
+
+
+        {/* Overlay gradients */}
+
+        <div className="pointer-events-none absolute inset-0 bg-black/35" />
+
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[34%] bg-gradient-to-b from-black/80 via-black/35 to-transparent" />
+
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%] bg-gradient-to-t from-black/95 via-black/50 to-transparent" />
+
+
+
+        {/* Error message */}
+
+        {mediaError && isHost && isWaiting && (
+
+          <div className="absolute left-5 right-5 top-5 z-50 rounded-2xl border border-red-300/20 bg-black/70 px-4 py-3 text-xs text-red-100 backdrop-blur-xl">
+
+            {mediaError}
+
           </div>
 
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-semibold text-ink-muted">
-              Room title
-            </span>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              maxLength={80}
-              placeholder="What are you going live about?"
-              className="w-full rounded-2xl border border-white/10 bg-surface-raised px-4 py-3 text-sm text-ink outline-none transition focus:border-accent-hot/50"
-              autoFocus
-            />
-          </label>
+        )}
 
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-semibold text-ink-muted">
-              Description
-            </span>
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              maxLength={240}
-              rows={3}
-              placeholder="A short description"
-              className="w-full resize-none rounded-2xl border border-white/10 bg-surface-raised px-4 py-3 text-sm text-ink outline-none transition focus:border-accent-hot/50"
-            />
-          </label>
+        {/* Host connection lost — viewer sees a real "please wait, Xs
+            left" countdown instead of a silent freeze or a fake error. */}
+        {!isHost && mediaState?.host?.status === 'reconnecting' && mediaState.host.reconnectDeadline && (
+          <HostReconnectingOverlay deadline={mediaState.host.reconnectDeadline} />
+        )}
 
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-semibold text-ink-muted">
-              Category
+
+
+        {/* Header */}
+
+        <RoomHeader
+
+          host={room.host}
+
+          viewerCount={room.viewerCount ?? mediaState?.viewerCount ?? 1200}
+
+          isLive={isLive}
+
+          onLeave={handleLeave}
+
+          onMinimize={handleMinimize}
+
+          currentUserId={userId}
+
+          task={task}
+
+          isHost={isHost}
+
+          onClaimTask={isHost ? undefined : claim}
+
+          claimingTask={claiming}
+
+          taskStats={stats}
+
+          onOpenViewers={() => setViewersOpen(true)}
+
+        />
+
+        {/* Live "gifts this stream" meter — visible to everyone in the
+            room, host and viewers alike, tallied from the same gift rows
+            already shown in chat. */}
+        <HostGiftMeter
+          totalDiamonds={sessionGiftTotals.totalDiamonds}
+          giftCount={sessionGiftTotals.giftCount}
+        />
+
+        {/* Viewer's own coin balance — visible at a glance in the room,
+            not just inside the gift sheet. Hidden for the host, whose
+            header already shows task/earnings stats. */}
+        {!isHost && (
+          <WalletBalancePill
+            className="absolute right-4 top-[80px] z-30"
+            refreshToken={walletRefreshToken}
+          />
+        )}
+
+
+
+        {/* Live indicator for host */}
+
+        {isHost && isLive && (
+
+          <div className="absolute left-1/2 top-[46px] z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/40 px-2 py-1 text-[9px] font-semibold tracking-wide backdrop-blur-xl">
+
+            <span
+              className={`mr-2 inline-block h-2 w-2 rounded-full ${
+                hostMediaReady ? 'bg-emerald-400' : 'animate-pulse bg-amber-300'
+              }`}
+            />
+
+            {hostMediaReady ? 'LIVE' : 'CONNECTING'}
+
+          </div>
+
+        )}
+
+
+
+        {/* Audio stage button */}
+
+        <button
+
+          type="button"
+
+          onClick={() => setSpeakerPanelOpen(true)}
+
+          aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} occupied${
+            pendingRequestCount > 0 ? `, ${pendingRequestCount} pending requests` : ''
+          }`}
+
+          className="absolute right-[13px] top-1/2 z-40 flex h-[29px] w-[29px] -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/45 backdrop-blur-xl transition hover:bg-black/60 active:scale-95"
+
+        >
+
+          <Mic className="h-[13px] w-[13px]" strokeWidth={1.6} />
+
+          {occupiedSeats > 0 && (
+
+            <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[9px] font-bold text-black">
+
+              {occupiedSeats}
+
             </span>
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-surface-raised px-4 py-3 text-sm text-ink outline-none"
+
+          )}
+
+          {pendingRequestCount > 0 && (
+
+            <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-[#FF3B5C] ring-2 ring-black">
+
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF3B5C] opacity-75" />
+
+            </span>
+
+          )}
+
+        </button>
+
+
+
+        {/* Always-visible speaker dock: shows connected speakers over the
+            camera feed for video rooms. Audio rooms already render every
+            seat inline as the stage background (see LiveVideo), so the
+            dock would just duplicate it there. */}
+
+        {room.media_type !== "audio" && (
+          <SpeakerDock speakers={dockSpeakers} topOffset={100} />
+        )}
+
+
+
+        {/* Secondary actions live in a "more" sheet, opened from the chat bar,
+            so the bottom edge stays to one clean row (chat + gift). */}
+        <RoomMoreActions
+          open={moreOpen}
+          onClose={() => setMoreOpen(false)}
+          isHost={isHost}
+          cameraEnabled={cameraEnabled}
+          onToggleCamera={() => setCameraEnabled((v) => !v)}
+          filterOpen={filterOpen}
+          onToggleFilter={() => setFilterOpen((v) => !v)}
+          micEnabled={micEnabled}
+          onToggleMic={isHost ? () => setMicEnabled((v) => !v) : undefined}
+          isAudioRoom={room.media_type === "audio"}
+          onShare={() => {
+            const url = typeof window !== 'undefined' ? window.location.href : '';
+            if (navigator.share) {
+              navigator.share({ url }).catch(() => {});
+            } else {
+              navigator.clipboard?.writeText(url);
+              toast.success('Room link copied');
+            }
+          }}
+          onLike={() => toast.success('❤️')}
+        />
+
+        {/* PK battle bar (score + timer, active/finished) */}
+
+        <PkBattleBar
+          state={pk.state}
+          onOpen={() => setPkOpen(true)}
+          roomHostId={room.host_id}
+          hostName={room.host?.name}
+          hostAvatar={room.host?.avatar}
+        />
+
+        {/* One-shot PK animations: start intro/countdown and end-of-battle
+            result, driven by the real PK lifecycle. Renders nothing while
+            no PK is active/finishing. */}
+        <PKBattleOverlay
+          state={pk.state}
+          roomHostId={room.host_id}
+          hostName={room.host?.name}
+          hostAvatar={room.host?.avatar}
+        />
+
+        {/* "Last PK" achievement card, only while live and no PK is running. */}
+        {isLive && !pk.state && (
+          <div className="absolute inset-x-0 top-[104px] z-30 mx-4">
+            <LastPKCard hostId={room.host_id} onView={() => setPkOpen(true)} />
+          </div>
+        )}
+
+        {/* "X joined" pulses, top-left, above the chat stream */}
+
+        {(isLive || isWaiting) && <RoomJoinFeed events={joinEvents} />}
+
+        {/* Live room chat (message stream + input) */}
+
+        {(isLive || isWaiting) && (
+          <RoomChat
+            messages={chatMessages}
+            selfUserId={selfUserId}
+            connected={chatState === 'connected'}
+            canChat={canChat}
+            isHost={isHost}
+            raised={isHost && isWaiting}
+            onSend={sendChat}
+            onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
+            onOpenMore={() => setMoreOpen(true)}
+            onOpenPk={() => setPkOpen(true)}
+            onOpenGames={() => toast.info('Games coming soon 🎮')}
+            onToggleFilter={isHost ? () => setFilterOpen((v) => !v) : undefined}
+            filterOpen={filterOpen}
+          />
+        )}
+
+
+
+        {/* Host controls */}
+
+        {isHost && isWaiting && (
+
+          <HostControls
+
+            isWaiting={isWaiting}
+
+            isLive={isLive}
+
+            onStart={handleStart}
+
+            actionLoading={actionLoading}
+
+            localStreamReady={!!localStreamRef.current}
+
+          />
+
+        )}
+
+
+
+        {/* Gift picker (viewers) */}
+
+        {!isHost && giftSheetOpen && room.host?.id && (
+
+          <GiftPickerSheet
+
+            roomId={room.id}
+
+            hostId={room.host.id}
+
+            onClose={() => setGiftSheetOpen(false)}
+
+            onSent={(gift, position) => {
+              setSentGift({ code: gift.code, icon: gift.icon, name: gift.name, position });
+              setWalletRefreshToken((t) => t + 1);
+            }}
+
+          />
+
+        )}
+
+
+
+        {/* Gift-sent celebration: replaces the old success toast */}
+
+        {sentGift && (
+
+          <GiftSendAnimation gift={sentGift} onDone={() => setSentGift(null)} />
+
+        )}
+
+
+
+        {/* Filter popup */}
+
+        {filterOpen && isHost && (
+
+          <div className="absolute bottom-[92px] left-1/2 z-50 w-[min(280px,calc(100%-32px))] -translate-x-1/2 rounded-2xl border border-white/15 bg-black/75 p-3 shadow-2xl backdrop-blur-2xl">
+
+            <div className="mb-2 flex items-center justify-between px-1">
+
+              <p className="text-xs font-semibold text-white">Streamer filter</p>
+
+              <span className="text-[10px] text-white/45">Live preview</span>
+
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+
+              {Object.keys(filterPresets).map((filter) => (
+
+                <button
+
+                  key={filter}
+
+                  type="button"
+
+                  onClick={() => setSelectedFilter(filter)}
+
+                  className={`rounded-xl border px-2 py-2 text-[11px] transition ${
+
+                    selectedFilter === filter
+
+                      ? 'border-white bg-white text-black'
+
+                      : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'
+
+                  }`}
+
+                >
+
+                  {filter}
+
+                </button>
+
+              ))}
+
+            </div>
+
+          </div>
+
+        )}
+
+
+
+        {/* Viewer loading overlay */}
+
+        {isLive && !viewerConnected && !isHost && (
+
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/15 backdrop-blur-[1px]">
+
+            <div className="rounded-3xl border border-white/10 bg-black/45 px-6 py-5 text-center backdrop-blur-xl">
+
+              <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+
+              <p className="mt-3 text-sm font-semibold">Joining the live...</p>
+
+            </div>
+
+          </div>
+
+        )}
+
+
+
+        {/* Guest speaker controls */}
+
+        {speakerPublishing && !isHost && (
+
+          <div className="absolute left-[15px] bottom-[154px] z-40 flex items-center gap-2">
+
+            <div className="flex items-center rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[8px] font-semibold backdrop-blur-xl">
+
+              <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+
+              You are speaking
+
+            </div>
+
+            <button
+
+              type="button"
+
+              onClick={() => setGuestMicEnabled((v) => !v)}
+
+              className={`flex h-[26px] w-[26px] items-center justify-center rounded-full border border-white/10 backdrop-blur-xl transition ${
+
+                guestMicEnabled ? 'bg-black/45 text-white hover:bg-white/10' : 'bg-white text-black'
+
+              }`}
+
+              aria-label={guestMicEnabled ? 'Mute microphone' : 'Unmute microphone'}
+
             >
-              <option value="explore">Explore</option>
-              <option value="nearby">Nearby</option>
-              <option value="popular">Popular</option>
-              <option value="featured">Featured</option>
-            </select>
-          </label>
 
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            type="submit"
-            disabled={creating}
-            className="grad-brand animate-gradient-shift glow-hot flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-sm font-black text-white disabled:opacity-60"
-          >
-            {creating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Camera className="h-4 w-4" />
-            )}
-            {creating ? "Creating room…" : "Create room"}
-          </motion.button>
-        </form>
-      </motion.div>
-    </div>
+              {guestMicEnabled ? <Mic className="h-[13px] w-[13px]" /> : <MicOff className="h-[13px] w-[13px]" />}
+
+            </button>
+
+          </div>
+
+        )}
+
+
+
+        {/* Speaker error */}
+
+        {mediaError && !isHost && (
+
+          <div className="absolute left-[15px] right-[30px] bottom-[150px] z-50 rounded-2xl border border-red-300/20 bg-red-950/70 p-3 text-xs text-red-100 backdrop-blur-xl">
+
+            {mediaError}
+
+          </div>
+
+        )}
+
+
+
+        {/* Viewer list */}
+
+        {viewersOpen && (
+          <ViewerListSheet viewerIds={viewerIds} onClose={() => setViewersOpen(false)} />
+        )}
+
+        {/* Audio stage modal */}
+
+        {speakerPanelOpen && (
+          <AudioStageModal
+
+            isHost={isHost}
+
+            requests={requests}
+
+            speakers={activeSpeakers}
+
+            speakerProfiles={speakerProfiles}
+
+            speakingSpeakerIds={speakingSpeakerIds}
+
+            seatCount={seatCount}
+
+            pending={viewerRequestPending}   // Viewer's own pending state
+
+            requestLoading={actionLoading}
+
+            onRequest={requestAudio}
+
+            onApprove={approve}
+
+            onReject={reject}
+
+            onClose={() => setSpeakerPanelOpen(false)}
+
+            hostName={room.host?.name || 'Host'}
+
+          />
+
+        )}
+
+        {/* PK battle sheet */}
+
+        <PkBattleSheet
+
+          open={pkOpen}
+
+          onClose={() => setPkOpen(false)}
+
+          myUserId={userId}
+
+          isHost={isHost}
+
+          hostName={room.host?.name || 'Host'}
+
+          pk={pk}
+
+        />
+
+      </section>
+
+    </main>
+
   );
+
 }
