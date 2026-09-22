@@ -112,8 +112,8 @@ export default function LiveFeedPage() {
           {/* Logo Area */}
           <div className="relative flex flex-col items-start">
             
-            {/* The Mascot (image.png) */}
-            <div className="absolute -top-10 left-[3.5rem] z-20 w-16 h-16">
+            {/* The Mascot (image.png) - Scaled down to match the smaller logo */}
+            <div className="absolute -top-8 left-[2.5rem] z-20 w-12 h-12">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src="/image.png" 
@@ -122,13 +122,13 @@ export default function LiveFeedPage() {
               />
             </div>
 
-            {/* The Custom SVG Logo */}
+            {/* The Custom SVG Logo - Made 30% smaller (180px * 0.7 = 126px) */}
             <div className="relative mt-1">
-              <SubhaLogo className="w-[180px] h-auto drop-shadow-[0_0_15px_rgba(255,154,0,0.3)]" />
+              <SubhaLogo className="w-[126px] h-auto drop-shadow-[0_0_15px_rgba(255,154,0,0.3)]" />
             </div>
 
             {/* Tagline */}
-            <p className="text-[10px] font-medium text-white/70 tracking-wide mt-0.5 ml-1">
+            <p className="text-[9px] font-medium text-white/70 tracking-wide mt-0.5 ml-0.5">
               Live People. Real Connection.
             </p>
           </div>
@@ -139,25 +139,25 @@ export default function LiveFeedPage() {
               type="button"
               onClick={comingSoon('Search')}
               aria-label="Search"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
             >
-              <Search className="h-4.5 w-4.5" />
+              <Search className="h-4 w-4" />
             </button>
             
             <button
               type="button"
               onClick={comingSoon('Notifications')}
               aria-label="Notifications"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
             >
-              <Bell className="h-4.5 w-4.5" />
-              <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-orange-500 ring-2 ring-[#0a0a0a]" />
+              <Bell className="h-4 w-4" />
+              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-orange-500 ring-2 ring-[#0a0a0a]" />
             </button>
 
             {/* Go Live Button */}
             <button
               onClick={() => setShowCreateModal(true)}
-              className="relative flex items-center gap-1.5 rounded-full border border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 px-4 py-2.5 text-xs font-bold text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-transform active:scale-95"
+              className="relative flex items-center gap-1.5 rounded-full border border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 px-4 py-2 text-xs font-bold text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-transform active:scale-95"
             >
               <Crown className="h-3.5 w-3.5 fill-orange-400" />
               Go Live
@@ -166,7 +166,7 @@ export default function LiveFeedPage() {
         </div>
 
         {/* Category tabs */}
-        <nav className="mt-5 -mx-4 flex gap-6 overflow-x-auto px-4 text-sm font-semibold text-white/40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="mt-4 -mx-4 flex gap-6 overflow-x-auto px-4 text-sm font-semibold text-white/40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((tab) => (
             <button
               key={tab}
@@ -305,7 +305,7 @@ export default function LiveFeedPage() {
   );
 }
 
-// --- Helper Components (These were missing before) ---
+// --- Helper Components ---
 
 function Section({
   icon,
