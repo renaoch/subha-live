@@ -99,34 +99,36 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 
-  /* ---- "Cosmic Violet" custom tokens used across every redesigned page ----
-     Deep indigo-violet stage backdrop matching the reference mockup,
-     electric violet as the primary brand color, cyan for "live"/tech
-     accents, magenta kept as a secondary hot accent for badges & hearts,
-     gold for currency. Token names are unchanged so every existing
-     component (bg-surface, text-accent-hot, glass-panel, grad-brand, …)
-     re-themes automatically. */
-  --surface: 252 42% 7%;
-  --surface-raised: 254 38% 12%;
-  --surface-overlay: 255 40% 17%;
-  --ink: 0 0% 99%;
-  --ink-muted: 250 18% 74%;
-  --ink-faint: 250 14% 55%;
+  /* ---- "Golden Ember" custom tokens used across every redesigned page ----
+     True near-black stage backdrop matching the new reference mockup,
+     warm amber/gold as the primary brand color, a deep ember orange as
+     the secondary hot accent (banners, "Live" wordmark, glows), and a
+     raspberry-pink/red for LIVE badges. Cyan/violet/green are kept for
+     misc secondary UI (not present in this screen) so unrelated pages
+     don't break. Token names are unchanged so every existing component
+     (bg-surface, text-accent-hot, glass-panel, grad-brand, …) re-themes
+     automatically. */
+  --surface: 0 0% 5%;
+  --surface-raised: 20 8% 10%;
+  --surface-overlay: 20 8% 15%;
+  --ink: 0 0% 100%;
+  --ink-muted: 30 8% 78%;
+  --ink-faint: 30 6% 56%;
 
-  --accent-hot: 273 88% 66%;
-  --accent-hot-2: 322 85% 64%;
-  --accent-violet: 258 90% 68%;
+  --accent-hot: 22 90% 56%;
+  --accent-hot-2: 346 82% 58%;
+  --accent-violet: 262 70% 62%;
   --accent-cyan: 192 92% 58%;
-  --accent-gold: 42 96% 58%;
+  --accent-gold: 38 95% 56%;
   --accent-green: 152 60% 50%;
 
-  --grad-start: 273 90% 62%;
-  --grad-mid: 258 85% 55%;
-  --grad-end: 232 80% 50%;
+  --grad-start: 38 95% 58%;
+  --grad-mid: 28 94% 55%;
+  --grad-end: 14 88% 52%;
 
-  --shadow-color: 265 85% 45%;
+  --shadow-color: 24 90% 40%;
 
-  --live-red: 356 85% 58%;
+  --live-red: 346 82% 58%;
 }
 
 @layer base {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Eye, Flame, MapPin, Search, Sparkles } from 'lucide-react';
+import { Bell, Eye, Flame, MapPin, Search } from 'lucide-react';
 
 import { roomsApi, type RoomRecord } from '@/lib/api/rooms';
 import { Avatar } from '@/components/ui/avatar';
@@ -117,33 +117,33 @@ export default function LiveFeedPage() {
         <button
           type="button"
           onClick={goLive}
-          className="grad-brand animate-gradient-shift glow-hot-lg group relative block w-full overflow-hidden rounded-[28px] text-left transition active:scale-[0.98]"
+          className="glow-hot-lg group relative block w-full overflow-hidden rounded-[28px] bg-surface-raised text-left transition active:scale-[0.98]"
         >
-          {/* Decorative glows / orbs, layered so this reads as a rich
-              "photo" hero even without an actual background image. */}
-          <span className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-accent-gold/30 blur-3xl" />
-          <span className="pointer-events-none absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-accent-hot2/30 blur-3xl" />
-          <span className="pointer-events-none absolute right-8 top-1/2 h-24 w-24 -translate-y-1/2 rounded-full bg-white/10 blur-2xl" />
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-black/20" />
+          {/* Real portrait photo, matching the reference design's hero image */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="https://images.unsplash.com/photo-1591853725932-79227eb926b5?auto=format&fit=crop&w=1200&q=80"
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover object-[75%_20%] transition duration-300 group-active:scale-105"
+          />
+          {/* Dark gradient so the copy on the left stays readable over the photo */}
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black via-black/70 to-black/10" />
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
 
-          <div className="relative flex min-h-[184px] items-center justify-between gap-3 p-5">
+          <div className="relative flex min-h-[220px] items-center justify-between gap-3 p-5">
             <div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/90 backdrop-blur-sm">
-                <Sparkles className="h-3 w-3" />
-                Start streaming
-              </span>
-              <p className="mt-3 font-display text-[26px] font-extrabold leading-tight text-white drop-shadow-sm">
+              <p className="font-display text-[26px] font-extrabold leading-tight text-white drop-shadow-sm">
                 Go Live
               </p>
-              <p className="font-display text-[26px] font-extrabold italic leading-tight text-white drop-shadow-sm">
+              <p className="grad-gold-text font-display text-[26px] font-extrabold italic leading-tight drop-shadow-sm">
                 Be Yourself
               </p>
-              <p className="mt-1.5 text-xs text-white/75">Share your world with Subha</p>
-              <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-bold text-black shadow-lg shadow-black/20 transition group-active:scale-95">
-                Go Live →
+              <p className="mt-1.5 text-xs text-white/70">Share your world with Subha</p>
+              <span className="grad-brand mt-4 inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-bold text-black shadow-lg shadow-black/30 transition group-active:scale-95">
+                Go Live <span aria-hidden>→</span>
               </span>
             </div>
-            <span className="relative shrink-0 self-start pt-1 font-display text-sm italic leading-tight text-white/60 [writing-mode:horizontal-tb]">
+            <span className="relative hidden shrink-0 self-start pt-1 font-display text-lg italic leading-tight text-accent-gold/90 drop-shadow-sm sm:block">
               More
               <br />
               Than Live
