@@ -1,45 +1,85 @@
 // components/BottomBar.tsx
-import { Link2, Menu, Gift, ThumbsUp } from 'lucide-react';
+import { Home, PartyPopper, Plus, MessageCircle, User } from 'lucide-react';
 
 interface BottomBarProps {
   isHost: boolean;
   onOpenGift?: () => void;
+  onPlusClick?: () => void;
+  onHomeClick?: () => void;
+  onPartyClick?: () => void;
+  onMessagesClick?: () => void;
+  onProfileClick?: () => void;
 }
 
 /**
  * Bottom action bar. Chat input/live stream live in <RoomChat /> directly
  * above this row, so only the share / menu / gift / like actions remain here.
  */
-export function BottomBar({ isHost, onOpenGift }: BottomBarProps) {
-  const items = [
-    { icon: <Link2 className="h-[15px] w-[15px]" strokeWidth={1.7} />, label: 'Share link' },
-    { icon: <Menu className="h-[16px] w-[16px]" strokeWidth={1.7} />, label: 'Menu' },
-    ...(!isHost
-      ? [{ icon: <Gift className="h-[15px] w-[15px]" strokeWidth={1.7} />, label: 'Gift', onClick: onOpenGift }]
-      : []),
-  ];
-
+export function BottomBar({ 
+  onPlusClick, 
+  onHomeClick, 
+  onPartyClick, 
+  onMessagesClick, 
+  onProfileClick 
+}: BottomBarProps) {
   return (
-    <div className="absolute inset-x-0 bottom-[10px] z-40 flex items-center justify-end gap-[5px] px-[14px]">
-      {items.map((item) => (
-        <button
-          key={item.label}
-          type="button"
-          aria-label={item.label}
-          onClick={item.onClick}
-          className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/45 backdrop-blur-xl"
+    <div className="absolute inset-x-0 bottom-[10px] z-40 flex justify-center px-4">
+      {/* Main Pill Container */}
+      <div className="relative flex w-full max-w-[400px] items-center justify-between rounded-full border border-orange-500/20 bg-[#0a0a0a]/90 px-6 py-3 shadow-[0_0_30px_rgba(255,140,0,0.1)] backdrop-blur-xl">
+        
+        {/* Home */}
+        <button 
+          type="button" 
+          onClick={onHomeClick}
+          aria-label="Home"
+          className="flex h-10 w-10 items-center justify-center text-orange-400 transition-transform active:scale-90"
         >
-          {item.icon}
+          <Home className="h-6 w-6 fill-orange-400/20" />
         </button>
-      ))}
 
-      <button
-        type="button"
-        aria-label="Like"
-        className="flex h-[33px] w-[33px] shrink-0 items-center justify-center rounded-full bg-white text-black"
-      >
-        <ThumbsUp className="h-[14px] w-[14px]" strokeWidth={1.6} />
-      </button>
+        {/* Party Popper */}
+        <button 
+          type="button" 
+          onClick={onPartyClick}
+          aria-label="Party"
+          className="flex h-10 w-10 items-center justify-center text-white/60 transition-transform active:scale-90 hover:text-white"
+        >
+          <PartyPopper className="h-6 w-6" />
+        </button>
+
+        {/* Center Plus Button - Floats above the bar */}
+        <div className="relative -top-6">
+          <button
+            type="button"
+            onClick={onPlusClick}
+            aria-label="Create"
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#ffb347] to-[#ff8c00] shadow-[0_0_20px_rgba(249,115,22,0.5)] transition-transform active:scale-90"
+          >
+            <Plus className="h-7 w-7 text-black" strokeWidth={3} />
+          </button>
+        </div>
+
+        {/* Messages */}
+        <button 
+          type="button" 
+          onClick={onMessagesClick}
+          aria-label="Messages"
+          className="flex h-10 w-10 items-center justify-center text-white/60 transition-transform active:scale-90 hover:text-white"
+        >
+          <MessageCircle className="h-6 w-6" />
+        </button>
+
+        {/* Profile */}
+        <button 
+          type="button" 
+          onClick={onProfileClick}
+          aria-label="Profile"
+          className="flex h-10 w-10 items-center justify-center text-white/60 transition-transform active:scale-90 hover:text-white"
+        >
+          <User className="h-6 w-6" />
+        </button>
+
+      </div>
     </div>
   );
 }
