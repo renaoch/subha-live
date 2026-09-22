@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Eye, Flame, MapPin, Search } from 'lucide-react';
+import { Bell, Eye, Flame, MapPin, Search, Sparkles } from 'lucide-react';
 
 import { roomsApi, type RoomRecord } from '@/lib/api/rooms';
 import { Avatar } from '@/components/ui/avatar';
+import { BannerCarousel } from '@/components/BannerCarousel';
+import { getPromoBanners } from '@/lib/promo-banners';
 import { cn } from '@/lib/utils';
 
 const TABS = ['For You', 'Following', 'Nearby', 'PK', 'New'] as const;
@@ -17,6 +19,7 @@ export default function LiveFeedPage() {
   const [activeTab, setActiveTab] = useState<Tab>('For You');
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const promoBanners = useMemo(() => getPromoBanners(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +75,7 @@ export default function LiveFeedPage() {
               type="button"
               onClick={comingSoon('Search')}
               aria-label="Search"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface-raised/70 text-ink-muted transition hover:text-ink"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface-raised/70 text-ink-muted transition-colors hover:border-accent-hot/40 hover:text-ink active:scale-95"
             >
               <Search className="h-4.5 w-4.5" />
             </button>
@@ -80,10 +83,10 @@ export default function LiveFeedPage() {
               type="button"
               onClick={comingSoon('Notifications')}
               aria-label="Notifications"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface-raised/70 text-ink-muted transition hover:text-ink"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface-raised/70 text-ink-muted transition-colors hover:border-accent-hot/40 hover:text-ink active:scale-95"
             >
               <Bell className="h-4.5 w-4.5" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-live" />
+              <span className="absolute right-2.5 top-2.5 h-2 w-2 animate-live-dot rounded-full bg-live ring-2 ring-surface" />
             </button>
           </div>
         </div>
@@ -114,27 +117,42 @@ export default function LiveFeedPage() {
         <button
           type="button"
           onClick={goLive}
-          className="group relative block w-full overflow-hidden rounded-3xl border border-border text-left shadow-panel"
+          className="grad-brand animate-gradient-shift glow-hot-lg group relative block w-full overflow-hidden rounded-[28px] text-left transition active:scale-[0.98]"
         >
-          <div className="absolute inset-0 bg-brand-radial" />
-          <div className="relative flex min-h-[176px] items-center justify-between gap-3 bg-gradient-to-br from-surface-overlay via-surface-raised/60 to-transparent p-5">
+          {/* Decorative glows / orbs, layered so this reads as a rich
+              "photo" hero even without an actual background image. */}
+          <span className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-accent-gold/30 blur-3xl" />
+          <span className="pointer-events-none absolute -bottom-16 left-1/3 h-48 w-48 rounded-full bg-accent-hot2/30 blur-3xl" />
+          <span className="pointer-events-none absolute right-8 top-1/2 h-24 w-24 -translate-y-1/2 rounded-full bg-white/10 blur-2xl" />
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-black/20" />
+
+          <div className="relative flex min-h-[184px] items-center justify-between gap-3 p-5">
             <div>
-              <p className="font-display text-2xl font-extrabold leading-tight">Go Live</p>
-              <p className="font-display text-2xl font-extrabold leading-tight text-accent-gold">
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white/90 backdrop-blur-sm">
+                <Sparkles className="h-3 w-3" />
+                Start streaming
+              </span>
+              <p className="mt-3 font-display text-[26px] font-extrabold leading-tight text-white drop-shadow-sm">
+                Go Live
+              </p>
+              <p className="font-display text-[26px] font-extrabold italic leading-tight text-white drop-shadow-sm">
                 Be Yourself
               </p>
-              <p className="mt-1 text-xs text-ink-muted">Share your world with Subha</p>
-              <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-accent-hot to-accent-gold px-4 py-2 text-xs font-bold text-white shadow-glow">
+              <p className="mt-1.5 text-xs text-white/75">Share your world with Subha</p>
+              <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-bold text-black shadow-lg shadow-black/20 transition group-active:scale-95">
                 Go Live →
               </span>
             </div>
-            <span className="font-display text-sm italic text-white/70">
+            <span className="relative shrink-0 self-start pt-1 font-display text-sm italic leading-tight text-white/60 [writing-mode:horizontal-tb]">
               More
               <br />
               Than Live
             </span>
           </div>
         </button>
+
+        {/* Promo carousel */}
+        <BannerCarousel items={promoBanners} />
 
         {/* Popular Live */}
         <Section icon={<Flame className="h-4 w-4 text-accent-hot" />} title="Popular Live">
@@ -201,7 +219,11 @@ function Section({
           {icon}
           {title}
         </h2>
-        <button type="button" onClick={() => toast.info('Coming soon')} className="text-xs font-medium text-ink-faint">
+        <button
+          type="button"
+          onClick={() => toast.info('Coming soon')}
+          className="text-xs font-medium text-ink-faint transition-colors hover:text-accent-gold"
+        >
           See All ›
         </button>
       </div>
@@ -227,7 +249,7 @@ function RoomCard({
       type="button"
       onClick={onClick}
       className={cn(
-        'group relative block w-full overflow-hidden rounded-2xl border border-border bg-surface-raised text-left',
+        'group relative block w-full overflow-hidden rounded-2xl border border-border bg-surface-raised text-left shadow-panel transition duration-200 active:scale-[0.97] active:border-accent-hot/40',
         compact ? 'aspect-[3/4]' : tall ? 'aspect-[4/5]' : 'aspect-[3/4]',
       )}
     >
@@ -238,13 +260,28 @@ function RoomCard({
           alt={room.title}
           className="absolute inset-0 h-full w-full object-cover transition duration-300 group-active:scale-105"
         />
+      ) : room.host?.avatar ? (
+        // No cover set for the room — fall back to the host's profile
+        // photo (blurred + scaled to fill) instead of an empty tile.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={room.host.avatar}
+          alt={name}
+          className="absolute inset-0 h-full w-full scale-110 object-cover object-top blur-[2px] brightness-[0.65] transition duration-300 group-active:scale-115"
+        />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-accent-violet/40 via-surface-raised to-surface" />
+        <div
+          className={cn(
+            'absolute inset-0 flex items-center justify-center bg-gradient-to-br from-accent-violet/40 via-surface-raised to-surface',
+          )}
+        >
+          <Avatar name={name} size="lg" className="h-16 w-16 text-2xl opacity-90" />
+        </div>
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/30" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-black/25 transition-opacity group-active:from-black/95" />
 
       <div className="absolute left-2 top-2 flex items-center gap-1.5">
-        <span className="flex items-center gap-1 rounded-full bg-live px-2 py-0.5 text-[10px] font-bold text-white">
+        <span className="flex items-center gap-1 rounded-full bg-live px-2 py-0.5 text-[10px] font-bold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.15)]">
           <span className="h-1.5 w-1.5 animate-live-dot rounded-full bg-white" />
           LIVE
         </span>
@@ -279,10 +316,12 @@ function SkeletonGrid({ count, tall }: { count: number; tall?: boolean }) {
         <div
           key={i}
           className={cn(
-            'animate-pulse rounded-2xl border border-border bg-surface-raised',
+            'relative overflow-hidden rounded-2xl border border-border bg-surface-raised',
             tall ? 'aspect-[4/5]' : 'aspect-[3/4]',
           )}
-        />
+        >
+          <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.6s_infinite] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
+        </div>
       ))}
     </div>
   );
@@ -290,9 +329,12 @@ function SkeletonGrid({ count, tall }: { count: number; tall?: boolean }) {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-10 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-surface-raised/40 py-12 text-center">
+      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-overlay text-lg">
+        📡
+      </span>
       <p className="text-sm font-medium text-ink-muted">No one's live right now</p>
-      <p className="mt-1 text-xs text-ink-faint">Be the first — tap Go Live above.</p>
+      <p className="text-xs text-ink-faint">Be the first — tap Go Live above.</p>
     </div>
   );
 }

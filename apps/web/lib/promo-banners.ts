@@ -6,7 +6,18 @@ import type { BannerItem } from "@/components/BannerCarousel";
  * Default promo slides for the Home/Party header carousels. Placeholder
  * destinations for now (toast) until the corresponding features/routes
  * exist — swap `onClick` for a real `router.push(...)` once they do.
+ *
+ * Gradients are pulled from the live CSS theme tokens (see
+ * `:root` in app/globals.css) instead of hardcoded hex, so these slides
+ * re-theme automatically whenever the palette changes — no edits needed
+ * here.
  */
+function themeVar(name: string) {
+  if (typeof window === "undefined") return `hsl(var(${name}))`;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value ? `hsl(${value})` : `hsl(var(${name}))`;
+}
+
 export function getPromoBanners(): BannerItem[] {
   return [
     {
@@ -14,7 +25,7 @@ export function getPromoBanners(): BannerItem[] {
       title: "Refer & Earn",
       subtitle: "Invite friends, earn coins when they join",
       Icon: Gift,
-      gradient: ["#FF6B4A", "#F5B93F"],
+      gradient: [themeVar("--accent-hot-2"), themeVar("--accent-gold")],
       onClick: () => toast.info("Refer & Earn is coming soon 🎁"),
     },
     {
@@ -22,7 +33,7 @@ export function getPromoBanners(): BannerItem[] {
       title: "Daily Check-in",
       subtitle: "Log in every day for bonus coins",
       Icon: Sparkles,
-      gradient: ["#A86CFF", "#5FA8FF"],
+      gradient: [themeVar("--accent-violet"), themeVar("--accent-cyan")],
       onClick: () => toast.info("Daily rewards are coming soon ✨"),
     },
     {
@@ -30,7 +41,7 @@ export function getPromoBanners(): BannerItem[] {
       title: "Top-Up Bonus",
       subtitle: "Extra coins on your next recharge",
       Icon: Wallet,
-      gradient: ["#5FD9C4", "#57C2FF"],
+      gradient: [themeVar("--accent-green"), themeVar("--accent-cyan")],
       onClick: () => toast.info("Top-up bonuses are coming soon 💰"),
     },
   ];
