@@ -64,20 +64,45 @@ export default function LiveFeedPage() {
           <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[150%] h-40 bg-orange-500/10 blur-[60px] rounded-[100%]" />
         </div>
 
-        <div className="relative z-10 flex items-center justify-between">
+        <div className="relative z-10 flex items-start justify-between">
           
-          {/* Logo Image */}
-          <div className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src="/subha-logo.png" 
-              alt="Subha - Live People. Real Connection." 
-              className="h-16 w-auto object-contain drop-shadow-[0_0_15px_rgba(255,154,0,0.3)]"
-            />
+          {/* Custom Logo Area */}
+          <div className="relative flex flex-col mt-2">
+            
+            {/* The Mascot (image.png) */}
+            {/* Positioned absolutely so it sits on top of the text */}
+            <div className="absolute -top-12 left-2 z-20 w-16 h-16">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src="/image.png" 
+                alt="Subha Mascot" 
+                className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(56,189,248,0.4)]"
+              />
+            </div>
+
+            {/* CSS Recreated "Subha" Text */}
+            <div className="relative mt-4">
+              <h1 
+                className="font-display text-[3.2rem] leading-none font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-[#ffd8a8] via-[#ff9a00] to-[#cc5500]"
+                style={{ 
+                  WebkitTextStroke: '2px #fff',
+                  filter: 'drop-shadow(0px 4px 10px rgba(255,154,0,0.4))'
+                }}
+              >
+                Subha
+              </h1>
+              {/* Decorative Sparkle */}
+              <span className="absolute -right-5 top-2 text-2xl text-orange-400 drop-shadow-[0_0_8px_rgba(255,154,0,0.8)]">✦</span>
+            </div>
+
+            {/* Tagline */}
+            <p className="text-[10px] font-medium text-white/70 tracking-wide mt-0.5 ml-1">
+              Live People. Real Connection.
+            </p>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-4">
             <button
               type="button"
               onClick={comingSoon('Search')}
@@ -97,7 +122,7 @@ export default function LiveFeedPage() {
               <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-orange-500 ring-2 ring-[#0a0a0a]" />
             </button>
 
-            {/* Go Live Button (Matching top right of reference) */}
+            {/* Go Live Button */}
             <button
               onClick={goLive}
               className="relative flex items-center gap-1.5 rounded-full border border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 px-4 py-2.5 text-xs font-bold text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-transform active:scale-95"
@@ -109,7 +134,7 @@ export default function LiveFeedPage() {
         </div>
 
         {/* Category tabs */}
-        <nav className="mt-4 -mx-4 flex gap-6 overflow-x-auto px-4 text-sm font-semibold text-white/40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="mt-6 -mx-4 flex gap-6 overflow-x-auto px-4 text-sm font-semibold text-white/40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((tab) => (
             <button
               key={tab}
