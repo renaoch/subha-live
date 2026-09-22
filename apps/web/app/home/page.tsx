@@ -57,75 +57,75 @@ export default function LiveFeedPage() {
     <main className="min-h-dvh bg-[#0a0a0a] pb-28 text-white font-sans selection:bg-orange-500/30 overflow-x-hidden">
       
       {/* Header */}
-      <header className="relative z-30 px-4 pb-2 pt-[calc(1.5rem+env(safe-area-inset-top))]">
+      <header className="relative z-30 px-4 pb-2 pt-[calc(1rem+env(safe-area-inset-top))]">
         
         {/* Background glow effect behind header */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[150%] h-40 bg-orange-500/10 blur-[60px] rounded-[100%]" />
         </div>
 
-        <div className="relative z-10 flex items-start justify-between">
+        <div className="relative z-10 flex items-center justify-between gap-2">
           
-          {/* Custom Logo Area */}
-          <div className="relative flex flex-col mt-2">
+          {/* Logo Area */}
+          <div className="relative flex flex-col items-start">
             
-            {/* The Mascot (image.png) */}
-            {/* Positioned absolutely so it sits on top of the text */}
-            <div className="absolute -top-12 left-2 z-20 w-16 h-16">
+            {/* The Mascot (image.png) - Positioned to sit on top of the "u" */}
+            <div className="absolute -top-6 left-[4.5rem] z-20 w-12 h-12">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src="/image.png" 
                 alt="Subha Mascot" 
-                className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(56,189,248,0.4)]"
+                className="w-full h-full object-contain drop-shadow-[0_0_12px_rgba(56,189,248,0.5)]"
               />
             </div>
 
             {/* CSS Recreated "Subha" Text */}
-            <div className="relative mt-4">
+            <div className="relative mt-2">
               <h1 
-                className="font-display text-[3.2rem] leading-none font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-[#ffd8a8] via-[#ff9a00] to-[#cc5500]"
+                className="font-sans text-[2.5rem] leading-none font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-[#ffd8a8] via-[#ff9a00] to-[#cc5500]"
                 style={{ 
-                  WebkitTextStroke: '2px #fff',
+                  fontFamily: '"Nunito", "Baloo 2", system-ui, sans-serif',
+                  WebkitTextStroke: '1.5px #fff',
                   filter: 'drop-shadow(0px 4px 10px rgba(255,154,0,0.4))'
                 }}
               >
                 Subha
               </h1>
               {/* Decorative Sparkle */}
-              <span className="absolute -right-5 top-2 text-2xl text-orange-400 drop-shadow-[0_0_8px_rgba(255,154,0,0.8)]">✦</span>
+              <span className="absolute -right-4 top-1 text-xl text-orange-400 drop-shadow-[0_0_8px_rgba(255,154,0,0.8)]">✦</span>
             </div>
 
             {/* Tagline */}
-            <p className="text-[10px] font-medium text-white/70 tracking-wide mt-0.5 ml-1">
+            <p className="text-[9px] font-medium text-white/60 tracking-wide mt-0.5 ml-1">
               Live People. Real Connection.
             </p>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 mt-4">
+          {/* Action Buttons - Aligned vertically with the text block */}
+          <div className="flex items-center gap-2 mt-2">
             <button
               type="button"
               onClick={comingSoon('Search')}
               aria-label="Search"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
             >
-              <Search className="h-4.5 w-4.5" />
+              <Search className="h-4 w-4" />
             </button>
             
             <button
               type="button"
               onClick={comingSoon('Notifications')}
               aria-label="Notifications"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
             >
-              <Bell className="h-4.5 w-4.5" />
-              <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-orange-500 ring-2 ring-[#0a0a0a]" />
+              <Bell className="h-4 w-4" />
+              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-orange-500 ring-2 ring-[#0a0a0a]" />
             </button>
 
             {/* Go Live Button */}
             <button
               onClick={goLive}
-              className="relative flex items-center gap-1.5 rounded-full border border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 px-4 py-2.5 text-xs font-bold text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-transform active:scale-95"
+              className="relative flex items-center gap-1.5 rounded-full border border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 px-4 py-2 text-xs font-bold text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-transform active:scale-95"
             >
               <Crown className="h-3.5 w-3.5 fill-orange-400" />
               Go Live
@@ -134,7 +134,7 @@ export default function LiveFeedPage() {
         </div>
 
         {/* Category tabs */}
-        <nav className="mt-6 -mx-4 flex gap-6 overflow-x-auto px-4 text-sm font-semibold text-white/40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="mt-5 -mx-4 flex gap-6 overflow-x-auto px-4 text-sm font-semibold text-white/40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((tab) => (
             <button
               key={tab}
