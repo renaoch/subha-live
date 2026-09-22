@@ -117,37 +117,38 @@ export default function LiveFeedPage() {
         <button
           type="button"
           onClick={goLive}
-          className="glow-hot-lg group relative block w-full overflow-hidden rounded-[28px] bg-surface-raised text-left transition active:scale-[0.98]"
+          className="group relative block w-full overflow-hidden rounded-[30px] border border-accent-hot/70 bg-black text-left shadow-[0_0_0_1px_rgba(255,154,0,0.10),0_24px_70px_-24px_rgba(255,140,0,0.62)] transition-transform duration-200 active:scale-[0.985]"
         >
-          {/* Real portrait photo, matching the reference design's hero image */}
+          <span className="pointer-events-none absolute -inset-1 rounded-[32px] bg-accent-hot/10 blur-2xl" />
+
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="https://images.unsplash.com/photo-1591853725932-79227eb926b5?auto=format&fit=crop&w=1200&q=80"
+            src="https://images.unsplash.com/photo-1591853725932-79227eb926b5?auto=format&fit=crop&w=1400&q=85"
             alt=""
-            className="absolute inset-0 h-full w-full object-cover object-[75%_20%] transition duration-300 group-active:scale-105"
+            className="absolute inset-0 h-full w-full object-cover object-[64%_20%] transition duration-500 group-active:scale-[1.025]"
           />
-          {/* Dark gradient so the copy on the left stays readable over the photo */}
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black via-black/70 to-black/10" />
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
 
-          <div className="relative flex min-h-[220px] items-center justify-between gap-3 p-5">
-            <div>
-              <p className="font-display text-[26px] font-extrabold leading-tight text-white drop-shadow-sm">
+          {/* Reference-style cinematic overlays: very dark on the copy side, soft vignette all around. */}
+          <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.92)_0%,rgba(0,0,0,0.76)_30%,rgba(0,0,0,0.28)_67%,rgba(0,0,0,0.12)_100%)]" />
+          <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(0deg,rgba(0,0,0,0.62)_0%,rgba(0,0,0,0.05)_52%,rgba(0,0,0,0.14)_100%)]" />
+          <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_62%_42%,transparent_0%,transparent_42%,rgba(0,0,0,0.24)_100%)]" />
+
+          <div className="relative flex aspect-[2.07/1] min-h-[180px] items-center px-5 py-5 sm:px-9 sm:py-7">
+            <div className="max-w-[58%] sm:max-w-[53%]">
+              <p className="font-display text-[clamp(2rem,5vw,3.45rem)] font-extrabold leading-[0.98] tracking-[-0.035em] text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.4)]">
                 Go Live
               </p>
-              <p className="grad-gold-text font-display text-[26px] font-extrabold italic leading-tight drop-shadow-sm">
+              <p className="grad-gold-text mt-1 font-display text-[clamp(2rem,5vw,3.45rem)] font-extrabold italic leading-[0.98] tracking-[-0.04em] drop-shadow-[0_2px_14px_rgba(0,0,0,0.45)]">
                 Be Yourself
               </p>
-              <p className="mt-1.5 text-xs text-white/70">Share your world with Subha</p>
-              <span className="grad-brand mt-4 inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-bold text-black shadow-lg shadow-black/30 transition group-active:scale-95">
-                Go Live <span aria-hidden>→</span>
+              <p className="mt-3 text-[clamp(0.78rem,1.8vw,1.08rem)] font-medium tracking-[-0.01em] text-white/80">
+                Share your world with Subha
+              </p>
+              <span className="grad-brand mt-5 inline-flex items-center gap-3 rounded-full px-7 py-3.5 text-[clamp(0.95rem,2vw,1.18rem)] font-extrabold text-black shadow-[0_10px_30px_rgba(255,129,0,0.24)] transition-transform group-active:scale-95">
+                Go Live
+                <span aria-hidden className="text-[1.25em] leading-none">→</span>
               </span>
             </div>
-            <span className="relative hidden shrink-0 self-start pt-1 font-display text-lg italic leading-tight text-accent-gold/90 drop-shadow-sm sm:block">
-              More
-              <br />
-              Than Live
-            </span>
           </div>
         </button>
 

@@ -21,20 +21,20 @@ function themeVar(name: string) {
 export function getPromoBanners(): BannerItem[] {
   return [
     {
-      id: "refer-earn",
-      title: "Refer & Earn",
-      subtitle: "Invite friends, earn coins when they join",
-      Icon: Gift,
-      gradient: [themeVar("--accent-hot-2"), themeVar("--accent-gold")],
-      onClick: () => toast.info("Refer & Earn is coming soon 🎁"),
-    },
-    {
       id: "daily-rewards",
       title: "Daily Check-in",
       subtitle: "Log in every day for bonus coins",
       Icon: Sparkles,
-      gradient: [themeVar("--accent-violet"), themeVar("--accent-cyan")],
+      gradient: [themeVar("--accent-hot"), themeVar("--accent-gold")],
       onClick: () => toast.info("Daily rewards are coming soon ✨"),
+    },
+    {
+      id: "refer-earn",
+      title: "Refer & Earn",
+      subtitle: "Invite friends, earn coins when they join",
+      Icon: Gift,
+      gradient: [themeVar("--accent-hot"), themeVar("--accent-gold")],
+      onClick: () => toast.info("Refer & Earn is coming soon 🎁"),
     },
     {
       id: "top-up-bonus",
