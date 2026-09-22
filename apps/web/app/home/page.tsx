@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Eye, Flame, MapPin, Search, Crown } from 'lucide-react';
+import { Bell, Eye, Flame, MapPin, Search, Crown, X } from 'lucide-react';
 
 import { roomsApi, type RoomRecord } from '@/lib/api/rooms';
 import { Avatar } from '@/components/ui/avatar';
 import { BannerCarousel } from '@/components/BannerCarousel';
 import { getPromoBanners } from '@/lib/promo-banners';
+import { SubhaLogo } from '@/components/SubhaLogo'; 
 import { cn } from '@/lib/utils';
 
 const TABS = ['For You', 'Following', 'Nearby', 'PK', 'New'] as const;
@@ -16,10 +17,18 @@ type Tab = (typeof TABS)[number];
 
 export default function LiveFeedPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<Tab>('For You');
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const promoBanners = useMemo(() => getPromoBanners(), []);
+
+  useEffect(() => {
+    if (searchParams.get('create') === '1') {
+      setShowCreateModal(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,17 +58,51 @@ export default function LiveFeedPage() {
   const recommended = byViewers.slice(4, 6);
   const nearby = byViewers.slice(6, 9);
 
-  const goLive = () => router.push('/home?create=1');
+  const goLive = () => router.push('/home/go-live');
   const openRoom = (id: string) => router.push(`/home/room/${id}`);
   const comingSoon = (what: string) => () => toast.info(`${what} coming soon`);
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    router.replace('/home');
+  };
 
   return (
     <main className="min-h-dvh bg-[#0a0a0a] pb-28 text-white font-sans selection:bg-orange-500/30 overflow-x-hidden">
       
+      {/* Create Live Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="relative w-full max-w-sm rounded-3xl border border-white/10 bg-[#1a1a1a] p-6 text-center shadow-2xl">
+            <button 
+              onClick={closeCreateModal}
+              className="absolute right-4 top-4 text-white/50 hover:text-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-orange-500/20 text-orange-400">
+              <Crown className="h-8 w-8" />
+            </div>
+            <h2 className="font-display text-xl font-bold text-white">Start Your Live Stream</h2>
+            <p className="mt-2 text-sm text-white/60">
+              This is where your camera setup, title input, and "Start Stream" button would go.
+            </p>
+            <button 
+              onClick={() => {
+                toast.success("Stream started! (Placeholder)");
+                closeCreateModal();
+              }}
+              className="mt-6 w-full rounded-full bg-gradient-to-r from-orange-400 to-orange-500 py-3 text-sm font-bold text-black transition-transform active:scale-95"
+            >
+              Start Streaming
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="relative z-30 px-4 pb-2 pt-[calc(1rem+env(safe-area-inset-top))]">
         
-        {/* Background glow effect behind header */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[150%] h-40 bg-orange-500/10 blur-[60px] rounded-[100%]" />
         </div>
@@ -69,8 +112,8 @@ export default function LiveFeedPage() {
           {/* Logo Area */}
           <div className="relative flex flex-col items-start">
             
-            {/* The Mascot (image.png) - Positioned to sit on top of the "u" */}
-            <div className="absolute -top-6 left-[4.5rem] z-20 w-12 h-12">
+            {/* The Mascot (image.png) */}
+            <div className="absolute -top-10 left-[3.5rem] z-20 w-16 h-16">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src="/image.png" 
@@ -79,53 +122,42 @@ export default function LiveFeedPage() {
               />
             </div>
 
-            {/* CSS Recreated "Subha" Text */}
-            <div className="relative mt-2">
-              <h1 
-                className="font-sans text-[2.5rem] leading-none font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-[#ffd8a8] via-[#ff9a00] to-[#cc5500]"
-                style={{ 
-                  fontFamily: '"Nunito", "Baloo 2", system-ui, sans-serif',
-                  WebkitTextStroke: '1.5px #fff',
-                  filter: 'drop-shadow(0px 4px 10px rgba(255,154,0,0.4))'
-                }}
-              >
-                Subha
-              </h1>
-              {/* Decorative Sparkle */}
-              <span className="absolute -right-4 top-1 text-xl text-orange-400 drop-shadow-[0_0_8px_rgba(255,154,0,0.8)]">✦</span>
+            {/* The Custom SVG Logo */}
+            <div className="relative mt-1">
+              <SubhaLogo className="w-[180px] h-auto drop-shadow-[0_0_15px_rgba(255,154,0,0.3)]" />
             </div>
 
             {/* Tagline */}
-            <p className="text-[9px] font-medium text-white/60 tracking-wide mt-0.5 ml-1">
+            <p className="text-[10px] font-medium text-white/70 tracking-wide mt-0.5 ml-1">
               Live People. Real Connection.
             </p>
           </div>
 
-          {/* Action Buttons - Aligned vertically with the text block */}
+          {/* Action Buttons */}
           <div className="flex items-center gap-2 mt-2">
             <button
               type="button"
               onClick={comingSoon('Search')}
               aria-label="Search"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
             >
-              <Search className="h-4 w-4" />
+              <Search className="h-4.5 w-4.5" />
             </button>
             
             <button
               type="button"
               onClick={comingSoon('Notifications')}
               aria-label="Notifications"
-              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
             >
-              <Bell className="h-4 w-4" />
-              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-orange-500 ring-2 ring-[#0a0a0a]" />
+              <Bell className="h-4.5 w-4.5" />
+              <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-orange-500 ring-2 ring-[#0a0a0a]" />
             </button>
 
             {/* Go Live Button */}
             <button
-              onClick={goLive}
-              className="relative flex items-center gap-1.5 rounded-full border border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 px-4 py-2 text-xs font-bold text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-transform active:scale-95"
+              onClick={() => setShowCreateModal(true)}
+              className="relative flex items-center gap-1.5 rounded-full border border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 px-4 py-2.5 text-xs font-bold text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-transform active:scale-95"
             >
               <Crown className="h-3.5 w-3.5 fill-orange-400" />
               Go Live
@@ -158,7 +190,7 @@ export default function LiveFeedPage() {
         {/* Go Live hero */}
         <button
           type="button"
-          onClick={goLive}
+          onClick={() => setShowCreateModal(true)}
           className="group relative block w-full overflow-hidden rounded-[28px] bg-[#1a1a1a] text-left transition active:scale-[0.98] border border-orange-500/20"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -239,9 +271,41 @@ export default function LiveFeedPage() {
           )}
         </Section>
       </div>
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/90 px-6 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
+        <div className="flex items-center justify-between relative">
+          <button onClick={comingSoon('Home')} className="flex flex-col items-center gap-1 text-orange-400">
+            <Flame className="h-6 w-6" />
+          </button>
+          
+          <button onClick={comingSoon('Party')} className="flex flex-col items-center gap-1 text-white/40 hover:text-white/70">
+            <Search className="h-6 w-6" />
+          </button>
+
+          <div className="relative -top-5">
+            <button 
+              onClick={() => setShowCreateModal(true)}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 shadow-[0_0_20px_rgba(249,115,22,0.5)] transition-transform active:scale-90"
+            >
+              <span className="text-2xl font-bold text-black">+</span>
+            </button>
+          </div>
+
+          <button onClick={comingSoon('Messages')} className="flex flex-col items-center gap-1 text-white/40 hover:text-white/70">
+            <Bell className="h-6 w-6" />
+          </button>
+
+          <button onClick={comingSoon('Profile')} className="flex flex-col items-center gap-1 text-white/40 hover:text-white/70">
+            <Avatar name="User" size="sm" className="h-6 w-6 border border-white/20" />
+          </button>
+        </div>
+      </nav>
     </main>
   );
 }
+
+// --- Helper Components (These were missing before) ---
 
 function Section({
   icon,
