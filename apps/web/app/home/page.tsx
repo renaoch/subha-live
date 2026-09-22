@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Eye, Flame, MapPin, Search } from 'lucide-react';
+import { Bell, Eye, Flame, MapPin, Search, Crown } from 'lucide-react';
 
 import { roomsApi, type RoomRecord } from '@/lib/api/rooms';
 import { Avatar } from '@/components/ui/avatar';
@@ -41,9 +41,6 @@ export default function LiveFeedPage() {
     };
   }, []);
 
-  // No dedicated "popular" / "recommended" / "nearby" endpoints yet — split
-  // the one live-rooms list into feed sections client-side, ranked by
-  // viewer count. Swap these slices for real endpoints as they land.
   const byViewers = useMemo(
     () => [...rooms].sort((a, b) => (b.viewerCount ?? 0) - (a.viewerCount ?? 0)),
     [rooms],
@@ -57,42 +54,62 @@ export default function LiveFeedPage() {
   const comingSoon = (what: string) => () => toast.info(`${what} coming soon`);
 
   return (
-    <main className="min-h-dvh bg-surface pb-28 text-ink">
+    <main className="min-h-dvh bg-[#0a0a0a] pb-28 text-white font-sans selection:bg-orange-500/30 overflow-x-hidden">
+      
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-surface/80 px-4 pb-3 pt-[calc(1.1rem+env(safe-area-inset-top))] backdrop-blur-xl">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="font-display text-2xl font-extrabold tracking-tight">
-              Subha{' '}
-              <span className="bg-gradient-to-r from-accent-hot to-accent-gold bg-clip-text text-transparent">
-                Live
-              </span>
-            </h1>
-            <p className="mt-0.5 text-xs text-ink-faint">Live People. Real Connection.</p>
+      <header className="relative z-30 px-4 pb-2 pt-[calc(1.5rem+env(safe-area-inset-top))]">
+        
+        {/* Background glow effect behind header */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-[150%] h-40 bg-orange-500/10 blur-[60px] rounded-[100%]" />
+        </div>
+
+        <div className="relative z-10 flex items-center justify-between">
+          
+          {/* Logo Image */}
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
+              src="/subha-logo.png" 
+              alt="Subha - Live People. Real Connection." 
+              className="h-16 w-auto object-contain drop-shadow-[0_0_15px_rgba(255,154,0,0.3)]"
+            />
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 mt-2">
             <button
               type="button"
               onClick={comingSoon('Search')}
               aria-label="Search"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface-raised/70 text-ink-muted transition-colors hover:border-accent-hot/40 hover:text-ink active:scale-95"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
             >
               <Search className="h-4.5 w-4.5" />
             </button>
+            
             <button
               type="button"
               onClick={comingSoon('Notifications')}
               aria-label="Notifications"
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface-raised/70 text-ink-muted transition-colors hover:border-accent-hot/40 hover:text-ink active:scale-95"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 backdrop-blur-md transition-colors hover:bg-white/10 active:scale-95"
             >
               <Bell className="h-4.5 w-4.5" />
-              <span className="absolute right-2.5 top-2.5 h-2 w-2 animate-live-dot rounded-full bg-live ring-2 ring-surface" />
+              <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-orange-500 ring-2 ring-[#0a0a0a]" />
+            </button>
+
+            {/* Go Live Button (Matching top right of reference) */}
+            <button
+              onClick={goLive}
+              className="relative flex items-center gap-1.5 rounded-full border border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 px-4 py-2.5 text-xs font-bold text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-transform active:scale-95"
+            >
+              <Crown className="h-3.5 w-3.5 fill-orange-400" />
+              Go Live
             </button>
           </div>
         </div>
 
         {/* Category tabs */}
-        <nav className="mt-4 -mx-4 flex gap-5 overflow-x-auto px-4 text-sm font-semibold text-ink-faint [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="mt-4 -mx-4 flex gap-6 overflow-x-auto px-4 text-sm font-semibold text-white/40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((tab) => (
             <button
               key={tab}
@@ -100,12 +117,12 @@ export default function LiveFeedPage() {
               onClick={() => setActiveTab(tab)}
               className={cn(
                 'relative shrink-0 pb-2 transition-colors',
-                activeTab === tab && 'text-accent-gold',
+                activeTab === tab ? 'text-orange-400' : 'hover:text-white/70',
               )}
             >
               {tab}
               {activeTab === tab && (
-                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-accent-hot to-accent-gold" />
+                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
               )}
             </button>
           ))}
@@ -117,33 +134,31 @@ export default function LiveFeedPage() {
         <button
           type="button"
           onClick={goLive}
-          className="glow-hot-lg group relative block w-full overflow-hidden rounded-[28px] bg-surface-raised text-left transition active:scale-[0.98]"
+          className="group relative block w-full overflow-hidden rounded-[28px] bg-[#1a1a1a] text-left transition active:scale-[0.98] border border-orange-500/20"
         >
-          {/* Real portrait photo, matching the reference design's hero image */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="https://images.unsplash.com/photo-1591853725932-79227eb926b5?auto=format&fit=crop&w=1200&q=80"
             alt=""
             className="absolute inset-0 h-full w-full object-cover object-[75%_20%] transition duration-300 group-active:scale-105"
           />
-          {/* Dark gradient so the copy on the left stays readable over the photo */}
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black via-black/70 to-black/10" />
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black via-black/80 to-black/10" />
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/20" />
 
           <div className="relative flex min-h-[220px] items-center justify-between gap-3 p-5">
             <div>
               <p className="font-display text-[26px] font-extrabold leading-tight text-white drop-shadow-sm">
                 Go Live
               </p>
-              <p className="grad-gold-text font-display text-[26px] font-extrabold italic leading-tight drop-shadow-sm">
+              <p className="font-display text-[26px] font-extrabold italic leading-tight text-orange-400 drop-shadow-sm">
                 Be Yourself
               </p>
               <p className="mt-1.5 text-xs text-white/70">Share your world with Subha</p>
-              <span className="grad-brand mt-4 inline-flex items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-bold text-black shadow-lg shadow-black/30 transition group-active:scale-95">
+              <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 px-5 py-2.5 text-sm font-bold text-black shadow-lg shadow-orange-500/20 transition group-active:scale-95">
                 Go Live <span aria-hidden>→</span>
               </span>
             </div>
-            <span className="relative hidden shrink-0 self-start pt-1 font-display text-lg italic leading-tight text-accent-gold/90 drop-shadow-sm sm:block">
+            <span className="relative hidden shrink-0 self-start pt-1 font-display text-lg italic leading-tight text-orange-400/90 drop-shadow-sm sm:block">
               More
               <br />
               Than Live
@@ -155,7 +170,7 @@ export default function LiveFeedPage() {
         <BannerCarousel items={promoBanners} />
 
         {/* Popular Live */}
-        <Section icon={<Flame className="h-4 w-4 text-accent-hot" />} title="Popular Live">
+        <Section icon={<Flame className="h-4 w-4 text-orange-500" />} title="Popular Live">
           {loading ? (
             <SkeletonGrid count={4} />
           ) : popular.length === 0 ? (
@@ -185,7 +200,7 @@ export default function LiveFeedPage() {
         </Section>
 
         {/* Nearby */}
-        <Section icon={<MapPin className="h-4 w-4 text-accent-hot" />} title="Nearby">
+        <Section icon={<MapPin className="h-4 w-4 text-orange-500" />} title="Nearby">
           {loading ? (
             <SkeletonGrid count={3} />
           ) : nearby.length === 0 ? (
@@ -222,7 +237,7 @@ function Section({
         <button
           type="button"
           onClick={() => toast.info('Coming soon')}
-          className="text-xs font-medium text-ink-faint transition-colors hover:text-accent-gold"
+          className="text-xs font-medium text-white/50 transition-colors hover:text-orange-400"
         >
           See All ›
         </button>
@@ -249,7 +264,7 @@ function RoomCard({
       type="button"
       onClick={onClick}
       className={cn(
-        'group relative block w-full overflow-hidden rounded-2xl border border-border bg-surface-raised text-left shadow-panel transition duration-200 active:scale-[0.97] active:border-accent-hot/40',
+        'group relative block w-full overflow-hidden rounded-2xl border border-white/5 bg-[#1a1a1a] text-left shadow-lg transition duration-200 active:scale-[0.97]',
         compact ? 'aspect-[3/4]' : tall ? 'aspect-[4/5]' : 'aspect-[3/4]',
       )}
     >
@@ -261,8 +276,6 @@ function RoomCard({
           className="absolute inset-0 h-full w-full object-cover transition duration-300 group-active:scale-105"
         />
       ) : room.host?.avatar ? (
-        // No cover set for the room — fall back to the host's profile
-        // photo (blurred + scaled to fill) instead of an empty tile.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={room.host.avatar}
@@ -272,7 +285,7 @@ function RoomCard({
       ) : (
         <div
           className={cn(
-            'absolute inset-0 flex items-center justify-center bg-gradient-to-br from-accent-violet/40 via-surface-raised to-surface',
+            'absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900',
           )}
         >
           <Avatar name={name} size="lg" className="h-16 w-16 text-2xl opacity-90" />
@@ -281,8 +294,8 @@ function RoomCard({
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-black/25 transition-opacity group-active:from-black/95" />
 
       <div className="absolute left-2 top-2 flex items-center gap-1.5">
-        <span className="flex items-center gap-1 rounded-full bg-live px-2 py-0.5 text-[10px] font-bold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.15)]">
-          <span className="h-1.5 w-1.5 animate-live-dot rounded-full bg-white" />
+        <span className="flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-black shadow-[0_0_0_1px_rgba(255,255,255,0.15)]">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-black" />
           LIVE
         </span>
         <span className="flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
@@ -297,7 +310,7 @@ function RoomCard({
             <Avatar name={name} src={room.host?.avatar ?? undefined} size="sm" className="h-6 w-6 border border-white/30" />
             <span className="truncate text-xs font-bold text-white">{name}</span>
             {room.host?.is_verified && (
-              <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-accent-cyan text-[8px] text-white">
+              <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[8px] text-white">
                 ✓
               </span>
             )}
@@ -316,7 +329,7 @@ function SkeletonGrid({ count, tall }: { count: number; tall?: boolean }) {
         <div
           key={i}
           className={cn(
-            'relative overflow-hidden rounded-2xl border border-border bg-surface-raised',
+            'relative overflow-hidden rounded-2xl border border-white/5 bg-white/5',
             tall ? 'aspect-[4/5]' : 'aspect-[3/4]',
           )}
         >
@@ -329,12 +342,12 @@ function SkeletonGrid({ count, tall }: { count: number; tall?: boolean }) {
 
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-surface-raised/40 py-12 text-center">
-      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-overlay text-lg">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/10 bg-white/5 py-12 text-center">
+      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-lg">
         📡
       </span>
-      <p className="text-sm font-medium text-ink-muted">No one's live right now</p>
-      <p className="text-xs text-ink-faint">Be the first — tap Go Live above.</p>
+      <p className="text-sm font-medium text-white/60">No one's live right now</p>
+      <p className="text-xs text-white/40">Be the first — tap Go Live above.</p>
     </div>
   );
 }
