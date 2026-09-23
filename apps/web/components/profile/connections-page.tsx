@@ -20,7 +20,7 @@ interface ConnectionsPageProps {
 export function ConnectionsPage({ initialTab }: ConnectionsPageProps) {
   const router = useRouter();
 
-  const [tab, setTab] = useState<Tab>(initialTab);
+  const tab = initialTab;
   const [userId, setUserId] = useState<string | null>(null);
   const [entries, setEntries] = useState<FollowListEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,15 +61,12 @@ export function ConnectionsPage({ initialTab }: ConnectionsPageProps) {
     load(tab);
   }, [tab, load]);
 
-  const selectTab = useCallback(
-    (nextTab: Tab) => {
-      setTab(nextTab);
-      router.replace(`/home/me/connections?tab=${nextTab}`, {
-        scroll: false,
-      });
-    },
-    [router],
-  );
+  const title =
+    tab === "followers"
+      ? "Followers"
+      : tab === "following"
+        ? "Following"
+        : "Friends";
 
   return (
     <main className="min-h-dvh bg-[#17131F] font-[family-name:var(--font-body)] text-[#F3ECE0] antialiased">
@@ -85,26 +82,8 @@ export function ConnectionsPage({ initialTab }: ConnectionsPageProps) {
           </button>
 
           <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-[#F3ECE0]">
-            Connections
+            {title}
           </h1>
-        </div>
-
-        <div className="mt-5 flex rounded-full border border-[#2A2238] bg-[#1D1829]/60 p-1">
-          <TabButton
-            label="Followers"
-            active={tab === "followers"}
-            onClick={() => selectTab("followers")}
-          />
-          <TabButton
-            label="Following"
-            active={tab === "following"}
-            onClick={() => selectTab("following")}
-          />
-          <TabButton
-            label="Friends"
-            active={tab === "friends"}
-            onClick={() => selectTab("friends")}
-          />
         </div>
 
         <div className="mt-5">
@@ -191,29 +170,5 @@ export function ConnectionsPage({ initialTab }: ConnectionsPageProps) {
         </div>
       </div>
     </main>
-  );
-}
-
-function TabButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-1 rounded-full py-2 text-xs font-bold transition ${
-        active
-          ? "bg-white text-black"
-          : "text-[#9088A0] hover:text-[#F3ECE0]"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
