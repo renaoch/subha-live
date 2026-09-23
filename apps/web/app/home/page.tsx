@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Eye, Flame, Loader2, MapPin, Search, Crown, X } from 'lucide-react';
+import { Bell, Eye, Flame, Loader2, Search, Crown, X } from 'lucide-react';
 
 import { roomsApi, type RoomRecord } from '@/lib/api/rooms';
 import { useCreateRoom } from '@/hooks/queries/use-rooms';
@@ -67,8 +67,6 @@ export default function LiveFeedPage() {
     [rooms],
   );
   const popular = byViewers.slice(0, 4);
-  const recommended = byViewers.slice(4, 6);
-  const nearby = byViewers.slice(6, 9);
 
   const openRoom = (id: string) => enterRoom(id);
   const comingSoon = (what: string) => () => toast.info(`${what} coming soon`);
@@ -280,36 +278,6 @@ export default function LiveFeedPage() {
             <div className="grid grid-cols-2 gap-3">
               {popular.map((room) => (
                 <RoomCard key={room.id} room={room} onClick={() => openRoom(room.id)} />
-              ))}
-            </div>
-          )}
-        </Section>
-
-        {/* Recommended For You */}
-        <Section title="Recommended For You">
-          {loading ? (
-            <SkeletonGrid count={2} tall />
-          ) : recommended.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {recommended.map((room) => (
-                <RoomCard key={room.id} room={room} tall onClick={() => openRoom(room.id)} />
-              ))}
-            </div>
-          )}
-        </Section>
-
-        {/* Nearby */}
-        <Section icon={<MapPin className="h-4 w-4 text-orange-500" />} title="Nearby">
-          {loading ? (
-            <SkeletonGrid count={3} />
-          ) : nearby.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <div className="grid grid-cols-3 gap-2.5">
-              {nearby.map((room) => (
-                <RoomCard key={room.id} room={room} compact onClick={() => openRoom(room.id)} />
               ))}
             </div>
           )}
