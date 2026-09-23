@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Eye, Flame, MapPin, Search, Crown, X } from 'lucide-react';
+import { Bell, Eye, Flame, Loader2, MapPin, Search, Crown, X } from 'lucide-react';
 
 import { roomsApi, type RoomRecord } from '@/lib/api/rooms';
+import { useCreateRoom } from '@/hooks/queries/use-rooms';
+import { useRoomEntryGuard } from '@/lib/room-session-context';
 import { Avatar } from '@/components/ui/avatar';
 import { BannerCarousel } from '@/components/BannerCarousel';
 import { getPromoBanners } from '@/lib/promo-banners';
@@ -22,12 +24,22 @@ export default function LiveFeedPage() {
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [streamTitle, setStreamTitle] = useState('');
   const promoBanners = useMemo(() => getPromoBanners(), []);
+
+  const createRoomMutation = useCreateRoom();
+  const { enterRoom, guardCreate } = useRoomEntryGuard();
+
+  const openCreateModal = () => {
+    if (!guardCreate()) return;
+    setShowCreateModal(true);
+  };
 
   useEffect(() => {
     if (searchParams.get('create') === '1') {
-      setShowCreateModal(true);
+      openCreateModal();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   useEffect(() => {
@@ -58,17 +70,35 @@ export default function LiveFeedPage() {
   const recommended = byViewers.slice(4, 6);
   const nearby = byViewers.slice(6, 9);
 
-  const goLive = () => router.push('/home/go-live');
-  const openRoom = (id: string) => router.push(`/home/room/${id}`);
+  const openRoom = (id: string) => enterRoom(id);
   const comingSoon = (what: string) => () => toast.info(`${what} coming soon`);
 
   const closeCreateModal = () => {
+    if (createRoomMutation.isPending) return;
     setShowCreateModal(false);
+    setStreamTitle('');
     router.replace('/home');
   };
 
+  const startStream = async () => {
+    if (!guardCreate()) return;
+    try {
+      const room = await createRoomMutation.mutateAsync({
+        title: streamTitle.trim() || 'Live now',
+        livekit_room_name: `subha-live-${crypto.randomUUID()}`,
+        category: 'explore',
+        media_type: 'video',
+      });
+      setShowCreateModal(false);
+      setStreamTitle('');
+      router.push(`/home/room/${room.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't start the stream");
+    }
+  };
+
   return (
-    <main className="min-h-dvh bg-[#0a0a0a] pb-28 text-white font-sans selection:bg-orange-500/30 overflow-x-hidden">
+    <main className="min-h-dvh bg-[#0a0a0a] pb-6 text-white font-sans selection:bg-orange-500/30 overflow-x-hidden">
       
       {/* Create Live Modal */}
       {showCreateModal && (
@@ -85,16 +115,30 @@ export default function LiveFeedPage() {
             </div>
             <h2 className="font-display text-xl font-bold text-white">Start Your Live Stream</h2>
             <p className="mt-2 text-sm text-white/60">
-              This is where your camera setup, title input, and "Start Stream" button would go.
+              Give your stream a title. You'll set up your camera and mic on the next screen.
             </p>
-            <button 
-              onClick={() => {
-                toast.success("Stream started! (Placeholder)");
-                closeCreateModal();
-              }}
-              className="mt-6 w-full rounded-full bg-gradient-to-r from-orange-400 to-orange-500 py-3 text-sm font-bold text-black transition-transform active:scale-95"
+            <input
+              type="text"
+              value={streamTitle}
+              onChange={(e) => setStreamTitle(e.target.value)}
+              placeholder="What's happening?"
+              maxLength={80}
+              autoFocus
+              className="mt-5 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white placeholder:text-white/30 outline-none focus:border-orange-500/50"
+            />
+            <button
+              onClick={startStream}
+              disabled={createRoomMutation.isPending}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 py-3 text-sm font-bold text-black transition-transform active:scale-95 disabled:opacity-70"
             >
-              Start Streaming
+              {createRoomMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Setting up…
+                </>
+              ) : (
+                'Start Streaming'
+              )}
             </button>
           </div>
         </div>
@@ -156,7 +200,7 @@ export default function LiveFeedPage() {
 
             {/* Go Live Button */}
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => openCreateModal()}
               className="relative flex items-center gap-1.5 rounded-full border border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-orange-600/10 px-3.5 py-1.5 text-[11px] font-bold text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)] transition-transform active:scale-95"
             >
               <Crown className="h-3 w-3 fill-orange-400" />
@@ -190,7 +234,7 @@ export default function LiveFeedPage() {
         {/* Go Live hero */}
         <button
           type="button"
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => openCreateModal()}
           className="group relative block w-full overflow-hidden rounded-[28px] bg-[#1a1a1a] text-left transition active:scale-[0.98] border border-orange-500/20"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -272,35 +316,6 @@ export default function LiveFeedPage() {
         </Section>
       </div>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/90 px-6 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
-        <div className="flex items-center justify-between relative">
-          <button onClick={comingSoon('Home')} className="flex flex-col items-center gap-1 text-orange-400">
-            <Flame className="h-6 w-6" />
-          </button>
-          
-          <button onClick={comingSoon('Party')} className="flex flex-col items-center gap-1 text-white/40 hover:text-white/70">
-            <Search className="h-6 w-6" />
-          </button>
-
-          <div className="relative -top-5">
-            <button 
-              onClick={() => setShowCreateModal(true)}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 shadow-[0_0_20px_rgba(249,115,22,0.5)] transition-transform active:scale-90"
-            >
-              <span className="text-2xl font-bold text-black">+</span>
-            </button>
-          </div>
-
-          <button onClick={comingSoon('Messages')} className="flex flex-col items-center gap-1 text-white/40 hover:text-white/70">
-            <Bell className="h-6 w-6" />
-          </button>
-
-          <button onClick={comingSoon('Profile')} className="flex flex-col items-center gap-1 text-white/40 hover:text-white/70">
-            <Avatar name="User" size="sm" className="h-6 w-6 border border-white/20" />
-          </button>
-        </div>
-      </nav>
     </main>
   );
 }
