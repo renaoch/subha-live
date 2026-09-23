@@ -27,7 +27,6 @@ import { LiveVideo } from '@/components/LiveVideo';
 import { RoomMoreActions } from '@/components/RoomMoreActions';
 
 import { GoLiveSetup } from '@/components/GoLiveSetup';
-import { FilterPicker } from '@/components/FilterPicker';
 import { ContributorsModal } from '@/components/ContributorsModal';
 
 import { RoomChat } from '@/components/RoomChat';
@@ -290,7 +289,6 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
 
   const [micEnabled, setMicEnabled] = useState(true);
 
-  const [filterOpen, setFilterOpen] = useState(false);
 
 
 
@@ -655,13 +653,6 @@ useEffect(() => {
           open={moreOpen}
           onClose={() => setMoreOpen(false)}
           isHost={isHost}
-          filterOpen={filterOpen}
-          onToggleFilter={() => {
-            setMoreOpen(false);
-            setFilterOpen((v) => !v);
-          }}
-          micEnabled={micEnabled}
-          onToggleMic={isHost ? () => setMicEnabled((v) => !v) : undefined}
           isAudioRoom={room.media_type === "audio"}
           onShare={() => {
             const url = typeof window !== 'undefined' ? window.location.href : '';
@@ -777,25 +768,6 @@ useEffect(() => {
         )}
 
 
-
-        {/* Filter popup (host, while live). The filter is baked into the
-            published video, so changes show up for viewers immediately. */}
-        {filterOpen && isHost && !isWaiting && room.media_type !== 'audio' && (
-          <div className="absolute inset-x-3 bottom-[92px] z-50 rounded-3xl border border-white/15 bg-black/75 px-4 pb-3 pt-3 shadow-2xl backdrop-blur-2xl">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold text-white">Filters</p>
-              <span className="text-[10px] text-white/50">
-                {cameraFilterBaked ? 'Viewers see this too' : 'Preview only on this device'}
-              </span>
-            </div>
-            <FilterPicker
-              value={cameraFilter}
-              onChange={setCameraFilter}
-              sampleSrc={room.host?.avatar}
-              size="sm"
-            />
-          </div>
-        )}
 
         {/* Viewer loading overlay */}
 

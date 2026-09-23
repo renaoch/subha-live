@@ -3,11 +3,7 @@
 
 import { useEffect } from "react";
 import {
-  SlidersHorizontal,
   Link2,
-  Menu,
-  Mic,
-  MicOff,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,13 +22,19 @@ interface RoomMoreActionsProps {
   open: boolean;
   onClose: () => void;
   isHost: boolean;
-  filterOpen?: boolean;
-  onToggleFilter?: () => void;
-  micEnabled?: boolean;
-  onToggleMic?: () => void;
   onShare?: () => void;
-  onOpenMenu?: () => void;
   isAudioRoom?: boolean;
+  /** @deprecated Mic, filters, and menu were moved out of this sheet.
+   * Accepted (and ignored) only so older call sites keep compiling. */
+  filterOpen?: boolean;
+  /** @deprecated see `filterOpen`. */
+  onToggleFilter?: () => void;
+  /** @deprecated see `filterOpen`. */
+  micEnabled?: boolean;
+  /** @deprecated see `filterOpen`. */
+  onToggleMic?: () => void;
+  /** @deprecated see `filterOpen`. */
+  onOpenMenu?: () => void;
   /** @deprecated "Hide video" and "Like" were removed from this menu.
    * Accepted (and ignored) only so older call sites keep compiling. */
   cameraEnabled?: boolean;
@@ -43,21 +45,14 @@ interface RoomMoreActionsProps {
 }
 
 /**
- * Bottom sheet of secondary room actions (mic, filters, share, menu).
- * Keeps the primary chat bar uncluttered — PK/Games/Gift/Filters live in the
- * main action row now.
+ * Bottom sheet of secondary room actions. Mic and filters live in the main
+ * chat action row now, and the hamburger menu was removed, so this sheet
+ * only ever holds "Share link".
  */
 export function RoomMoreActions({
   open,
   onClose,
-  isHost,
-  filterOpen = false,
-  onToggleFilter,
-  micEnabled = true,
-  onToggleMic,
   onShare,
-  onOpenMenu,
-  isAudioRoom = false,
 }: RoomMoreActionsProps) {
   // Lock body scroll while open
   useEffect(() => {
@@ -70,39 +65,11 @@ export function RoomMoreActions({
   }, [open]);
 
   const actions: RoomAction[] = [
-    ...(isHost
-      ? [
-          {
-            key: "mic",
-            label: micEnabled ? "Mute mic" : "Unmute mic",
-            icon: micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />,
-            onClick: onToggleMic,
-            active: !micEnabled,
-          },
-          ...(isAudioRoom
-            ? []
-            : [
-                {
-                  key: "filters",
-                  label: "Filters",
-                  icon: <SlidersHorizontal className="h-5 w-5" />,
-                  onClick: onToggleFilter,
-                  active: filterOpen,
-                },
-              ]),
-        ]
-      : []),
     {
       key: "share",
       label: "Share link",
       icon: <Link2 className="h-5 w-5" />,
       onClick: onShare,
-    },
-    {
-      key: "menu",
-      label: "Menu",
-      icon: <Menu className="h-5 w-5" />,
-      onClick: onOpenMenu,
     },
   ];
 
@@ -143,7 +110,7 @@ export function RoomMoreActions({
           </button>
         </div>
 
-        <div className="grid grid-cols-4 gap-y-4 pb-1">
+        <div className="flex justify-center gap-y-4 pb-1">
           {actions.map((a) => (
             <button
               key={a.key}
