@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { SendHorizonal, Gift, Menu, Swords, SlidersHorizontal, Lock } from "lucide-react";
+import { SendHorizonal, Gift, Menu, Swords, Mic, MicOff, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RoomChatMessage } from "@/lib/api/chat";
 import { GameIcon } from "@/components/icons";
@@ -28,9 +28,9 @@ interface RoomChatProps {
   onOpenPk?: () => void;
   /** Opens games. */
   onOpenGames?: () => void;
-  /** Host-only filter toggle, shown in the main action row. */
-  onToggleFilter?: () => void;
-  filterOpen?: boolean;
+  /** Host-only mic mute/unmute, shown in the main action row. */
+  onToggleMic?: () => void;
+  micEnabled?: boolean;
   /** False when the server restricts sending to the host's friends. */
   canChat?: boolean;
 }
@@ -145,7 +145,7 @@ function RoundButton({ label, onClick, active, tone = "neutral", children }: Rou
  * the star. New rows slide up from the bottom as they arrive.
  *
  * The bottom action row is a single frosted pill: burger menu (more) + chat
- * input + PK + Games + Gift/Filters.
+ * input + PK + Games + Gift/Mic.
  */
 export function RoomChat({
   messages,
@@ -158,8 +158,8 @@ export function RoomChat({
   onOpenMore,
   onOpenPk,
   onOpenGames,
-  onToggleFilter,
-  filterOpen,
+  onToggleMic,
+  micEnabled = true,
   canChat = true,
 }: RoomChatProps) {
   const [draft, setDraft] = useState("");
@@ -369,9 +369,17 @@ export function RoomChat({
           </RoundButton>
         )}
 
-        {onToggleFilter && (
-          <RoundButton label="Filters" onClick={onToggleFilter} tone="neutral" active={filterOpen}>
-            <SlidersHorizontal className="h-[18px] w-[18px]" strokeWidth={2} />
+        {onToggleMic && (
+          <RoundButton
+            label={micEnabled ? "Mute mic" : "Unmute mic"}
+            onClick={onToggleMic}
+            tone={micEnabled ? "neutral" : "rose"}
+          >
+            {micEnabled ? (
+              <Mic className="h-[18px] w-[18px]" strokeWidth={2} />
+            ) : (
+              <MicOff className="h-[18px] w-[18px]" strokeWidth={2} />
+            )}
           </RoundButton>
         )}
       </div>

@@ -721,8 +721,8 @@ useEffect(() => {
             onOpenMore={() => setMoreOpen(true)}
             onOpenPk={() => setPkOpen(true)}
             onOpenGames={() => toast.info('Games coming soon 🎮')}
-            onToggleFilter={isHost ? () => setFilterOpen((v) => !v) : undefined}
-            filterOpen={filterOpen}
+            onToggleMic={isHost && room.media_type !== 'audio' ? () => setMicEnabled((v) => !v) : undefined}
+            micEnabled={micEnabled}
           />
         )}
 
