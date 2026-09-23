@@ -84,23 +84,25 @@ export function GoLiveSetup({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-black/90 via-black/55 to-transparent" />
       <div className="relative px-4 pb-[calc(env(safe-area-inset-bottom)+22px)]">
         {error && (
-          <div className="mb-3 rounded-2xl border border-red-300/20 bg-red-950/60 px-4 py-3 text-xs text-red-100 backdrop-blur-xl">
+          <div className="glass-panel mb-3 rounded-2xl border-red-300/20 bg-red-950/50 px-4 py-3 text-xs text-red-100">
             {error}
           </div>
         )}
 
         {isAudioRoom ? (
-          <p className="mb-4 text-center text-[13px] text-white/70">
-            Your party room is ready. Tap below when you want guests to join.
-          </p>
+          <div className="glass-panel mb-5 rounded-[24px] px-4 py-4 text-center">
+            <p className="text-[13px] text-white/75">
+              Your party room is ready. Tap below when you want guests to join.
+            </p>
+          </div>
         ) : (
-          <div className="mb-5">
+          <div className="glass-panel mb-5 rounded-[24px] px-4 pb-3.5 pt-3.5">
             <div className="mb-3 flex items-center justify-between">
               <p className="flex items-center gap-1.5 text-[13px] font-bold text-white">
-                <Sparkles className="h-4 w-4 text-amber-300" />
+                <Sparkles className="h-4 w-4 text-accent-gold" />
                 Filters
               </p>
-              <span className="text-[11px] text-white/55">
+              <span className="text-[10.5px] font-medium text-white/50">
                 {filterBaked
                   ? "Viewers see this too"
                   : "Preview only on this device"}
@@ -119,21 +121,27 @@ export function GoLiveSetup({
           {!disabled && (
             <span
               aria-hidden
-              className="absolute inset-0 animate-ping rounded-full bg-accent-hot/30 [animation-duration:2.2s]"
+              className="absolute inset-0 animate-ping rounded-full bg-accent-hot/25 [animation-duration:2.2s]"
             />
           )}
           <button
             type="button"
             onClick={onStart}
             disabled={disabled}
-            className="grad-brand animate-gradient-shift glow-hot-lg relative flex h-[62px] w-full items-center justify-center gap-2.5 rounded-full text-[19px] font-black tracking-tight text-white transition active:scale-[0.98] disabled:opacity-60"
+            className="grad-brand animate-gradient-shift glow-hot-lg relative isolate flex h-[62px] w-full items-center justify-center gap-2.5 overflow-hidden rounded-full text-[18px] font-black tracking-tight text-white transition active:scale-[0.98] disabled:opacity-60"
           >
-            {starting || (!ready && !error) ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Radio className="h-5 w-5" strokeWidth={2.4} />
-            )}
-            {label}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-1/2 rounded-t-full bg-gradient-to-b from-white/25 to-transparent"
+            />
+            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/15">
+              {starting || (!ready && !error) ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Radio className="h-4 w-4" strokeWidth={2.4} />
+              )}
+            </span>
+            <span className="relative">{label}</span>
           </button>
         </div>
       </div>

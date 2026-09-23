@@ -34,14 +34,14 @@ export function FilterPicker({
   size = "md",
   className,
 }: FilterPickerProps) {
-  const dim = size === "md" ? "h-[60px] w-[60px]" : "h-[46px] w-[46px]";
+  const dim = size === "md" ? "h-[64px] w-[64px]" : "h-[46px] w-[46px]";
 
   return (
     <div
       role="radiogroup"
       aria-label="Camera filter"
       className={cn(
-        "-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "-mx-4 flex gap-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,
       )}
     >
@@ -54,44 +54,54 @@ export function FilterPicker({
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(filter.name)}
-            className="flex shrink-0 flex-col items-center gap-1.5 active:scale-95"
+            className="flex shrink-0 flex-col items-center gap-2 active:scale-95"
           >
             <span
               className={cn(
-                "relative block overflow-hidden rounded-full transition-all duration-200",
+                "relative block shrink-0 rounded-full transition-all duration-200",
                 dim,
-                selected
-                  ? "ring-[2.5px] ring-white ring-offset-2 ring-offset-black/60"
-                  : "ring-1 ring-white/25",
+                selected && "p-[2.5px] bg-[linear-gradient(135deg,hsl(var(--accent-gold)),hsl(var(--accent-hot)))] shadow-[0_0_0_1px_hsl(var(--accent-hot)/0.25),0_6px_18px_-4px_hsl(var(--shadow-color)/0.75)]",
               )}
             >
-              {sampleSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={sampleSrc}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  style={{ filter: cameraFilterCss(filter.name) }}
-                />
-              ) : (
-                <span
-                  className="block h-full w-full"
-                  style={{
-                    backgroundImage: SAMPLE_SCENE,
-                    filter: cameraFilterCss(filter.name),
-                  }}
-                />
-              )}
-              {selected && (
-                <span className="absolute inset-0 flex items-center justify-center bg-black/35">
-                  <Check className="h-5 w-5 text-white" strokeWidth={3} />
-                </span>
-              )}
+              <span
+                className={cn(
+                  "relative block h-full w-full overflow-hidden rounded-full",
+                  !selected && "ring-1 ring-inset ring-white/15",
+                )}
+              >
+                {sampleSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={sampleSrc}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    style={{ filter: cameraFilterCss(filter.name) }}
+                  />
+                ) : (
+                  <span
+                    className="block h-full w-full"
+                    style={{
+                      backgroundImage: SAMPLE_SCENE,
+                      filter: cameraFilterCss(filter.name),
+                    }}
+                  />
+                )}
+                {!selected && (
+                  <span className="pointer-events-none absolute inset-0 bg-black/25 transition-opacity group-hover:bg-black/10" />
+                )}
+                {selected && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/95 shadow-sm">
+                      <Check className="h-3.5 w-3.5 text-black" strokeWidth={3} />
+                    </span>
+                  </span>
+                )}
+              </span>
             </span>
             <span
               className={cn(
-                "text-[11px] leading-none transition-colors",
-                selected ? "font-bold text-white" : "font-medium text-white/60",
+                "text-[11px] leading-none tracking-tight transition-colors",
+                selected ? "font-bold text-white" : "font-medium text-white/55",
               )}
             >
               {filter.name}
