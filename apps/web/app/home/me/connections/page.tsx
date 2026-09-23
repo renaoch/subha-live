@@ -8,7 +8,9 @@ export default function Page({
   const tab =
     searchParams.tab === "following"
       ? "following"
-      : "followers";
+      : searchParams.tab === "friends"
+        ? "friends"
+        : "followers";
 
   return <ConnectionsPage initialTab={tab} />;
 }

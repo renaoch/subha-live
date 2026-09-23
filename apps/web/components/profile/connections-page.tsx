@@ -5,9 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, BadgeCheck, Users } from "lucide-react";
 
-import { usersApi, type FollowListEntry } from "@/lib/api/users";
+import {
+  usersApi,
+  mutualFriends,
+  type FollowListEntry,
+} from "@/lib/api/users";
 
-type Tab = "followers" | "following";
+type Tab = "followers" | "following" | "friends";
 
 interface ConnectionsPageProps {
   initialTab: Tab;
@@ -30,12 +34,18 @@ export function ConnectionsPage({ initialTab }: ConnectionsPageProps) {
       const me = await usersApi.me();
       setUserId(me.id);
 
-      const list =
-        activeTab === "followers"
-          ? await usersApi.getFollowers(me.id)
-          : await usersApi.getFollowing(me.id);
-
-      setEntries(list);
+      if (activeTab === "followers") {
+        setEntries(await usersApi.getFollowers(me.id));
+      } else if (activeTab === "following") {
+        setEntries(await usersApi.getFollowing(me.id));
+      } else {
+        // Friends = users who follow each other (mutual).
+        const [followers, following] = await Promise.all([
+          usersApi.getFollowers(me.id),
+          usersApi.getFollowing(me.id),
+        ]);
+        setEntries(mutualFriends(followers, following));
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -50,6 +60,16 @@ export function ConnectionsPage({ initialTab }: ConnectionsPageProps) {
   useEffect(() => {
     load(tab);
   }, [tab, load]);
+
+  const selectTab = useCallback(
+    (nextTab: Tab) => {
+      setTab(nextTab);
+      router.replace(`/home/me/connections?tab=${nextTab}`, {
+        scroll: false,
+      });
+    },
+    [router],
+  );
 
   return (
     <main className="min-h-dvh bg-[#17131F] font-[family-name:var(--font-body)] text-[#F3ECE0] antialiased">
@@ -73,12 +93,17 @@ export function ConnectionsPage({ initialTab }: ConnectionsPageProps) {
           <TabButton
             label="Followers"
             active={tab === "followers"}
-            onClick={() => setTab("followers")}
+            onClick={() => selectTab("followers")}
           />
           <TabButton
             label="Following"
             active={tab === "following"}
-            onClick={() => setTab("following")}
+            onClick={() => selectTab("following")}
+          />
+          <TabButton
+            label="Friends"
+            active={tab === "friends"}
+            onClick={() => selectTab("friends")}
           />
         </div>
 
@@ -112,7 +137,9 @@ export function ConnectionsPage({ initialTab }: ConnectionsPageProps) {
               <p className="text-sm text-[#9088A0]">
                 {tab === "followers"
                   ? "No followers yet."
-                  : "Not following anyone yet."}
+                  : tab === "following"
+                    ? "Not following anyone yet."
+                    : "No mutual friends yet."}
               </p>
             </div>
           )}
