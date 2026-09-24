@@ -211,12 +211,36 @@ export async function getOrSetCache<T>(key: string, ttlSeconds: number, fetcher:
   if (cached !== null) return cached;
   const lockKey = `lock:${key}`;
   const token = `${process.pid}-${Date.now()}-${Math.random()}`;
-  const acquired = redisUrl
-    ? (await (client as any).set(lockKey, token, { NX: true, EX: LOCK_TTL_SECONDS })) === "OK"
-    : (await (client as any).set(lockKey, token, { nx: true, ex: LOCK_TTL_SECONDS })) === "OK";
+
+  // Lock acquisition talks to Redis directly (not through cacheGet/cacheSet,
+  // which already fail safe), so a stalled/queued command here used to hang
+  // the whole request for up to ~100s whenever Redis was unreachable (see
+  // the reconnectStrategy comment above). Treat any failure here the same
+  // way cacheGet/cacheSet do: log it and fall through to the fetcher
+  // directly, so a Redis outage degrades to "no caching", not "request
+  // never responds".
+  let acquired = false;
+  try {
+    acquired = redisUrl
+      ? (await (client as any).set(lockKey, token, { NX: true, EX: LOCK_TTL_SECONDS })) === "OK"
+      : (await (client as any).set(lockKey, token, { nx: true, ex: LOCK_TTL_SECONDS })) === "OK";
+  } catch (error) {
+    console.error(`[redis] lock acquire failed for ${lockKey}:`, error);
+    return fetcher();
+  }
+
   if (acquired) {
-    try { const fresh = await fetcher(); await cacheSet(key, fresh, ttlSeconds); return fresh; }
-    finally { if ((await client.get<string>(lockKey)) === token) await client.del(lockKey); }
+    try {
+      const fresh = await fetcher();
+      await cacheSet(key, fresh, ttlSeconds);
+      return fresh;
+    } finally {
+      try {
+        if ((await client.get<string>(lockKey)) === token) await client.del(lockKey);
+      } catch (error) {
+        console.error(`[redis] lock release failed for ${lockKey}:`, error);
+      }
+    }
   }
   const start = Date.now();
   while (Date.now() - start < LOCK_MAX_WAIT_MS) {
