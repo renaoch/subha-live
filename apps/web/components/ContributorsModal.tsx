@@ -16,6 +16,8 @@ interface ContributorsModalProps {
   hostId: string;
   hostName: string;
   onClose: () => void;
+  /** Tapping a contributor row opens their profile popup in place. */
+  onOpenProfile?: (userId: string) => void;
 }
 
 const TABS: Array<{ key: ContributorPeriod; label: string; caption: string }> = [
@@ -40,7 +42,7 @@ const STALE_AFTER_MS = 30_000;
  * Layout: #1 gets a crowned centre-stage spot, #2 and #3 flank it on
  * lower podium steps, and everyone else follows in a ranked list.
  */
-export function ContributorsModal({ hostId, hostName, onClose }: ContributorsModalProps) {
+export function ContributorsModal({ hostId, hostName, onClose, onOpenProfile }: ContributorsModalProps) {
   const [period, setPeriod] = useState<ContributorPeriod>("daily");
   const [byPeriod, setByPeriod] = useState<Partial<Record<ContributorPeriod, PeriodState>>>({});
   // Mirror of state so `load` can check freshness without stale closures.
@@ -188,7 +190,7 @@ export function ContributorsModal({ hostId, hostName, onClose }: ContributorsMod
           ) : state.data.length === 0 ? (
             <EmptyBoard period={period} />
           ) : (
-            <Board contributors={state.data} />
+            <Board contributors={state.data} onOpenProfile={onOpenProfile} />
           )}
         </div>
       </div>
@@ -200,34 +202,43 @@ export function ContributorsModal({ hostId, hostName, onClose }: ContributorsMod
 // Board = podium (top 3) + list (4+)
 // ---------------------------------------------------------------------------
 
-function Board({ contributors }: { contributors: HostContributor[] }) {
+function Board({
+  contributors,
+  onOpenProfile,
+}: {
+  contributors: HostContributor[];
+  onOpenProfile?: (userId: string) => void;
+}) {
   const [first, second, third] = contributors;
   const rest = contributors.slice(3);
 
   return (
     <>
       <div className="flex items-end justify-center gap-2 px-4 pb-1 pt-9">
-        <PodiumSlot rank={2} entry={second} />
-        <PodiumSlot rank={1} entry={first} />
-        <PodiumSlot rank={3} entry={third} />
+        <PodiumSlot rank={2} entry={second} onOpenProfile={onOpenProfile} />
+        <PodiumSlot rank={1} entry={first} onOpenProfile={onOpenProfile} />
+        <PodiumSlot rank={3} entry={third} onOpenProfile={onOpenProfile} />
       </div>
 
       {rest.length > 0 && (
         <ul className="mx-4 mt-3 space-y-1.5">
           {rest.map((c) => (
-            <li
-              key={c.userId}
-              className="flex items-center gap-3 rounded-2xl bg-white/[0.045] px-3 py-2"
-            >
-              <span className="w-6 text-center text-[13px] font-extrabold tabular-nums text-white/45">
-                {c.rank}
-              </span>
-              <Avatar name={c.name} src={c.avatar ?? undefined} size="sm" className="h-10 w-10" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold text-white">{c.name}</p>
-                <LevelChip level={c.level} />
-              </div>
-              <CoinAmount value={c.totalCoins} />
+            <li key={c.userId}>
+              <button
+                type="button"
+                onClick={() => onOpenProfile?.(c.userId)}
+                className="flex w-full items-center gap-3 rounded-2xl bg-white/[0.045] px-3 py-2 text-left transition active:scale-[0.99]"
+              >
+                <span className="w-6 text-center text-[13px] font-extrabold tabular-nums text-white/45">
+                  {c.rank}
+                </span>
+                <Avatar name={c.name} src={c.avatar ?? undefined} size="sm" className="h-10 w-10" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold text-white">{c.name}</p>
+                  <LevelChip level={c.level} />
+                </div>
+                <CoinAmount value={c.totalCoins} />
+              </button>
             </li>
           ))}
         </ul>
@@ -266,7 +277,15 @@ const PODIUM = {
   },
 } as const;
 
-function PodiumSlot({ rank, entry }: { rank: 1 | 2 | 3; entry?: HostContributor }) {
+function PodiumSlot({
+  rank,
+  entry,
+  onOpenProfile,
+}: {
+  rank: 1 | 2 | 3;
+  entry?: HostContributor;
+  onOpenProfile?: (userId: string) => void;
+}) {
   const style = PODIUM[rank];
   const isFirst = rank === 1;
 
@@ -294,8 +313,11 @@ function PodiumSlot({ rank, entry }: { rank: 1 | 2 | 3; entry?: HostContributor 
         )}
 
         {/* Avatar in a metal ring */}
-        <div
-          className="rounded-full p-[3px]"
+        <button
+          type="button"
+          onClick={() => entry && onOpenProfile?.(entry.userId)}
+          disabled={!entry}
+          className="rounded-full p-[3px] transition active:scale-95 disabled:cursor-default"
           style={{ background: style.ring, boxShadow: entry ? style.glow : "none" }}
         >
           {entry ? (
@@ -315,7 +337,7 @@ function PodiumSlot({ rank, entry }: { rank: 1 | 2 | 3; entry?: HostContributor 
               ?
             </div>
           )}
-        </div>
+        </button>
 
         {/* Rank chip overlapping the avatar's bottom edge */}
         <span

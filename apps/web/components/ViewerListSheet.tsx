@@ -17,6 +17,8 @@ interface ViewerListSheetProps {
   /** Real connected viewer userIds, from the room's live media state. */
   viewerIds: string[];
   onClose: () => void;
+  /** Tapping a viewer row opens their profile popup in place. */
+  onOpenProfile?: (userId: string) => void;
 }
 
 /**
@@ -25,7 +27,7 @@ interface ViewerListSheetProps {
  * tracks who is connected by id — this component is what turns that into a
  * human-readable list, with no invented names or placeholder data.
  */
-export function ViewerListSheet({ viewerIds, onClose }: ViewerListSheetProps) {
+export function ViewerListSheet({ viewerIds, onClose, onOpenProfile }: ViewerListSheetProps) {
   const [profiles, setProfiles] = useState<Record<string, ViewerEntry>>({});
   const [loading, setLoading] = useState(true);
 
@@ -122,9 +124,11 @@ export function ViewerListSheet({ viewerIds, onClose }: ViewerListSheetProps) {
           ) : (
             <div className="space-y-1">
               {list.map((viewer) => (
-                <div
+                <button
+                  type="button"
                   key={viewer.id}
-                  className="flex items-center gap-3 rounded-2xl px-2 py-2 transition hover:bg-white/[0.04]"
+                  onClick={() => onOpenProfile?.(viewer.id)}
+                  className="flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition hover:bg-white/[0.04] active:scale-[0.99]"
                 >
                   <Avatar name={viewer.name} src={viewer.avatar ?? undefined} size="sm" />
                   <div className="min-w-0 flex-1">
@@ -135,7 +139,7 @@ export function ViewerListSheet({ viewerIds, onClose }: ViewerListSheetProps) {
                       <p className="truncate text-[11px] text-ink-faint">@{viewer.handle}</p>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
               {loading && (
                 <div className="flex items-center justify-center py-3">

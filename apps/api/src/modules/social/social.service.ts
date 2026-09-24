@@ -108,6 +108,13 @@ export async function followUser(
     throw error;
   }
 
+  // Keep the denormalized profile counters in sync so the
+  // profile page and connections tabs show correct numbers.
+  await Promise.all([
+    bumpProfileCounter(followerId, "following", 1),
+    bumpProfileCounter(followingId, "followers", 1),
+  ]);
+
   return data;
 }
 
@@ -154,7 +161,57 @@ export async function unfollowUser(
     throw error;
   }
 
+  // Keep the denormalized profile counters in sync so the
+  // profile page and connections tabs show correct numbers.
+  await Promise.all([
+    bumpProfileCounter(followerId, "following", -1),
+    bumpProfileCounter(followingId, "followers", -1),
+  ]);
+
   return data;
+}
+
+/**
+ * Atomically-ish adjust a denormalized counter column on
+ * `profiles` (either `followers` or `following`), clamped at 0.
+ *
+ * `follows` rows are the source of truth; these columns exist
+ * purely so the profile page doesn't need a COUNT(*) on every
+ * request. They must be kept in sync on every follow/unfollow.
+ */
+async function bumpProfileCounter(
+  userId: UserId,
+  column: "followers" | "following",
+  delta: 1 | -1
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(column)
+    .eq("id", userId)
+    .single();
+
+  if (error || !data) {
+    console.error(
+      `Failed to read ${column} counter for profile counter update:`,
+      error
+    );
+    return;
+  }
+
+  const current = (data as Record<string, number | null>)[column] ?? 0;
+  const next = Math.max(0, current + delta);
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ [column]: next } as never)
+    .eq("id", userId);
+
+  if (updateError) {
+    console.error(
+      `Failed to update ${column} counter:`,
+      updateError
+    );
+  }
 }
 
 // get followers of a user

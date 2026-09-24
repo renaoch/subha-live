@@ -2,7 +2,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { usersApi } from "@/lib/api/users";
@@ -52,6 +51,8 @@ interface RoomHeaderProps {
   onOpenViewers?: () => void;
   /** Opens the "Top contributors" modal. Omit to hide the trophy icon. */
   onOpenContributors?: () => void;
+  /** Tapping the host's avatar/name opens their profile popup in place. */
+  onOpenProfile?: (userId: string) => void;
 }
 
 type Tag = {
@@ -194,6 +195,7 @@ export function RoomHeader({
   taskStats,
   onOpenViewers,
   onOpenContributors,
+  onOpenProfile,
 }: RoomHeaderProps) {
   const hostName = host?.name || "Host";
   const avatarUrl = host?.avatar || undefined;
@@ -215,9 +217,11 @@ export function RoomHeader({
         {/* Left group: host identity + follow button, min-w-0 so the
             name truncates instead of pushing the right cluster off. */}
         <div className="flex min-w-0 items-center gap-2">
-          <Link
-            href={host?.id ? `/user/${host.id}` : "#"}
-            className="flex min-w-0 items-center gap-2.5 rounded-full py-0.5 transition active:scale-[0.98]"
+          <button
+            type="button"
+            onClick={() => host?.id && onOpenProfile?.(host.id)}
+            disabled={!host?.id}
+            className="flex min-w-0 items-center gap-2.5 rounded-full py-0.5 text-left transition active:scale-[0.98] disabled:cursor-default"
           >
             <Avatar
               name={hostName}
@@ -248,7 +252,7 @@ export function RoomHeader({
                 </div>
               )}
             </div>
-          </Link>
+          </button>
 
           {showFollow && host?.id && <FollowButton hostId={host.id} />}
         </div>

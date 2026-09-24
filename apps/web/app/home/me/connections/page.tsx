@@ -1,14 +1,15 @@
 import { ConnectionsPage } from "@/components/profile/connections-page";
 
-export default function Page({
+export default async function Page({
   searchParams,
 }: {
-  searchParams: { tab?: string };
+  searchParams: Promise<{ tab?: string }>;
 }) {
+  const params = await searchParams;
   const tab =
-    searchParams.tab === "following"
+    params.tab === "following"
       ? "following"
-      : searchParams.tab === "friends"
+      : params.tab === "friends"
         ? "friends"
         : "followers";
 

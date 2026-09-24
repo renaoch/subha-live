@@ -34,6 +34,8 @@ export interface Conversation {
 export interface Friendship {
   areFriends: boolean;
   isBlocked: boolean;
+  /** Free messages left with this user before you need to follow each other. null = unlimited (friends). */
+  freeMessagesRemaining: number | null;
 }
 
 export const messagesApi = {

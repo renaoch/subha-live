@@ -34,7 +34,14 @@ export interface Conversation {
 export interface Friendship {
   areFriends: boolean;
   isBlocked: boolean;
+  /**
+   * Free-message allowance between two non-friends.
+   * null once they're friends (unlimited, this doesn't apply).
+   */
+  freeMessagesRemaining: number | null;
 }
+
+const FREE_MESSAGES_PER_NON_FRIEND = 3;
 
 function toMessage(
   row: Pick<DmRow, "id" | "sender_id" | "recipient_id" | "encrypted_content" | "is_read" | "created_at">,
@@ -92,16 +99,42 @@ async function getProfiles(ids: string[]): Promise<Map<string, ConversationUser>
   return map;
 }
 
+/**
+ * How many of the free (pre-friendship) messages `fromId` has already
+ * used up on `toId`. Each sender/recipient direction has its own quota —
+ * "user A sends user B 3 messages" only exhausts A → B, not B → A.
+ */
+async function countFreeMessagesUsed(fromId: string, toId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("direct_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("sender_id", fromId)
+    .eq("recipient_id", toId);
+
+  if (error) return 0;
+  return count ?? 0;
+}
+
 export const messagesService = {
   async friendship(userId: string, otherUserId: string): Promise<Friendship> {
     if (userId === otherUserId) {
-      return { areFriends: true, isBlocked: false };
+      return { areFriends: true, isBlocked: false, freeMessagesRemaining: null };
     }
     const [friends, blocked] = await Promise.all([
       areFriends(userId, otherUserId),
       isBlocked(userId, otherUserId),
     ]);
-    return { areFriends: friends, isBlocked: blocked };
+
+    if (friends || blocked) {
+      return { areFriends: friends, isBlocked: blocked, freeMessagesRemaining: null };
+    }
+
+    const used = await countFreeMessagesUsed(userId, otherUserId);
+    return {
+      areFriends: false,
+      isBlocked: false,
+      freeMessagesRemaining: Math.max(0, FREE_MESSAGES_PER_NON_FRIEND - used),
+    };
   },
 
   async listConversations(userId: string): Promise<Conversation[]> {
@@ -217,10 +250,20 @@ export const messagesService = {
     if (blocked) {
       throw new AppError(403, "You cannot message this user", { code: "DM_BLOCKED" });
     }
+
+    // Friends (mutual follows) can message freely. Everyone else gets a
+    // 3-message trial per direction — user A messaging user B doesn't
+    // touch user A's separate allowance with user C, and doesn't use up
+    // any of user B's allowance for messaging back.
     if (!friends) {
-      throw new AppError(403, "You must follow each other to start a conversation", {
-        code: "DM_NOT_FRIENDS",
-      });
+      const used = await countFreeMessagesUsed(userId, otherUserId);
+      if (used >= FREE_MESSAGES_PER_NON_FRIEND) {
+        throw new AppError(
+          403,
+          "You've used your 3 free messages with this user. Follow each other to keep chatting.",
+          { code: "DM_FREE_LIMIT_REACHED" },
+        );
+      }
     }
 
     const { data, error } = await supabase
