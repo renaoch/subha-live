@@ -39,7 +39,7 @@ export function UserProfilePopup({ userId, currentUserId, onClose }: UserProfile
     ]).then(([p, status]) => {
       if (cancelled) return;
       setProfile(p);
-setFollowing(status ? status.following ?? false : null);
+      setFollowing(status ? status.following ?? false : null);
       setLoading(false);
     });
     return () => {
