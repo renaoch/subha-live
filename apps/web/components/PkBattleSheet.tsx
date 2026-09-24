@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Loader2, Swords, X, Search } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -30,11 +29,13 @@ interface PkBattleSheetProps {
   isHost: boolean;
   hostName: string;
   pk: ReturnType<typeof usePk>;
+  /** Opens a user's profile in the in-room popup instead of navigating away. */
+  onOpenProfile?: (userId: string) => void;
 }
 
 type HostInfo = { id: string; name: string; handle: string; avatar: string | null };
 
-export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }: PkBattleSheetProps) {
+export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk, onOpenProfile }: PkBattleSheetProps) {
   const [liveHosts, setLiveHosts] = useState<Map<string, HostInfo>>(new Map());
   const [outgoing, setOutgoing] = useState<{ battleId: string; opponentHostId: string } | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -148,6 +149,7 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
                   score={state.scoreA}
                   winner={finished && state.winner === "A"}
                   align="left"
+                  onOpenProfile={onOpenProfile}
                 />
                 <span className="text-center text-[11px] font-black text-white/40">
                   {active && state.endsAt != null ? formatRemaining(state.endsAt - now) : "VS"}
@@ -159,6 +161,7 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
                   score={state.scoreB}
                   winner={finished && state.winner === "B"}
                   align="right"
+                  onOpenProfile={onOpenProfile}
                 />
               </div>
 
@@ -198,13 +201,17 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
           ) : isHost && pk.incomingInvite ? (
             /* Incoming invite (host B) */
             <div className="space-y-4 pb-2 text-center">
-              <Link href={`/user/${pk.incomingInvite.fromHostId}`} className="mx-auto block w-fit">
+              <button
+                type="button"
+                onClick={() => onOpenProfile?.(pk.incomingInvite!.fromHostId)}
+                className="mx-auto block w-fit"
+              >
                 <Avatar
                   name={nameOf(pk.incomingInvite.fromHostId)}
                   src={avatarOf(pk.incomingInvite.fromHostId)}
                   size="lg"
                 />
-              </Link>
+              </button>
               <p className="text-[14px] font-semibold text-white">
                 {nameOf(pk.incomingInvite.fromHostId)} challenges you
               </p>
@@ -288,13 +295,17 @@ export function PkBattleSheet({ open, onClose, myUserId, isHost, hostName, pk }:
                         key={r.id}
                         className="flex w-full items-center gap-3 rounded-2xl px-2 py-2 transition hover:bg-white/[0.04]"
                       >
-                        <Link href={`/user/${h!.id}`} className="flex min-w-0 flex-1 items-center gap-3 active:opacity-70">
+                        <button
+                          type="button"
+                          onClick={() => onOpenProfile?.(h!.id)}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left active:opacity-70"
+                        >
                           <Avatar name={name} src={h?.avatar ?? undefined} size="sm" />
                           <span className="min-w-0 flex-1 text-left">
                             <span className="block truncate text-[12.5px] font-medium text-white/85">{name}</span>
                             <span className="block truncate text-[11px] text-white/30">{r.title}</span>
                           </span>
-                        </Link>
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleInvite(h!.id)}
@@ -334,6 +345,7 @@ function BattleSide({
   score,
   winner,
   align,
+  onOpenProfile,
 }: {
   name: string;
   avatar?: string;
@@ -341,6 +353,7 @@ function BattleSide({
   score: number;
   winner: boolean;
   align: "left" | "right";
+  onOpenProfile?: (userId: string) => void;
 }) {
   const avatarEl = (
     <Avatar name={name} src={avatar} size="sm" className={cn("h-10 w-10", winner && "ring-2 ring-[#F5B93F]")} />
@@ -348,9 +361,9 @@ function BattleSide({
   return (
     <div className={cn("flex flex-col items-center gap-1", align === "left" ? "text-left" : "text-right")}>
       {userId ? (
-        <Link href={`/user/${userId}`} className="active:opacity-70">
+        <button type="button" onClick={() => onOpenProfile?.(userId)} className="active:opacity-70">
           {avatarEl}
-        </Link>
+        </button>
       ) : (
         avatarEl
       )}

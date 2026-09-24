@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { SendHorizonal, Gift, Menu, Swords, Mic, MicOff, Lock } from "lucide-react";
+import { SendHorizonal, Gift, Menu, Swords, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RoomChatMessage } from "@/lib/api/chat";
 import { GameIcon } from "@/components/icons";
@@ -31,8 +30,8 @@ interface RoomChatProps {
   /** Host-only mic mute/unmute, shown in the main action row. */
   onToggleMic?: () => void;
   micEnabled?: boolean;
-  /** False when the server restricts sending to the host's friends. */
-  canChat?: boolean;
+  /** Opens a user's profile in the in-room popup instead of navigating away. */
+  onOpenProfile?: (userId: string) => void;
 }
 
 // YouTube-live-style username colors: bright, legible against video, no two
@@ -160,7 +159,7 @@ export function RoomChat({
   onOpenGames,
   onToggleMic,
   micEnabled = true,
-  canChat = true,
+  onOpenProfile,
 }: RoomChatProps) {
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
@@ -245,12 +244,13 @@ export function RoomChat({
                   <p className="min-w-0 flex-1 text-[12.5px] leading-snug [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]">
                     {m.level ? <LevelBadge level={m.level} /> : null}
                     {m.tags?.length ? <TagBadges tags={m.tags} /> : null}
-                    <Link
-                      href={`/user/${m.userId}`}
+                    <button
+                      type="button"
+                      onClick={() => onOpenProfile?.(m.userId)}
                       className="mr-1 font-bold text-[#FFD24B] hover:underline"
                     >
                       {m.username}
-                    </Link>
+                    </button>
                     <span className="text-white/90">
                       sent {gift ? gift.name : "a gift"}
                       {gift && gift.quantity > 1 ? ` ×${gift.quantity}` : ""}
@@ -287,9 +287,13 @@ export function RoomChat({
                 {mine ? (
                   avatarEl
                 ) : (
-                  <Link href={`/user/${m.userId}`} className="shrink-0 active:opacity-70">
+                  <button
+                    type="button"
+                    onClick={() => onOpenProfile?.(m.userId)}
+                    className="shrink-0 active:opacity-70"
+                  >
                     {avatarEl}
-                  </Link>
+                  </button>
                 )}
                 <p className="min-w-0 flex-1 text-[12.5px] leading-snug [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]">
                   {m.level ? <LevelBadge level={m.level} /> : null}
@@ -299,13 +303,14 @@ export function RoomChat({
                       You
                     </span>
                   ) : (
-                    <Link
-                      href={`/user/${m.userId}`}
+                    <button
+                      type="button"
+                      onClick={() => onOpenProfile?.(m.userId)}
                       className="mr-1.5 font-bold hover:underline"
                       style={{ color: nameColor }}
                     >
                       {m.username}
-                    </Link>
+                    </button>
                   )}
                   <span className="break-words text-white/95">{m.message}</span>
                 </p>
@@ -330,25 +335,19 @@ export function RoomChat({
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder={!connected ? "Connecting…" : canChat ? "Say something…" : "Only friends can chat"}
-            disabled={!connected || !canChat}
+            placeholder={!connected ? "Connecting…" : "Say something…"}
+            disabled={!connected}
             maxLength={500}
             className="min-w-0 flex-1 bg-transparent px-2 text-[13px] text-white placeholder:text-white/40 focus:outline-none disabled:opacity-60"
           />
-          {canChat ? (
-            <button
-              type="submit"
-              disabled={!connected || !draft.trim()}
-              aria-label="Send message"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-hot text-white transition-all duration-150 hover:brightness-110 active:scale-90 disabled:opacity-40"
-            >
-              <SendHorizonal className="h-4 w-4" strokeWidth={2} />
-            </button>
-          ) : (
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center text-white/35">
-              <Lock className="h-4 w-4" strokeWidth={2} />
-            </span>
-          )}
+          <button
+            type="submit"
+            disabled={!connected || !draft.trim()}
+            aria-label="Send message"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-hot text-white transition-all duration-150 hover:brightness-110 active:scale-90 disabled:opacity-40"
+          >
+            <SendHorizonal className="h-4 w-4" strokeWidth={2} />
+          </button>
         </form>
 
         {onOpenPk && (

@@ -65,6 +65,8 @@ import { AudioStageModal } from '@/components/AudioStageModal';
 import { SpeakerDock, type DockSpeaker } from '@/components/SpeakerDock';
 
 import { ViewerListSheet } from '@/components/ViewerListSheet';
+
+import { UserProfilePopup } from '@/components/room/UserProfilePopup';
 import { cameraFilterCss } from '@/lib/camera-filters';
 
 
@@ -182,7 +184,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   useRoomHeartbeat(room?.id ?? '', room?.status);
 
   // Live room chat over the realtime service.
-  const { messages: chatMessages, state: chatState, selfUserId, canChat, send: sendChat } =
+  const { messages: chatMessages, state: chatState, selfUserId, send: sendChat } =
     useRoomChat(room?.id ?? '', room?.status);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
 
@@ -295,6 +297,11 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
   const [speakerPanelOpen, setSpeakerPanelOpen] = useState(false);
 
   const [viewersOpen, setViewersOpen] = useState(false);
+
+  // Tapping any user (chat, header, viewer list, contributors, PK) opens
+  // this in-room popup instead of navigating to /user/[id] and leaving the
+  // live stream.
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
 
   const [guestMicEnabled, setGuestMicEnabled] = useState(true);
 
@@ -533,6 +540,8 @@ useEffect(() => {
 
           currentUserId={userId}
 
+          onOpenProfile={setProfileUserId}
+
           task={task}
 
           isHost={isHost}
@@ -704,7 +713,6 @@ useEffect(() => {
             messages={chatMessages}
             selfUserId={selfUserId}
             connected={chatState === 'connected'}
-            canChat={canChat}
             isHost={isHost}
 
             onSend={sendChat}
@@ -714,6 +722,7 @@ useEffect(() => {
             onOpenGames={() => toast.info('Games coming soon 🎮')}
             onToggleMic={isHost && room.media_type !== 'audio' ? () => setMicEnabled((v) => !v) : undefined}
             micEnabled={micEnabled}
+            onOpenProfile={setProfileUserId}
           />
         )}
 
@@ -849,13 +858,18 @@ useEffect(() => {
             hostId={room.host.id}
             hostName={room.host.name || 'Host'}
             onClose={() => setContributorsOpen(false)}
+            onOpenProfile={setProfileUserId}
           />
         )}
 
         {/* Viewer list */}
 
         {viewersOpen && (
-          <ViewerListSheet viewerIds={viewerIds} onClose={() => setViewersOpen(false)} />
+          <ViewerListSheet
+            viewerIds={viewerIds}
+            onClose={() => setViewersOpen(false)}
+            onOpenProfile={setProfileUserId}
+          />
         )}
 
         {/* Audio stage modal */}
@@ -909,7 +923,20 @@ useEffect(() => {
 
           pk={pk}
 
+          onOpenProfile={setProfileUserId}
+
         />
+
+        {/* User profile popup — opened from chat, header, viewer list,
+            contributors, or PK; slides up from the bottom over the live
+            stream instead of navigating to a full profile page. */}
+        {profileUserId && (
+          <UserProfilePopup
+            userId={profileUserId}
+            currentUserId={userId}
+            onClose={() => setProfileUserId(null)}
+          />
+        )}
 
       </section>
 

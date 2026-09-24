@@ -80,16 +80,20 @@ export function UserProfilePopup({ userId, currentUserId, onClose }: UserProfile
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[120] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
       role="presentation"
     >
+      {/* Bottom sheet: the live stream stays visible behind/above this, the
+          sheet itself rises from the bottom to 70% of the viewport height. */}
       <div
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className="relative flex h-[520px] w-full max-w-[380px] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#150f26] shadow-[0_24px_80px_rgba(0,0,0,0.65)] animate-in fade-in zoom-in-95 duration-200"
+        className="relative flex h-[70dvh] w-full max-w-[520px] flex-col overflow-hidden rounded-t-[28px] border border-b-0 border-white/10 bg-[#150f26] shadow-[0_-24px_80px_rgba(0,0,0,0.65)] animate-in slide-in-from-bottom duration-300 ease-out"
       >
+        <div className="absolute left-1/2 top-2.5 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-white/20" />
+
         {view === "profile" ? (
           <ProfileView
             loading={loading}
