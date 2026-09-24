@@ -27,8 +27,25 @@ function logMediaProviderStatus() {
 }
 
 export async function bootstrap() {
+  // Redis is a cache/lock layer, not a hard dependency — getOrSetCache and
+  // the cache helpers all fail safe without it. The server must still start
+  // and accept requests (with CORS headers!) even if Redis is unreachable
+  // at boot; otherwise a Redis outage takes the entire API down, the
+  // reverse proxy in front of it has nothing to forward to, and every
+  // request comes back as a bare 502 with no CORS headers — which shows up
+  // in the browser as a misleading "CORS policy" error instead of the real
+  // cause. So connectRedis() is attempted but never allowed to block or
+  // kill startup; it keeps retrying in the background via its own
+  // reconnectStrategy.
+  connectRedis().catch((error) => {
+    console.error(
+      "[startup] Redis did not connect — continuing without it " +
+        "(caching/locks disabled until it recovers):",
+      error,
+    );
+  });
+
   try {
-    await connectRedis();
     logMediaProviderStatus();
     startPkFinalizer();
     startQuizFinalizer();

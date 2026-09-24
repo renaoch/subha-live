@@ -165,46 +165,42 @@ router.get("/redis", async (_req, res) => {
 });
 
 // Readiness Check
+//
+// Only Supabase (the database) is a hard dependency — every request needs
+// it. Redis is a cache/lock layer that the app now degrades gracefully
+// without (see getOrSetCache in lib/redis.ts), so it's reported here for
+// visibility but never fails readiness on its own. Previously this endpoint
+// went "not_ready" on any Redis hiccup; if the hosting platform uses this
+// as a readiness probe, that pulled an otherwise-healthy instance out of
+// rotation, leaving the reverse proxy with nothing to forward requests to —
+// which surfaces to the browser as a misleading CORS error on a plain 502.
 router.get("/ready", async (_req, res) => {
   const startTime = performance.now();
 
-  try {
-    await redisHealth();
+  const [dbResult, redisResult] = await Promise.allSettled([
+    supabase.from("profiles").select("id").limit(1),
+    redisHealth(),
+  ]);
 
-    const responseTime = Math.round(performance.now() - startTime);
+  const responseTime = Math.round(performance.now() - startTime);
+  const dbHealthy = dbResult.status === "fulfilled" && !dbResult.value.error;
+  const redisHealthy = redisResult.status === "fulfilled";
 
-    return res.status(200).json({
-      status: "ready",
+  const body = {
+    status: dbHealthy ? "ready" : "not_ready",
+    checks: {
+      database: { status: dbHealthy ? "healthy" : "unhealthy" },
+      redis: { status: redisHealthy ? "healthy" : "degraded" },
+    },
+    responseTime: `${responseTime}ms`,
+    timestamp: new Date().toISOString(),
+  };
 
-      checks: {
-        redis: {
-          status: "healthy",
-          responseTime: `${responseTime}ms`,
-        },
-      },
-
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    const responseTime = Math.round(performance.now() - startTime);
-
-    console.error("[health/ready] Redis readiness check failed:", error);
-
-    return res.status(503).json({
-      status: "not_ready",
-
-      checks: {
-        redis: {
-          status: "unhealthy",
-          responseTime: `${responseTime}ms`,
-        },
-      },
-
-      timestamp: new Date().toISOString(),
-
-      error: error instanceof Error ? error.message : String(error),
-    });
+  if (!redisHealthy) {
+    console.warn("[health/ready] Redis unhealthy — continuing without it:", redisResult.status === "rejected" ? redisResult.reason : undefined);
   }
+
+  return res.status(dbHealthy ? 200 : 503).json(body);
 });
 
 export default router;
