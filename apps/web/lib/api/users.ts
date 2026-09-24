@@ -43,6 +43,21 @@ interface FollowStatusResponse {
   following?: boolean;
 }
 
+/**
+ * Fired right after a follow/unfollow succeeds so any mounted profile
+ * page (own or the other user's) can refetch and show live counts
+ * instead of waiting for a full remount.
+ */
+export const FOLLOW_CHANGED_EVENT = "subha:follow-changed";
+
+function emitFollowChanged(userId: string) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(FOLLOW_CHANGED_EVENT, { detail: { userId } }),
+    );
+  }
+}
+
 export const usersApi = {
   async me(): Promise<PrivateProfile> {
     const response = await apiFetch<PrivateProfileResponse>(
@@ -111,21 +126,25 @@ export const usersApi = {
   },
 
   async follow(id: string) {
-    return apiFetch(
+    const result = await apiFetch(
       `/api/v1/users/${encodeURIComponent(id)}/follow`,
       {
         method: "POST",
       },
     );
+    emitFollowChanged(id);
+    return result;
   },
 
   async unfollow(id: string) {
-    return apiFetch(
+    const result = await apiFetch(
       `/api/v1/users/${encodeURIComponent(id)}/follow`,
       {
         method: "DELETE",
       },
     );
+    emitFollowChanged(id);
+    return result;
   },
 };
 

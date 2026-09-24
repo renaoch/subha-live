@@ -63,6 +63,17 @@ const PRIVATE_PROFILE_FIELDS = `
 `;
 const PROFILE_CACHE_TTL_SECONDS = 20;
 const profileCacheKey = (userId: UserId) => `profile:me:${userId}`;
+
+/**
+ * Bust the cached `/users/me` response for a user so the very next
+ * request sees fresh counters (followers/following/friends) instead of
+ * waiting out the 20s TTL. Call this anywhere a follow relationship
+ * changes for either side of it.
+ */
+export function invalidateProfileCache(userId: UserId): Promise<void> {
+  return cacheDel(profileCacheKey(userId));
+}
+
 // Public profile fields
 // Safe profile information that can be viewed by other users.
 

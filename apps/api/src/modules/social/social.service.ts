@@ -2,6 +2,7 @@ import { supabase } from "../../lib/supabase";
 import { encodeCursor, decodeCursor } from "../../lib/cursor";
 import type { Database } from "../../types/database.types";
 import { AppError } from "../../errors/app-error";
+import { invalidateProfileCache } from "../users/users.service";
 
 type UserId =
   Database["public"]["Tables"]["profiles"]["Row"]["id"];
@@ -115,6 +116,14 @@ export async function followUser(
     bumpProfileCounter(followingId, "followers", 1),
   ]);
 
+  // Both sides' cached /users/me response is now stale (follower and,
+  // if they're mutuals, both friend_counts too) — bust it immediately
+  // instead of leaving it stale for the cache TTL.
+  await Promise.all([
+    invalidateProfileCache(followerId),
+    invalidateProfileCache(followingId),
+  ]);
+
   return data;
 }
 
@@ -166,6 +175,11 @@ export async function unfollowUser(
   await Promise.all([
     bumpProfileCounter(followerId, "following", -1),
     bumpProfileCounter(followingId, "followers", -1),
+  ]);
+
+  await Promise.all([
+    invalidateProfileCache(followerId),
+    invalidateProfileCache(followingId),
   ]);
 
   return data;

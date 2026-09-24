@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { usersApi } from "@/lib/api/users";
+import { usersApi, FOLLOW_CHANGED_EVENT } from "@/lib/api/users";
 import type { PrivateProfile } from "@/lib/types";
 
 import { ProfileHero } from "./profile-hero";
@@ -56,6 +56,30 @@ export function ProfilePage() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  // Following/followers/friends counts change the moment you follow or
+  // unfollow someone anywhere in the app — refetch quietly (no loading
+  // flash) so they update here in real time instead of only on remount.
+  useEffect(() => {
+    let cancelled = false;
+
+    function refetchQuietly() {
+      usersApi
+        .me()
+        .then((user) => {
+          if (!cancelled) setProfile(user);
+        })
+        .catch(() => {
+          // Keep showing the last known-good profile on a transient failure.
+        });
+    }
+
+    window.addEventListener(FOLLOW_CHANGED_EVENT, refetchQuietly);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(FOLLOW_CHANGED_EVENT, refetchQuietly);
     };
   }, []);
 
