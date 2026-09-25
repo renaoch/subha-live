@@ -99,43 +99,45 @@ export function SubhaLuckyGame({ roomId, onClose }: SubhaLuckyGameProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-[#0d0710]">
-      {/* Premium backdrop */}
+    <div className="fixed inset-0 z-[70] flex flex-col bg-[#1c0506]">
+      {/* Premium red/gold backdrop, matching the Lucky Pro cabinet look */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(120% 60% at 50% -10%, rgba(168,85,247,0.22), transparent 60%), radial-gradient(90% 50% at 100% 100%, rgba(245,185,63,0.12), transparent 60%), linear-gradient(180deg, #1a0f24 0%, #0d0710 100%)",
+            "radial-gradient(120% 60% at 50% -10%, rgba(245,185,63,0.16), transparent 60%), radial-gradient(90% 50% at 100% 100%, rgba(180,20,30,0.25), transparent 60%), linear-gradient(180deg, #2a0709 0%, #150304 100%)",
         }}
       />
 
       <div className="relative mx-auto flex h-full w-full max-w-[430px] flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
-        {/* Header */}
+        {/* Header — round corner icon buttons like the reference cabinet */}
         <header className="flex items-center justify-between pt-[calc(env(safe-area-inset-top)+12px)]">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F5B93F]/15 ring-1 ring-[#F5B93F]/30">
-              <Sparkles className="h-4 w-4 text-[#F5B93F]" />
-            </span>
-            <div className="leading-none">
-              <p className="text-[11px] font-semibold tracking-[0.2em] text-[#F5B93F]/80">SUBHA</p>
-              <h1 className="grad-gold-text text-xl font-black tracking-tight">Lucky</h1>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSoundOn((v) => !v)}
+              aria-label={soundOn ? "Mute sound" : "Enable sound"}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F5B93F]/30 bg-black/30 text-[#F5B93F]/90 transition hover:bg-black/50 active:scale-95"
+            >
+              {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+          </div>
+
+          {/* Ribbon banner title, centered */}
+          <div className="relative flex items-center justify-center">
+            <div className="grad-brand rounded-full px-6 py-1 shadow-[0_6px_18px_-4px_rgba(245,120,30,0.7)]">
+              <h1 className="text-lg font-black italic tracking-wide text-black drop-shadow-[0_1px_0_rgba(255,255,255,0.3)]">
+                lucky pro
+              </h1>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => setSoundOn((v) => !v)}
-              aria-label={soundOn ? "Mute sound" : "Enable sound"}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/80 transition hover:bg-white/15 active:scale-95"
-            >
-              {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-            </button>
-            <button
-              type="button"
               onClick={() => setRulesOpen(true)}
               aria-label="Rules and help"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/80 transition hover:bg-white/15 active:scale-95"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F5B93F]/30 bg-black/30 text-[#F5B93F]/90 transition hover:bg-black/50 active:scale-95"
             >
               <HelpCircle className="h-4 w-4" />
             </button>
@@ -143,7 +145,7 @@ export function SubhaLuckyGame({ roomId, onClose }: SubhaLuckyGameProps) {
               type="button"
               onClick={onClose}
               aria-label="Close game"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/80 transition hover:bg-white/15 active:scale-95"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F5B93F]/30 bg-black/30 text-[#F5B93F]/90 transition hover:bg-black/50 active:scale-95"
             >
               <X className="h-4 w-4" />
             </button>
@@ -152,12 +154,12 @@ export function SubhaLuckyGame({ roomId, onClose }: SubhaLuckyGameProps) {
 
         {/* Stats */}
         <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-white/45">Balance</p>
+          <div className="flex-1 rounded-2xl border border-[#F5B93F]/25 bg-black/25 px-3 py-2">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-[#F5B93F]/60">Balance</p>
             <p className="mt-0.5 text-lg font-bold text-white">{balance === null ? "—" : formatCompact(balance)}</p>
           </div>
-          <div className="flex-1 rounded-2xl border border-[#F5B93F]/20 bg-[#F5B93F]/[0.06] px-3 py-2">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-[#F5B93F]/70">Today&apos;s winnings</p>
+          <div className="flex-1 rounded-2xl border border-[#F5B93F]/25 bg-black/25 px-3 py-2">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-[#F5B93F]/60">Today&apos;s winnings</p>
             <p className="mt-0.5 text-lg font-bold text-[#F5B93F]">{formatCompact(todayWinnings)}</p>
           </div>
         </div>
@@ -208,9 +210,8 @@ export function SubhaLuckyGame({ roomId, onClose }: SubhaLuckyGameProps) {
           )}
         </div>
 
-        {/* Bet selector */}
+        {/* Bet selector — round coin-style chips like the reference cabinet */}
         <div className="mt-3">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-white/45">Bet amount</p>
           <div className="grid grid-cols-4 gap-2">
             {bets.map((bet) => {
               const active = bet === selectedBet;
@@ -223,11 +224,11 @@ export function SubhaLuckyGame({ roomId, onClose }: SubhaLuckyGameProps) {
                   onClick={() => setSelectedBet(bet)}
                   aria-pressed={active}
                   className={cn(
-                    "rounded-xl border px-1 py-2.5 text-center text-sm font-bold transition active:scale-95 disabled:opacity-50",
+                    "flex flex-col items-center gap-1 rounded-full border-2 py-2 text-center text-xs font-black transition active:scale-95 disabled:opacity-50",
                     active
-                      ? "border-[#F5B93F] bg-[#F5B93F]/15 text-[#F5B93F] shadow-[0_0_16px_rgba(245,185,63,0.25)]"
-                      : "border-white/10 bg-white/[0.04] text-white/80 hover:bg-white/10",
-                    !affordable && "text-white/35",
+                      ? "border-[#F5B93F] bg-gradient-to-b from-[#7c4dff] to-[#5a2be0] text-white shadow-[0_0_16px_rgba(124,77,255,0.5)]"
+                      : "border-[#F5B93F]/50 bg-gradient-to-b from-[#F5B93F] to-[#c98a1f] text-black hover:brightness-110",
+                    !affordable && "opacity-60",
                   )}
                 >
                   {formatCompact(bet)}

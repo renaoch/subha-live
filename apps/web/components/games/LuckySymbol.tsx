@@ -5,6 +5,7 @@
 // keyed by the server-provided symbol id. `size` controls the rendered box;
 // the artwork scales to fill it.
 
+import type { ReactElement, ReactNode } from "react";
 import type { LuckySymbolId } from "@/lib/api/lucky";
 
 interface LuckySymbolProps {
@@ -21,7 +22,7 @@ function Svg({
 }: {
   size: number;
   className?: string;
-  children: React.ReactNode;
+  children: ReactNode;
   viewBox?: string;
 }) {
   return (
@@ -204,7 +205,7 @@ function Lucky() {
   );
 }
 
-const RENDERERS: Record<LuckySymbolId, () => React.ReactElement> = {
+const RENDERERS: Record<LuckySymbolId, () => ReactElement> = {
   orange: Orange,
   lemon: Lemon,
   grapes: Grapes,

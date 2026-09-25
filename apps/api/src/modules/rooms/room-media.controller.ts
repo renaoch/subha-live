@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../../errors/app-error";
 import { roomMediaService } from "./room-media.service";
-import { roomStageService } from "./room-state.service";
+import { roomStageService } from "./room-stage.service";
 
 function getTracks(value: unknown) {
   if (!Array.isArray(value)) return [];

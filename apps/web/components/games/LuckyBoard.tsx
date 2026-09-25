@@ -88,32 +88,56 @@ export function LuckyBoard({ config, spinning, revealing, result, onRevealed }: 
     return set;
   }, [result]);
 
+  // Center cell (index 4) is styled as the "counter" readout, echoing the
+  // classic ring-style lucky board — the perimeter (0,1,2,3,5,6,7,8) reads as
+  // the 8 outer positions, same as every payline symbol still in play.
+  const multiplierById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of symbols) map.set(s.id, s.id === "lucky" ? undefined! : s.multiplier);
+    return map;
+  }, [symbols]);
+
   const cells = Array.from({ length: 9 }, (_, i) => {
     const settled = revealing && finalSymbols && i < revealed;
     const symbolId = settled
       ? finalSymbols![i]
       : symbols[(tick + i) % symbols.length].id;
     const isWinning = settled && winningCells.has(i);
+    const isCenter = i === 4;
+    const mult = multiplierById.get(symbolId);
 
     return (
       <div
         key={i}
         className={cn(
-          "relative flex items-center justify-center rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-black/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-200",
-          isWinning && "border-[#F5B93F]/70 bg-[#F5B93F]/10 shadow-[0_0_18px_rgba(245,185,63,0.35)]",
+          "relative flex flex-col items-center justify-center gap-0.5 rounded-xl border transition-colors duration-200",
+          isCenter
+            ? "border-[#F5B93F]/50 bg-gradient-to-b from-[#3a0d10] to-[#1c0506] shadow-[inset_0_0_0_1px_rgba(245,185,63,0.25)]"
+            : "border-[#F5B93F]/20 bg-gradient-to-b from-[#4a1216]/80 to-[#1c0708] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
+          isWinning && "border-[#F5B93F] bg-[#F5B93F]/15 shadow-[0_0_18px_rgba(245,185,63,0.45)]",
         )}
         style={{ aspectRatio: "1 / 1" }}
       >
         <LuckySymbol
           id={symbolId}
-          size={52}
+          size={isCenter ? 40 : 44}
           className={cn(
             "drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]",
             isWinning && "animate-[pop-in_0.3s_ease-out]",
           )}
         />
+        {!isCenter && mult ? (
+          <span
+            className={cn(
+              "text-[9px] font-bold leading-none",
+              isWinning ? "text-[#FFE08A]" : "text-[#F5B93F]/70",
+            )}
+          >
+            {mult} times
+          </span>
+        ) : null}
         {isWinning && (
-          <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-[#F5B93F]/50" />
+          <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-[#F5B93F]/60" />
         )}
       </div>
     );
@@ -121,8 +145,8 @@ export function LuckyBoard({ config, spinning, revealing, result, onRevealed }: 
 
   return (
     <div className="relative">
-      {/* Premium gold/dark frame */}
-      <div className="rounded-[22px] border border-[#F5B93F]/25 bg-gradient-to-b from-[#2a1b2e] via-[#1a1120] to-[#120b16] p-2.5 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.8),inset_0_0_0_1px_rgba(245,185,63,0.08)]">
+      {/* Ornate red/gold "Lucky Pro" style frame */}
+      <div className="rounded-[22px] border-2 border-[#F5B93F]/60 bg-gradient-to-b from-[#5a1418] via-[#38090c] to-[#1c0506] p-2.5 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.85),inset_0_0_0_1px_rgba(245,185,63,0.15)]">
         <div className="grid grid-cols-3 gap-2">{cells}</div>
       </div>
     </div>
