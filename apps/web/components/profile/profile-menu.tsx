@@ -81,7 +81,7 @@ export function ProfileMenu() {
     >
       <ul className="grid grid-cols-4 gap-x-2 gap-y-6">
         {filteredItems.map(
-          ({ id, label, href, Icon }) => (
+          ({ id, label, href, Icon, subtitle }) => (
             <li key={id}>
               <Link
                 href={href}
@@ -94,6 +94,12 @@ export function ProfileMenu() {
                 <span className="max-w-[76px] text-[11px] font-medium leading-4 text-[#D9D2E0]">
                   {label}
                 </span>
+
+                {subtitle && (
+                  <span className="max-w-[76px] rounded-md bg-[#CBA35C]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide leading-none text-[#CBA35C]">
+                    {subtitle}
+                  </span>
+                )}
               </Link>
             </li>
           ),

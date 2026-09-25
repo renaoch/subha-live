@@ -23,6 +23,7 @@ import hostTaskRoutes from "./modules/host-task/host-task.routes";
 import pkRoutes from "./modules/pk/pk.routes";
 import quizRoutes from "./modules/quiz/quiz.routes";
 import luckyRoutes from "./modules/lucky/lucky.routes";
+import tradingRoutes from "./modules/trading/trading.routes";
 import messagesRoutes from "./modules/messages/messages.routes";
 import financialRoutes from "./modules/financial/financial.routes";
 import binanceRoutes from "./modules/binance/binance.routes";
@@ -80,6 +81,7 @@ import binanceRoutes from "./modules/binance/binance.routes";
     app.use("/api/v1", pkRoutes);
     app.use("/api/v1", quizRoutes);
     app.use("/api/v1", luckyRoutes);
+    app.use("/api/v1", tradingRoutes);
     app.use("/api/v1", messagesRoutes);
     app.use(
   "/api/v1/media/test",

@@ -4,13 +4,21 @@ import {
   GameIcon,
   StoreIcon,
   InviteIcon,
-  MedalIcon,
   HeartIcon,
   ShieldIcon,
   HeadsetIcon,
 } from "@/components/icons";
 
-export const profileMenuItems = [
+export interface ProfileMenuItem {
+  id: string;
+  label: string;
+  href: string;
+  Icon: (props: { className?: string; style?: React.CSSProperties }) => React.JSX.Element;
+  /** Optional secondary label, e.g. the "Agency Operations" tag on BD Center. */
+  subtitle?: string;
+}
+
+export const profileMenuItems: ProfileMenuItem[] = [
   {
     id: "level",
     label: "Level",
@@ -52,6 +60,7 @@ export const profileMenuItems = [
     label: "BD Center",
     href: "/bd-center",
     Icon: HeadsetIcon,
+    subtitle: "Agency Operations",
   },
   {
     id: "agency-center",
@@ -77,4 +86,4 @@ export const profileMenuItems = [
     href: "/admin/bd-applications",
     Icon: ShieldIcon,
   },
-] as const;
+];
