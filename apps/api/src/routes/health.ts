@@ -120,10 +120,21 @@ function publicHealthError(error: unknown): string {
  * The Redis/Supabase clients should still have their own network timeouts.
  */
 function withTimeout<T>(
-  promise: Promise<T>,
+  promise: PromiseLike<T>,
   timeoutMs: number,
   dependency: string
 ): Promise<T> {
+  /*
+   * Supabase's query builders (e.g. PostgrestFilterBuilder) are
+   * "thenable" but are not real Promise instances -- they don't
+   * implement catch/finally/Symbol.toStringTag. Wrapping with
+   * Promise.resolve() normalizes them into a genuine Promise<T>
+   * so the rest of this function (and callers) can rely on the
+   * standard Promise API and get a properly typed result instead
+   * of `unknown`.
+   */
+  const normalizedPromise = Promise.resolve(promise);
+
   return new Promise<T>((resolve, reject) => {
     let settled = false;
 
@@ -146,7 +157,7 @@ function withTimeout<T>(
      */
     timer.unref?.();
 
-    promise.then(
+    normalizedPromise.then(
       (value) => {
         if (settled) {
           return;
