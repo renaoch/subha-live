@@ -7,7 +7,7 @@ import { mediaConfig } from "../../config/media.config";
 import { CloudflareRealtimeError } from "../../lib/media/cloudflare/cloudflare.errors";
 import { redis } from "../../lib/redis";
 import { mediaKeys } from "../media/media.state";
-import { roomStageService } from "./room-state.service";
+import { roomStageService } from "./room-stage.service";
 import type {
   MediaSession,
   MediaTrack,
