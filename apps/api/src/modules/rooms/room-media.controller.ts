@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../../errors/app-error";
 import { roomMediaService } from "./room-media.service";
+import { roomStageService } from "./room-state.service";
 
 function getTracks(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -155,11 +156,13 @@ export async function createViewerSession(
 
     const offerSdp = typeof req.body?.offerSdp === "string" ? req.body.offerSdp : "";
     const preview = req.body?.preview === true;
+    const mode = req.body?.mode === "stage" ? "stage" : "listener";
     const result = await roomMediaService.createViewerSession(
       req.params.id,
       req.user.id,
       offerSdp,
       preview,
+      mode,
     );
 
     res.status(201).json({ success: true, data: result });
@@ -246,6 +249,70 @@ export async function mediaHeartbeat(
     );
 
     res.json({ success: true, data: { heartbeatAt: Date.now() } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getStage(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.user) throw new AppError(401, "Authentication required", {
+      code: "AUTHENTICATION_REQUIRED",
+    });
+
+    const revRaw = req.query.rev;
+    const rev =
+      typeof revRaw === "string" && revRaw.trim() ? Number(revRaw) : undefined;
+
+    const data = await roomStageService.getStage(
+      req.params.id,
+      req.user.id,
+      Number.isFinite(rev) ? rev : undefined,
+    );
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function reportStage(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.user) throw new AppError(401, "Authentication required", {
+      code: "AUTHENTICATION_REQUIRED",
+    });
+
+    await roomStageService.report(req.params.id, req.user.id, {
+      speaking: typeof req.body?.speaking === "boolean" ? req.body.speaking : undefined,
+      muted: typeof req.body?.muted === "boolean" ? req.body.muted : undefined,
+    });
+
+    res.json({ success: true, data: null });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function leaveSeat(
+  req: Request<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.user) throw new AppError(401, "Authentication required", {
+      code: "AUTHENTICATION_REQUIRED",
+    });
+
+    await roomStageService.evictSpeaker(req.params.id, req.user.id);
+    res.json({ success: true, data: null });
   } catch (error) {
     next(error);
   }

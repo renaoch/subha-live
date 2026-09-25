@@ -5,6 +5,9 @@ import { roomState } from "./room-state.service";
 import { roomService } from "./room.service";
 import { mediaConfig } from "../../config/media.config";
 import { CloudflareRealtimeError } from "../../lib/media/cloudflare/cloudflare.errors";
+import { redis } from "../../lib/redis";
+import { mediaKeys } from "../media/media.state";
+import { roomStageService } from "./room-state.service";
 import type {
   MediaSession,
   MediaTrack,
@@ -132,9 +135,11 @@ export const roomMediaService = {
   async getState(
     roomId: string,
   ) {
-    const state = await mediaService.getRoomState(
+    let state = await mediaService.getRoomState(
       roomId,
     );
+
+    state = await reapDeadSpeakers(roomId, state);
 
     return applyHostReconnectGrace(roomId, state);
   },
@@ -174,17 +179,34 @@ export const roomMediaService = {
       );
     }
 
-    const audioTrack =
-      requireTrack(
-        tracks,
-        "audio",
-      );
+    const isAudioRoom = room.media_type === "audio";
 
-    const videoTrack =
-      requireTrack(
-        tracks,
-        "video",
-      );
+    /*
+     * Video rooms publish camera + mic. Audio (party) rooms never have a
+     * camera, so they publish the raw mic (heard by people on stage) and,
+     * optionally, the host's pre-mixed audience feed (role "mix", see
+     * useAudioRoom) that plain listeners subscribe to instead of one
+     * track per speaker.
+     */
+    const audioTrack = isAudioRoom
+      ? (tracks.find(
+          (track) => track.kind === "audio" && track.role !== "mix",
+        ) ?? requireTrack(tracks, "audio"))
+      : requireTrack(tracks, "audio");
+
+    const mixTrack = isAudioRoom
+      ? tracks.find((track) => track.kind === "audio" && track.role === "mix")
+      : undefined;
+
+    const videoTrack = isAudioRoom
+      ? undefined
+      : requireTrack(tracks, "video");
+
+    const publishList: MediaTrack[] = isAudioRoom
+      ? mixTrack
+        ? [audioTrack, mixTrack]
+        : [audioTrack]
+      : [audioTrack, videoTrack as MediaTrack];
 
     const state =
       await mediaService.getRoomState(
@@ -246,8 +268,9 @@ export const roomMediaService = {
 
         await mediaService.saveHostSession(
           session,
-          videoTrack.trackName,
+          videoTrack?.trackName ?? "",
           audioTrack.trackName,
+          mixTrack?.trackName,
         );
       } else {
         session = {
@@ -265,7 +288,7 @@ export const roomMediaService = {
       const negotiation = await provider.publishTracks({
         sessionId: session.sessionId,
         offerSdp,
-        tracks: [audioTrack, videoTrack],
+        tracks: publishList,
       });
 
       if (!negotiation.answerSdp) {
@@ -284,8 +307,9 @@ export const roomMediaService = {
 
       await mediaService.saveHostSession(
         connectedSession,
-        videoTrack.trackName,
+        videoTrack?.trackName ?? "",
         audioTrack.trackName,
+        mixTrack?.trackName,
       );
 
       await mediaService.setRoomStatus(roomId, "live");
@@ -807,6 +831,15 @@ async subscribeHostToGuests(
     roomId: string,
     userId: string,
   ): Promise<void> {
+    const roomType = await roomStageService.getMediaType(roomId);
+
+    if (roomType === "audio") {
+      // Leaving a seat / a failed publish: same full teardown as a host
+      // kick (SFU sessions, seat, approval, participant role).
+      await roomStageService.evictSpeaker(roomId, userId);
+      return;
+    }
+
     const state =
       await mediaService.getRoomState(
         roomId,
@@ -851,13 +884,32 @@ async subscribeHostToGuests(
     userId: string,
     offerSdp: string,
     preview = false,
+    mode: "listener" | "stage" = "listener",
   ) {
+    /*
+     * Audio party rooms have their own, much lighter join path (no video
+     * track, no per-viewer state scan, single mixed track for listeners).
+     */
+    const cachedRoom = await roomStageService.getRoomLive(roomId);
+
+    if (cachedRoom.media_type === "audio") {
+      return createAudioViewerSession(
+        cachedRoom,
+        userId,
+        offerSdp,
+        preview,
+        mode,
+      );
+    }
+
     /*
      * Fetch the room status immediately before creating the
      * Cloudflare viewer session.
      */
     const room =
-      await getRoom(roomId);
+      await getRoom(
+        roomId
+      );
 
     if (
       room.host_id === userId
@@ -1424,6 +1476,18 @@ async subscribeHostToGuests(
     roomId: string,
     userId: string,
   ) {
+    const listenerSessionId = await roomStageService.getListenerSession(
+      roomId,
+      userId,
+    );
+
+    if (listenerSessionId) {
+      const listenerProvider = await mediaService.getProvider();
+      await listenerProvider.closeSession(listenerSessionId).catch(() => {});
+      await roomStageService.removeListener(roomId, userId);
+      return;
+    }
+
     const state =
       await mediaService.getRoomState(
         roomId,
@@ -1656,6 +1720,12 @@ async subscribeHostToGuests(
     await roomState.clear(
       roomId,
     );
+
+    // Listener sessions are deliberately NOT closed one by one (that would
+    // be thousands of provider calls at the moment the room ends). Their
+    // clients see status "ended" on the next stage poll and close their own
+    // peer connection; the SFU also reaps idle sessions on its own.
+    await roomStageService.clearRoom(roomId);
   },
 };
 
@@ -1712,4 +1782,284 @@ async function applyHostReconnectGrace(
       reconnectDeadline: deadline,
     },
   };
+}
+
+/* ==========================================================================
+ * AUDIO PARTY ROOM HELPERS
+ * ======================================================================== */
+
+/**
+ * Bounded concurrency for audio joins. A popular host can send thousands of
+ * people into a room within seconds; every join makes two provider calls
+ * (create session + pull tracks). Letting all of them run at once would
+ * saturate this process' sockets and trip provider-side limits, so joins are
+ * admitted through a small semaphore and anything beyond the queue limit is
+ * told to retry shortly (the client retries with jitter).
+ */
+const JOIN_MAX_CONCURRENT = 48;
+const JOIN_MAX_QUEUE = 1500;
+let joinActive = 0;
+const joinQueue: Array<() => void> = [];
+
+async function withJoinSlot<T>(task: () => Promise<T>): Promise<T> {
+  if (joinActive >= JOIN_MAX_CONCURRENT) {
+    if (joinQueue.length >= JOIN_MAX_QUEUE) {
+      throw new AppError(503, "The party is very busy. Retrying…", {
+        code: "MEDIA_JOIN_BUSY",
+      });
+    }
+    await new Promise<void>((resolve) => joinQueue.push(resolve));
+  } else {
+    joinActive += 1;
+  }
+
+  try {
+    return await task();
+  } finally {
+    const next = joinQueue.shift();
+    if (next) {
+      next(); // hand the slot straight to the next waiter
+    } else {
+      joinActive -= 1;
+    }
+  }
+}
+
+async function createAudioViewerSession(
+  room: { id: string; host_id: string; media_type: string },
+  userId: string,
+  offerSdp: string,
+  preview: boolean,
+  mode: "listener" | "stage",
+) {
+  const roomId = room.id;
+
+  if (room.host_id === userId) {
+    throw new AppError(409, "Host cannot join as a viewer", {
+      code: "HOST_CANNOT_BE_VIEWER",
+    });
+  }
+
+  if (preview) {
+    // Feed previews are a video-card feature; an audio room has nothing to
+    // show and must not spend an SFU session on it.
+    throw new AppError(409, "Audio rooms have no preview", {
+      code: "MEDIA_PREVIEW_UNSUPPORTED",
+    });
+  }
+
+  if (!stringValue(offerSdp)) {
+    throw new AppError(400, "offerSdp is required", {
+      code: "MEDIA_SDP_OFFER_REQUIRED",
+    });
+  }
+
+  const hostRaw = await redis.hget(mediaKeys.media(roomId), "host");
+  let host: {
+    userId: string;
+    sessionId: string;
+    status: string;
+    audioTrackName: string;
+    mixTrackName?: string;
+  } | null = null;
+  try {
+    host = typeof hostRaw === "string" ? JSON.parse(hostRaw) : null;
+  } catch {
+    host = null;
+  }
+
+  if (!host || host.status !== "connected") {
+    throw new AppError(409, "Host media is not available yet", {
+      code: "MEDIA_HOST_NOT_PUBLISHED",
+    });
+  }
+
+  const provider = await mediaService.getProvider();
+  const generation = await mediaService.getGeneration(roomId);
+
+  const tracks: RemoteMediaTrack[] = [];
+
+  if (mode === "stage") {
+    /*
+     * A seated speaker must not hear the host's pre-mix (it contains their
+     * own voice, delayed). They listen to the raw host mic plus every OTHER
+     * speaker's raw mic instead - at most 10 tracks, never scales with the
+     * audience.
+     */
+    const seated = await roomState.isSpeaker(roomId, userId);
+    if (!seated) {
+      throw new AppError(403, "You are not on stage", {
+        code: "ROOM_SPEAKER_NOT_APPROVED",
+      });
+    }
+
+    tracks.push({
+      sessionId: host.sessionId,
+      trackName: host.audioTrackName,
+    });
+
+    const speakerEntries = (await redis.hgetall(
+      mediaKeys.speakers(roomId),
+    )) as Record<string, string>;
+
+    for (const [speakerId, raw] of Object.entries(speakerEntries ?? {})) {
+      if (speakerId === userId) continue;
+      try {
+        const speaker = JSON.parse(raw) as {
+          sessionId: string;
+          audioTrackName: string;
+          status: string;
+        };
+        if (speaker.status !== "connected") continue;
+        tracks.push({
+          sessionId: speaker.sessionId,
+          trackName: speaker.audioTrackName,
+        });
+      } catch {
+        // Skip malformed entry.
+      }
+    }
+  } else {
+    // Listener: ONE track, the host's pre-mixed room audio. Falls back to
+    // the raw mic if the host's browser could not build a mix.
+    tracks.push({
+      sessionId: host.sessionId,
+      trackName: host.mixTrackName || host.audioTrackName,
+    });
+  }
+
+  return withJoinSlot(async () => {
+    // Drop any previous session this person still has open (reconnect,
+    // second tab) so it can't leak SFU egress.
+    const previousListener = await roomStageService.getListenerSession(
+      roomId,
+      userId,
+    );
+    if (previousListener) {
+      provider.closeSession(previousListener).catch(() => {});
+    }
+    if (mode === "stage") {
+      const previousViewer = await mediaService.getViewer(roomId, userId);
+      if (previousViewer?.sessionId) {
+        provider.closeSession(previousViewer.sessionId).catch(() => {});
+      }
+    }
+
+    let session: MediaSession | null = null;
+
+    const subscribe = async () => {
+      const created = await provider.createSessionOnly({
+        roomId,
+        userId,
+        role: "viewer",
+        generation,
+      });
+      session = created.session;
+      return provider.subscribeTracks({
+        sessionId: created.session.sessionId,
+        offerSdp,
+        tracks,
+      });
+    };
+
+    let negotiation: Awaited<ReturnType<typeof provider.subscribeTracks>>;
+
+    try {
+      try {
+        negotiation = await subscribe();
+      } catch (error) {
+        if (!isStaleSessionError(error)) throw error;
+
+        // A 410 on a session created a moment ago means one of the REMOTE
+        // tracks (host / a speaker) is gone even though Redis still lists
+        // it. Self-heal the stale entries so the client's retry is clean.
+        if (session) {
+          provider
+            .closeSession((session as MediaSession).sessionId)
+            .catch(() => {});
+        }
+        if (mode === "listener") {
+          await redis.hdel(mediaKeys.media(roomId), "host").catch(() => {});
+        }
+        throw new AppError(
+          503,
+          "The live stream session is no longer available. Please try again in a moment.",
+          { code: "MEDIA_HOST_SESSION_STALE" },
+        );
+      }
+
+      if (!negotiation.answerSdp || !session) {
+        throw new AppError(
+          502,
+          "Cloudflare did not return a viewer track negotiation answer",
+          { code: "MEDIA_TRACK_SDP_MISSING" },
+        );
+      }
+
+      const connected: MediaSession = {
+        ...(session as MediaSession),
+        status: "connected",
+        preview: false,
+        lastHeartbeatAt: Date.now(),
+      };
+
+      if (mode === "stage") {
+        await mediaService.saveViewerSession(connected);
+      } else {
+        await roomStageService.saveListenerSession(
+          roomId,
+          userId,
+          connected.sessionId,
+        );
+      }
+
+      return {
+        session: connected,
+        answerSdp: negotiation.answerSdp,
+        offerSdp: negotiation.offerSdp,
+        tracks: negotiation.tracks,
+        requiresRenegotiation: negotiation.requiresRenegotiation,
+      };
+    } catch (error) {
+      if (session) {
+        provider
+          .closeSession((session as MediaSession).sessionId)
+          .catch(() => {});
+      }
+      throw error;
+    }
+  });
+}
+
+/**
+ * Drops speakers whose heartbeat has gone silent (closed tab, lost
+ * network) so their seat doesn't stay taken forever. Only audio rooms:
+ * seats there are a scarce, visible resource.
+ */
+async function reapDeadSpeakers(
+  roomId: string,
+  state: RoomMediaState,
+): Promise<RoomMediaState> {
+  const speakerIds = Object.keys(state.speakers);
+  if (speakerIds.length === 0) return state;
+
+  const dead = speakerIds.filter((id) => {
+    const speaker = state.speakers[id];
+    const beat = speaker.lastHeartbeatAt || speaker.joinedAt || 0;
+    return Date.now() - beat > mediaConfig.session.staleAfterMs * 2;
+  });
+
+  if (dead.length === 0) return state;
+
+  if ((await roomStageService.getMediaType(roomId)) !== "audio") return state;
+
+  await Promise.all(
+    dead.map((id) =>
+      roomStageService.evictSpeaker(roomId, id).catch(() => {}),
+    ),
+  );
+
+  const speakers = { ...state.speakers };
+  for (const id of dead) delete speakers[id];
+  return { ...state, speakers };
 }

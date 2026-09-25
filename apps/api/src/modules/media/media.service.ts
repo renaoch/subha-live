@@ -696,6 +696,7 @@ export function createMediaService(
       session: MediaSession,
       videoTrackName: string,
       audioTrackName: string,
+      mixTrackName?: string,
     ): Promise<void> {
       if (
         session.role !==
@@ -733,6 +734,8 @@ export function createMediaService(
               videoTrackName,
 
               audioTrackName,
+
+              ...(mixTrackName ? { mixTrackName } : {}),
 
               generation:
                 session.generation,
@@ -1157,6 +1160,20 @@ export function createMediaService(
             "Host heartbeat does not match the active media session",
           );
         }
+
+        /*
+         * Persist the beat. Without this the host's lastHeartbeatAt stayed
+         * frozen at publish time, so the read-time reconnect-grace check
+         * (applyHostReconnectGrace) flagged a healthy host as "reconnecting"
+         * after 30s and force-ended the room after 60s.
+         */
+        await redis.hset(mediaKeys.media(roomId), {
+          host: JSON.stringify({
+            ...state.host,
+            lastHeartbeatAt: timestamp,
+          }),
+        });
+
       }
 
       if (
@@ -1180,6 +1197,16 @@ export function createMediaService(
             "Speaker heartbeat does not match the active media session",
           );
         }
+
+        await redis.hset(
+          mediaKeys.speakers(roomId),
+          userId,
+          JSON.stringify({
+            ...speaker,
+            lastHeartbeatAt: timestamp,
+          }),
+        );
+
       }
       if (
         role === "viewer"
@@ -1342,6 +1369,35 @@ export function createMediaService(
         sessionId,
         viewer.generation,
       );
+    },
+
+    /**
+     * Read ONE viewer's stored state without loading the whole audience.
+     * getRoomState() walks every viewer hash (one Redis round trip each),
+     * which is fine for a handful of people and fatal for thousands.
+     */
+    async getViewer(
+      roomId: string,
+      userId: string,
+    ): Promise<RoomMediaState["viewers"][string] | null> {
+      const value = (await redis.hgetall(
+        mediaKeys.viewer(roomId, userId),
+      )) as Record<string, string> | null;
+
+      if (!value || Object.keys(value).length === 0) {
+        return null;
+      }
+
+      return {
+        userId: value.userId ?? userId,
+        sessionId: value.sessionId ?? "",
+        generation: Number(value.generation ?? 0),
+        status: value.status as RoomMediaState["viewers"][string]["status"],
+        joinedAt: Number(value.joinedAt ?? 0),
+        lastHeartbeatAt: Number(value.lastHeartbeatAt ?? 0),
+        lastSequence: Number(value.lastSequence ?? 0),
+        preview: value.preview === "1",
+      };
     },
 
     async getProvider(): Promise<MediaProvider> {

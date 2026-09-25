@@ -154,6 +154,45 @@ export interface MediaViewerResult {
   requiresRenegotiation: boolean;
   alreadySubscribed?: boolean; 
 }
+
+/** One seat on an audio party room's stage. `null` = empty seat. */
+export interface StageSeatResult {
+  seat: number;
+  userId: string;
+  status: "connecting" | "connected" | "reconnecting" | "offline";
+  muted: boolean;
+  speakingAt: number;
+}
+
+export interface StageParticipantResult {
+  userId: string;
+  status: "connecting" | "connected" | "reconnecting" | "offline";
+  muted: boolean;
+  speakingAt: number;
+}
+
+/** Response shape of `GET /rooms/:id/stage` (room-stage.service.ts). */
+export interface StageSnapshotResult {
+  roomId: string;
+  status: string;
+  mediaType: string;
+  rev: number;
+  serverTime: number;
+  seatCount: number;
+  listenerCount: number;
+  requestCount: number;
+  host: StageParticipantResult;
+  seats: Array<StageSeatResult | null>;
+  pollMs: { stage: number; listener: number };
+  /** Only present when the request's `rev` was stale or omitted. */
+  profiles?: Record<string, { name: string; avatar: string | null }>;
+  me: {
+    seat: number | null;
+    isHost: boolean;
+    requestPending: boolean;
+  };
+}
+
 export const roomsApi = {
   list() {
     return apiFetch<RoomEnvelope<RoomRecord[]>>("/api/v1/rooms").then(
@@ -220,14 +259,45 @@ export const roomsApi = {
     ).then((r) => r.data);
   },
 
-  createViewerSession(id: string, offerSdp: string, preview = false) {
+  createViewerSession(
+    id: string,
+    offerSdp: string,
+    preview = false,
+    mode: "listener" | "stage" = "listener",
+  ) {
     return apiFetch<RoomEnvelope<MediaViewerResult>>(
       `/api/v1/rooms/${id}/media/viewer/session`,
       {
         method: "POST",
-        body: JSON.stringify({ offerSdp, preview }),
+        body: JSON.stringify({ offerSdp, preview, mode }),
       },
     ).then((r) => r.data);
+  },
+
+  /**
+   * Audio party-room stage poll: seats, host, listener/request counts.
+   * Also doubles as the listener's presence heartbeat, so plain
+   * listeners never need to call `heartbeat()` separately (see
+   * room-stage.service.ts on the API).
+   */
+  getStage(id: string, knownRev?: number) {
+    const query = knownRev !== undefined ? `?rev=${knownRev}` : "";
+    return apiFetch<RoomEnvelope<StageSnapshotResult>>(
+      `/api/v1/rooms/${id}/stage${query}`,
+    ).then((r) => r.data);
+  },
+
+  reportStage(id: string, input: { speaking?: boolean; muted?: boolean }) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/stage/report`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.data);
+  },
+
+  leaveSeat(id: string) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/stage/seat`, {
+      method: "DELETE",
+    }).then((r) => r.data);
   },
 
   leaveViewer(id: string) {

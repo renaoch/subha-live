@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { pkService } from "../pk/pk.service";
+import { roomMediaService } from "./room-media.service";
 import type { Tables, TablesInsert } from "../../types/database.types";
 
 type Room = Tables<"rooms">;
@@ -296,6 +297,10 @@ export const roomService = {
     // Best-effort: never let a PK cleanup failure stop the room from ending.
     await pkService.endForRoom(roomId).catch(() => {});
 
+    // Close every live SFU session and clear hot state (host/speakers/
+    // stage/listener presence) now, instead of waiting for the reaper.
+    await roomMediaService.shutdownRoom(roomId).catch(() => {});
+
     return data;
   },
 
@@ -323,6 +328,8 @@ export const roomService = {
     if (error || !data) return null;
 
     await pkService.endForRoom(roomId).catch(() => {});
+
+    await roomMediaService.shutdownRoom(roomId).catch(() => {});
 
     return data;
   },

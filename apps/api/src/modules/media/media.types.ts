@@ -102,8 +102,13 @@ export interface MediaTrack {
 
   direction: MediaTrackDirection;
 
-  
   mid?: string;
+
+  /**
+   * Audio party rooms only. "mic" is the raw microphone (heard by people
+   * on stage), "mix" is the host's pre-mixed audience feed.
+   */
+  role?: "mic" | "mix";
 }
 export interface RemoteMediaTrack {
   sessionId: string;
@@ -123,6 +128,9 @@ export interface HostMediaState {
   videoTrackName: string;
 
   audioTrackName: string;
+
+  /** Audio party rooms: the host's pre-mixed audience feed. */
+  mixTrackName?: string;
 
   generation: number;
 

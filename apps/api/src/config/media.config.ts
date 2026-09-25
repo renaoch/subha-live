@@ -9,6 +9,12 @@ export const mediaConfig = {
   audio: {
     channels: 1,
     maxBitrate: 24_000,
+    /**
+     * Bitrate of the single pre-mixed "room mix" track a party host
+     * publishes for the audience (see `stage` below). Mono Opus with DTX
+     * is transparent for speech at 24-32 kbps.
+     */
+    mixMaxBitrate: 32_000,
     dtx: true,
     echoCancellation: true,
     noiseSuppression: true,
@@ -97,6 +103,41 @@ export const mediaConfig = {
     maxGuestSlots: {
       video: 3,
       audio: 10,
+    },
+  },
+
+  /**
+   * Audio "party" room scaling model (10k+ concurrent listeners).
+   *
+   * Only the host and the seated speakers (max 11 people) take part in
+   * the full mesh of raw tracks. Everybody else is a *listener*: they pull
+   * ONE pre-mixed track (published by the host, see useAudioRoom) so the
+   * SFU egress per listener is a constant ~32 kbps no matter how many
+   * people are on stage, and a seat change never forces a renegotiation
+   * on thousands of listener peer connections.
+   *
+   * Listener state is kept O(1)/O(log n) in Redis (a sorted set of
+   * last-seen timestamps + one hash of session ids) and the polled stage
+   * snapshot is cached in-process, so read cost is independent of the
+   * audience size.
+   */
+  stage: {
+    /** A listener counts as present if seen within this window. */
+    listenerTtlMs: 45_000,
+    /** In-process cache lifetime of the shared (non user-specific) snapshot. */
+    snapshotCacheMs: 1_000,
+    /** A "speaking" report is considered live for this long. */
+    speakingTtlMs: 3_000,
+    /** How often the pruner may trim the listener zset per room. */
+    pruneEveryMs: 30_000,
+    /** Suggested client poll intervals, scaled by audience size. */
+    poll: {
+      stageMs: 1_500,
+      listenerSmallMs: 2_500,
+      listenerMediumMs: 4_000,
+      listenerLargeMs: 6_000,
+      mediumAudience: 500,
+      largeAudience: 3_000,
     },
   },
 } as const;

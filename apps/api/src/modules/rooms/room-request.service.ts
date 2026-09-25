@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { roomState } from "./room-state.service";
+import { roomStageService } from "./room-stage.service";
 import { resolveMaxGuestSlots } from "./room-media.service";
 import type {
   Tables,
@@ -376,6 +377,29 @@ export const roomRequestService = {
       });
     }
 
+    if (room.media_type === "audio") {
+      try {
+        await roomStageService.assignSeat(
+          roomId,
+          request.user_id,
+          resolveMaxGuestSlots(room.media_type, room.max_guest_slots),
+        );
+      } catch (seatError) {
+        if (videoAdded) await roomState.removeVideoSpeaker(roomId, request.user_id);
+        await roomState.removeSpeaker(roomId, request.user_id);
+        await supabase
+          .from("room_participants")
+          .update({ role: "audience" })
+          .eq("room_id", roomId)
+          .eq("user_id", request.user_id);
+        await supabase
+          .from("room_join_requests")
+          .update({ status: "pending", responded_at: null })
+          .eq("id", request.id);
+        throw seatError;
+      }
+    }
+
     await roomState.removeAudioRequest(roomId, request.user_id);
     return data;
   },
@@ -452,6 +476,25 @@ export const roomRequestService = {
         code: "ROOM_INVITATION_ACCEPT_FAILED",
         details: participantError.message,
       });
+    }
+
+    if (room.media_type === "audio") {
+      try {
+        await roomStageService.assignSeat(
+          roomId,
+          userId,
+          resolveMaxGuestSlots(room.media_type, room.max_guest_slots),
+        );
+      } catch (seatError) {
+        if (videoAdded) await roomState.removeVideoSpeaker(roomId, userId);
+        await roomState.removeSpeaker(roomId, userId);
+        await supabase
+          .from("room_participants")
+          .update({ role: "audience" })
+          .eq("room_id", roomId)
+          .eq("user_id", userId);
+        throw seatError;
+      }
     }
 
     const { data, error } = await supabase
