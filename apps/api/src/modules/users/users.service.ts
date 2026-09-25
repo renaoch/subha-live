@@ -54,8 +54,6 @@ const PRIVATE_PROFILE_FIELDS = `
   is_verified,
   coins,
   diamonds,
-  followers,
-  following,
   created_at,
   gender,
   role,
@@ -93,8 +91,6 @@ const PUBLIC_PROFILE_FIELDS = `
   vip_level,
   svip,
   is_verified,
-  followers,
-  following,
   created_at,
   gender,
   role
@@ -297,6 +293,36 @@ async function getFriendCount(
 
   return mutualRows?.length ?? 0;
 }
+
+/**
+ * Live count of `follows` rows for a user, in either direction.
+ *
+ * followers/following used to be read from denormalized counter columns
+ * on `profiles`, bumped only inside followUser()/unfollowUser(). Any follow
+ * row created another way — seed/demo data, a direct DB write, a migration,
+ * or a bumpProfileCounter() call that failed and only logged the error
+ * instead of throwing — left that counter permanently out of sync with the
+ * real `follows` table, which is what the "Following" list itself always
+ * queried. `follows` is the source of truth (same as getFriendCount above),
+ * so counts are derived from it directly instead of trusting a column that
+ * can silently drift.
+ */
+async function getFollowCount(
+  userId: UserId,
+  column: "follower_id" | "following_id",
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("follows")
+    .select("follower_id", { count: "exact", head: true })
+    .eq(column, userId);
+
+  if (error) {
+    console.error(`Failed to get ${column} count:`, error);
+    return 0;
+  }
+
+  return count ?? 0;
+}
 // -----------------------------------------------------------------------------
 // Get current authenticated user's private profile
 // GET /api/v1/users/me
@@ -335,6 +361,8 @@ export async function getCurrentUser(
         resolvedRole,
         visitorCount,
         friendCount,
+        followerCount,
+        followingCount,
       ] = await Promise.all([
         resolveProfileRole(
           userId,
@@ -344,6 +372,9 @@ export async function getCurrentUser(
         getVisitorCount(userId),
 
         getFriendCount(userId),
+
+        getFollowCount(userId, "following_id"),
+        getFollowCount(userId, "follower_id"),
       ]);
 
       return {
@@ -351,6 +382,8 @@ export async function getCurrentUser(
         role: resolvedRole,
         visitor_count: visitorCount,
         friend_count: friendCount,
+        followers: followerCount,
+        following: followingCount,
       } as PrivateProfile;
     },
   );
@@ -385,15 +418,22 @@ export async function getUserById(
 
   const profile = data as any;
 
-  const resolvedRole =
-    await resolveProfileRole(
+  const [resolvedRole, followerCount, followingCount, friendCount] = await Promise.all([
+    resolveProfileRole(
       userId,
       profile.role,
-    );
+    ),
+    getFollowCount(userId, "following_id"),
+    getFollowCount(userId, "follower_id"),
+    getFriendCount(userId),
+  ]);
 
   return {
     ...profile,
     role: resolvedRole,
+    followers: followerCount,
+    following: followingCount,
+    friend_count: friendCount,
   } as PublicProfile;
 }
 

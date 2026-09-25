@@ -41,6 +41,13 @@ export interface PublicProfile {
   following: number;
 
   /**
+   * Number of mutual follows (A follows B AND B follows A). Computed live
+   * from the `follows` table on every request, same as followers/following
+   * — never a stored counter that can drift out of sync.
+   */
+  friend_count: number;
+
+  /**
    * Resolved profile role.
    *
    * Normal:
@@ -75,13 +82,6 @@ export interface PrivateProfile extends PublicProfile {
    * this profile.
    */
   visitor_count: number;
-
-  /**
-   * Number of mutual follows.
-   *
-   * A friend means both users follow each other.
-   */
-  friend_count: number;
 }
 
 // ─── Profile API responses ─────────────────────────────────────

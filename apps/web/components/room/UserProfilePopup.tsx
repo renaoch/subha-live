@@ -9,6 +9,29 @@ import { useDmThread } from "@/hooks/useDmThread";
 import type { PublicProfile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+// Same level-tier palette as the /home/me profile hero (profile-hero.tsx),
+// kept here as a small standalone copy so the in-room popup can match its
+// look without the hero's full animated-ring CSS. Keep these two in sync if
+// the tier colors ever change.
+const TIER_PALETTE = [
+  { primary: "#D98F4E", accent: "#FFCF9E" }, // Bronze
+  { primary: "#AEB9C7", accent: "#EAF0F6" }, // Silver
+  { primary: "#F5B93F", accent: "#FFE29E" }, // Gold
+  { primary: "#5FD9C4", accent: "#B4F5E7" }, // Platinum
+  { primary: "#57C2FF", accent: "#B3E6FF" }, // Diamond
+  { primary: "#A86CFF", accent: "#DCC2FF" }, // Master
+  { primary: "#FF6CA8", accent: "#FFC0DA" }, // Grandmaster
+  { primary: "#FF8A5C", accent: "#FFCBAE" }, // Elite
+  { primary: "#FFD24C", accent: "#FFF0B8" }, // Legend
+  { primary: "#F5B93F", accent: "#F8F1E6" }, // Mythic
+] as const;
+const TIER_SIZE = 10;
+
+function tierForLevel(level: number) {
+  const index = Math.min(TIER_PALETTE.length - 1, Math.floor((Math.max(1, level) - 1) / TIER_SIZE));
+  return TIER_PALETTE[index];
+}
+
 interface UserProfilePopupProps {
   userId: string;
   currentUserId?: string | null;
@@ -119,6 +142,26 @@ export function UserProfilePopup({ userId, currentUserId, onClose }: UserProfile
   );
 }
 
+function TieredAvatar({ src, name, level }: { src: string | null; name: string; level: number }) {
+  const theme = tierForLevel(level);
+  return (
+    <div className="relative h-20 w-20 shrink-0">
+      <div
+        className="absolute inset-0 rounded-full p-[2px]"
+        style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})` }}
+      >
+        <div className="h-full w-full rounded-full bg-[#150f26]" />
+      </div>
+      <div
+        className="absolute inset-[3px] overflow-hidden rounded-full"
+        style={{ boxShadow: `0 0 16px ${theme.primary}55` }}
+      >
+        <Avatar name={name} src={src ?? undefined} size="lg" className="h-full w-full" />
+      </div>
+    </div>
+  );
+}
+
 function ProfileView({
   loading,
   profile,
@@ -159,7 +202,7 @@ function ProfileView({
         </div>
       ) : (
         <div className="flex flex-1 flex-col items-center overflow-y-auto px-6 pb-6 pt-10">
-          <Avatar name={profile.name || "User"} src={profile.avatar ?? undefined} size="lg" className="h-20 w-20" />
+          <TieredAvatar src={profile.avatar} name={profile.name || "User"} level={profile.level} />
 
           <div className="mt-3 flex items-center gap-1.5">
             <p className="max-w-[220px] truncate text-[17px] font-extrabold text-white">
@@ -186,7 +229,31 @@ function ProfileView({
             </p>
           )}
 
-          <div className="mt-6 flex w-full items-center gap-2.5 px-2">
+          {/* Same layout/labels as the Followers/Following/Friends row on
+              /home/me — just without a Visitors column, since that count
+              is private to the profile owner. */}
+          <dl className="mt-5 flex w-full items-stretch justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-3">
+            {[
+              { label: "Followers", value: profile.followers },
+              { label: "Following", value: profile.following },
+              { label: "Friends", value: profile.friend_count },
+            ].map((stat, i) => (
+              <div
+                key={stat.label}
+                className={cn(
+                  "flex flex-1 flex-col items-center justify-center gap-1",
+                  i !== 2 && "border-r border-white/10",
+                )}
+              >
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-white/45">
+                  {stat.label}
+                </dt>
+                <dd className="text-sm font-bold tabular-nums text-white">{stat.value}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div className="mt-5 flex w-full items-center gap-2.5 px-2">
             {!isSelf && (
               <button
                 type="button"
