@@ -49,6 +49,10 @@ import { PKBattleOverlay } from '@/components/pk/PKBattleOverlay';
 
 import { LastPKCard } from '@/components/pk/LastPKCard';
 
+import { GamesSheet } from '@/components/games/GamesSheet';
+
+import { SubhaLuckyGame } from '@/components/games/SubhaLuckyGame';
+
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
@@ -288,6 +292,9 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
 
   const [contributorsOpen, setContributorsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+
+  const [gamesOpen, setGamesOpen] = useState(false);
+  const [luckyOpen, setLuckyOpen] = useState(false);
 
   const [micEnabled, setMicEnabled] = useState(true);
 
@@ -719,7 +726,7 @@ useEffect(() => {
             onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
             onOpenMore={() => setMoreOpen(true)}
             onOpenPk={() => setPkOpen(true)}
-            onOpenGames={() => toast.info('Games coming soon 🎮')}
+            onOpenGames={() => setGamesOpen(true)}
             onToggleMic={isHost && room.media_type !== 'audio' ? () => setMicEnabled((v) => !v) : undefined}
             micEnabled={micEnabled}
             onOpenProfile={setProfileUserId}
@@ -926,6 +933,20 @@ useEffect(() => {
           onOpenProfile={setProfileUserId}
 
         />
+
+        {/* Games launcher + Subha Lucky game */}
+        <GamesSheet
+          open={gamesOpen}
+          onClose={() => setGamesOpen(false)}
+          onPlayLucky={() => {
+            setGamesOpen(false);
+            setLuckyOpen(true);
+          }}
+        />
+
+        {luckyOpen && room?.id && (
+          <SubhaLuckyGame roomId={room.id} onClose={() => setLuckyOpen(false)} />
+        )}
 
         {/* User profile popup — opened from chat, header, viewer list,
             contributors, or PK; slides up from the bottom over the live

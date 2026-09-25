@@ -22,6 +22,7 @@ import charismaRoutes from "./modules/charisma/charisma.routes";
 import hostTaskRoutes from "./modules/host-task/host-task.routes";
 import pkRoutes from "./modules/pk/pk.routes";
 import quizRoutes from "./modules/quiz/quiz.routes";
+import luckyRoutes from "./modules/lucky/lucky.routes";
 import messagesRoutes from "./modules/messages/messages.routes";
 import financialRoutes from "./modules/financial/financial.routes";
 import binanceRoutes from "./modules/binance/binance.routes";
@@ -78,6 +79,7 @@ import binanceRoutes from "./modules/binance/binance.routes";
     app.use("/api/v1", hostTaskRoutes);
     app.use("/api/v1", pkRoutes);
     app.use("/api/v1", quizRoutes);
+    app.use("/api/v1", luckyRoutes);
     app.use("/api/v1", messagesRoutes);
     app.use(
   "/api/v1/media/test",

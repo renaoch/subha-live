@@ -60,3 +60,69 @@ export function playGiftSentSound() {
     // Audio is a nice-to-have; never let it break the send flow.
   }
 }
+
+// ─── Subha Lucky sounds ──────────────────────────────────────────────────
+
+/** Short mechanical tick for the reel spin. */
+export function playLuckySpinSound() {
+  const ctx = getContext();
+  if (!ctx) return;
+  try {
+    tone(ctx, { freq: 180, start: 0, duration: 0.08, gain: 0.08, type: "square" });
+    tone(ctx, { freq: 140, start: 0.08, duration: 0.08, gain: 0.06, type: "square" });
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Soft click for a reel stopping. */
+export function playLuckyStopSound() {
+  const ctx = getContext();
+  if (!ctx) return;
+  try {
+    tone(ctx, { freq: 520, start: 0, duration: 0.06, gain: 0.07, type: "triangle" });
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Ascending chime for a normal win. */
+export function playLuckyWinSound() {
+  const ctx = getContext();
+  if (!ctx) return;
+  try {
+    tone(ctx, { freq: 659.25, start: 0, duration: 0.14, gain: 0.14 }); // E5
+    tone(ctx, { freq: 830.61, start: 0.08, duration: 0.16, gain: 0.14 }); // G#5
+    tone(ctx, { freq: 1046.5, start: 0.16, duration: 0.24, gain: 0.16 }); // C6
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Richer, longer fanfare for a large win. */
+export function playLuckyBigWinSound() {
+  const ctx = getContext();
+  if (!ctx) return;
+  try {
+    tone(ctx, { freq: 523.25, start: 0, duration: 0.16, gain: 0.14 });
+    tone(ctx, { freq: 659.25, start: 0.12, duration: 0.16, gain: 0.14 });
+    tone(ctx, { freq: 783.99, start: 0.24, duration: 0.16, gain: 0.15 });
+    tone(ctx, { freq: 1046.5, start: 0.36, duration: 0.4, gain: 0.18 });
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Special sparkle fanfare for the Lucky jackpot. */
+export function playLuckyJackpotSound() {
+  const ctx = getContext();
+  if (!ctx) return;
+  try {
+    tone(ctx, { freq: 659.25, start: 0, duration: 0.2, gain: 0.16 });
+    tone(ctx, { freq: 987.77, start: 0.12, duration: 0.2, gain: 0.16 });
+    tone(ctx, { freq: 1318.51, start: 0.24, duration: 0.32, gain: 0.18, type: "triangle" });
+    tone(ctx, { freq: 1975.53, start: 0.32, duration: 0.4, gain: 0.12, type: "triangle" });
+  } catch {
+    /* ignore */
+  }
+}
