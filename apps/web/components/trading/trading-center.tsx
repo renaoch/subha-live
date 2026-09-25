@@ -13,10 +13,10 @@ import {
 import { ApiError } from "@/lib/api/client";
 import { tradingApi, type TradingLedgerEntry, type TradingOverview } from "@/lib/api/trading";
 import { cn } from "@/lib/utils";
-import { TradingTab } from "./trading-tab";
+import { BuyCoinsTab } from "./buy-coins-tab";
 import { PayHostTab } from "./pay-host-tab";
 
-type Tab = "trading" | "pay-host";
+type Tab = "buy-coins" | "host-transfer";
 type Status = "loading" | "unauthorized" | "ready" | "error";
 
 export function TradingCenter() {
@@ -25,7 +25,7 @@ export function TradingCenter() {
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<TradingLedgerEntry[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("trading");
+  const [tab, setTab] = useState<Tab>("buy-coins");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -107,7 +107,7 @@ export function TradingCenter() {
 
       {/* Tabs */}
       <div className="mt-5 grid grid-cols-2 gap-1 rounded-2xl bg-[#1D1829]/60 p-1">
-        {(["trading", "pay-host"] as Tab[]).map((t) => (
+        {(["buy-coins", "host-transfer"] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
@@ -124,7 +124,7 @@ export function TradingCenter() {
                 transition={{ type: "spring", stiffness: 400, damping: 32 }}
               />
             )}
-            <span className="relative">{t === "trading" ? "Trading" : "Pay Host"}</span>
+            <span className="relative">{t === "buy-coins" ? "Buy Coins" : "Host Transfer"}</span>
           </button>
         ))}
       </div>
@@ -132,12 +132,18 @@ export function TradingCenter() {
       {/* Content */}
       <div className="mt-5">
         <AnimatePresence mode="wait">
-          {tab === "trading" ? (
-            <motion.div key="trading" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
-              <TradingTab balance={balance} transactions={transactions} loading={transactionsLoading} />
+          {tab === "buy-coins" ? (
+            <motion.div key="buy-coins" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+              <BuyCoinsTab
+                agencyId={overview.agency.id}
+                agencyName={overview.agency.name}
+                balance={balance}
+                transactions={transactions}
+                transactionsLoading={transactionsLoading}
+              />
             </motion.div>
           ) : (
-            <motion.div key="pay-host" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+            <motion.div key="host-transfer" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
               <PayHostTab balance={balance} onPaid={handlePaid} />
             </motion.div>
           )}

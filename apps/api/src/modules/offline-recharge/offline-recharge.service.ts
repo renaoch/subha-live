@@ -15,9 +15,10 @@ export async function requestOfflineRecharge(
     paymentMethod: string;
     transactionRef: string;
     note?: string;
+    agencyId?: string;
   }
 ) {
-  const { amountUsd, paymentMethod, transactionRef, note } = payload;
+  const { amountUsd, paymentMethod, transactionRef, note, agencyId } = payload;
 
   const { data, error } = await supabase
     .from("offline_recharges")
@@ -33,6 +34,8 @@ export async function requestOfflineRecharge(
       // 20260906000000_agency_offline_recharge.sql — the generated Insert
       // type doesn't know about `note` yet.
       note: note ?? null,
+      // Agency coin purchase: routes the approval to the Trading Market.
+      agency_id: agencyId ?? null,
     } as never)
     .select("id")
     .single();
@@ -102,7 +105,100 @@ export async function approveRecharge(
   payload: { status: "approved" | "rejected"; coins?: number; diamonds?: number }
 ) {
   await assertIsPlatformAdmin(adminId);
+
+  // Agency coin purchase (recharge tagged with agency_id) credits the agency's
+  // Trading Market, not the owner's personal wallet.
+  const { data: recharge, error: fetchError } = await supabase
+    .from("offline_recharges")
+    .select("agency_id, amount_usd, status")
+    .eq("id", rechargeId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!recharge) throw new AppError(404, "Recharge request not found", { code: "RECHARGE_NOT_FOUND" });
+
+  if (recharge.agency_id) {
+    return approveAgencyTradingPurchase(adminId, rechargeId, recharge.agency_id, recharge.amount_usd, payload);
+  }
+
   return creditRecharge(adminId, rechargeId, payload, null);
+}
+
+/**
+ * Approve/reject an AGENCY coin purchase: credits the agency's Trading Market
+ * (via fin_credit_agency_trading_recharge) instead of the personal wallet.
+ */
+async function approveAgencyTradingPurchase(
+  adminId: string,
+  rechargeId: string,
+  agencyId: string,
+  amountUsd: number,
+  payload: { status: "approved" | "rejected"; coins?: number; diamonds?: number }
+) {
+  if (payload.status === "rejected") {
+    const result = await creditAgencyTradingRecharge({
+      adminId,
+      rechargeId,
+      action: "rejected",
+      coins: 0,
+      agencyId,
+    });
+    return { success: true, alreadyProcessed: result.alreadyProcessed };
+  }
+
+  const coinsToAdd = payload.coins ?? Math.floor(amountUsd * 100);
+
+  const result = await creditAgencyTradingRecharge({
+    adminId,
+    rechargeId,
+    action: "approved",
+    coins: coinsToAdd,
+    agencyId,
+  });
+
+  await logAudit({
+    actorId: adminId,
+    agencyId,
+    action: "AGENCY_COIN_PURCHASE",
+    entityType: "offline_recharges",
+    entityId: rechargeId,
+    newValue: { coins: coinsToAdd, newBalance: result.newBalance, alreadyProcessed: result.alreadyProcessed },
+  });
+
+  return {
+    success: true,
+    alreadyProcessed: result.alreadyProcessed,
+    newBalance: result.newBalance,
+  };
+}
+
+/**
+ * Atomic settlement of an agency coin purchase against the Trading Market.
+ * Calls fin_credit_agency_trading_recharge() (service-role only) which locks
+ * the recharge row, flips its status, and credits the trading account + ledger.
+ */
+async function creditAgencyTradingRecharge(input: {
+  adminId: string;
+  rechargeId: string;
+  action: "approved" | "rejected";
+  coins: number;
+  agencyId: string;
+}): Promise<{ newBalance: number; alreadyProcessed: boolean }> {
+  const { data, error } = await (supabase as any).rpc("fin_credit_agency_trading_recharge", {
+    p_recharge_id: input.rechargeId,
+    p_admin_id: input.adminId,
+    p_action: input.action,
+    p_coins: input.coins,
+    p_agency_id: input.agencyId,
+  });
+
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    newBalance: Number(row?.new_balance ?? 0),
+    alreadyProcessed: Boolean(row?.already_processed),
+  };
 }
 
 /* -------------------------------------------------------------------------- */

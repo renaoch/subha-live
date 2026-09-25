@@ -248,3 +248,105 @@ $$;
 -- them to `authenticated` would let a browser mint/steal coins directly.
 grant execute on function public.fin_agency_trading_credit(text, bigint, text, text, jsonb) to service_role;
 grant execute on function public.fin_agency_pay_host(text, uuid, bigint, text) to service_role;
+
+-- ----------------------------------------------------------------------------
+-- fin_credit_agency_trading_recharge(p_recharge_id, p_admin_id, p_action,
+--                                    p_coins, p_agency_id)
+-- ----------------------------------------------------------------------------
+-- Settles an agency coin PURCHASE (an offline_recharge tagged with agency_id)
+-- into the agency's Trading Market balance instead of the owner's personal
+-- wallet. Atomic + idempotent: locks the recharge row, flips its status, and
+-- credits the trading account + ledger in one transaction. Reused by the admin
+-- approval path in offline-recharge.service.ts.
+-- ----------------------------------------------------------------------------
+create or replace function public.fin_credit_agency_trading_recharge(
+  p_recharge_id text,
+  p_admin_id     uuid,
+  p_action       text,
+  p_coins        bigint,
+  p_agency_id    text
+)
+returns table (
+  new_balance       bigint,
+  already_processed boolean
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_recharge public.offline_recharges%rowtype;
+  v_before   bigint;
+  v_after    bigint;
+begin
+  select * into v_recharge
+    from public.offline_recharges
+   where id = p_recharge_id
+   for update;
+
+  if not found then
+    raise exception 'RECHARGE_NOT_FOUND';
+  end if;
+
+  -- Idempotent: an already-processed recharge returns the current balance.
+  if v_recharge.status <> 'pending' then
+    select available_balance into v_after
+      from public.agency_trading_accounts
+     where agency_id = p_agency_id;
+    return query select coalesce(v_after, 0), true;
+    return;
+  end if;
+
+  if p_action = 'rejected' then
+    update public.offline_recharges
+       set status = 'rejected', processed_by = p_admin_id, processed_at = now()
+     where id = p_recharge_id;
+    select available_balance into v_after
+      from public.agency_trading_accounts
+     where agency_id = p_agency_id;
+    return query select coalesce(v_after, 0), false;
+    return;
+  end if;
+
+  if p_action <> 'approved' then
+    raise exception 'INVALID_ACTION';
+  end if;
+
+  insert into public.agency_trading_accounts (agency_id, available_balance)
+  values (p_agency_id, 0)
+  on conflict (agency_id) do nothing;
+
+  select available_balance into v_before
+    from public.agency_trading_accounts
+   where agency_id = p_agency_id
+   for update;
+
+  if v_before is null then
+    raise exception 'AGENCY_NOT_FOUND';
+  end if;
+
+  v_after := v_before + p_coins;
+
+  update public.agency_trading_accounts
+     set available_balance = v_after, updated_at = now()
+   where agency_id = p_agency_id;
+
+  insert into public.agency_trading_ledger (
+    agency_id, transaction_type, direction, amount, balance_before, balance_after,
+    reference_type, reference_id, metadata
+  ) values (
+    p_agency_id, 'AGENCY_COIN_PURCHASE', 'credit', p_coins, v_before, v_after,
+    'offline_recharge', p_recharge_id,
+    jsonb_build_object('recharge_id', p_recharge_id)
+  );
+
+  update public.offline_recharges
+     set status = 'approved', coins_credited = p_coins,
+         processed_by = p_admin_id, processed_at = now()
+   where id = p_recharge_id;
+
+  return query select v_after, false;
+end;
+$$;
+
+grant execute on function public.fin_credit_agency_trading_recharge(text, uuid, text, bigint, text) to service_role;
