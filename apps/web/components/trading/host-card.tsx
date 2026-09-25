@@ -7,7 +7,6 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { HostVerification } from "@/lib/api/trading";
 
 interface HostCardProps {
@@ -60,23 +59,9 @@ export function HostCard({ host, onClear }: HostCardProps) {
         </div>
       </div>
 
-      <div
-        className={cn(
-          "mt-4 flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold",
-          host.eligible
-            ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-400/20"
-            : "bg-rose-500/10 text-rose-300 ring-1 ring-rose-400/20",
-        )}
-      >
-        <span
-          className={cn(
-            "h-1.5 w-1.5 rounded-full",
-            host.eligible ? "bg-emerald-400" : "bg-rose-400",
-          )}
-        />
-        {host.eligible
-          ? "Eligible for Agency Payment"
-          : "This host is not eligible for Agency payments"}
+      <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-500/10 px-3 py-2.5 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-400/20">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+        Eligible for Agency Payment
       </div>
     </motion.div>
   );

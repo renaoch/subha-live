@@ -134,7 +134,7 @@ export function PayHostTab({ balance, onPaid }: PayHostTabProps) {
       {/* Step 1 — enter host ID */}
       <section>
         <label htmlFor="host-id" className="mb-2 block text-xs font-bold uppercase tracking-wide text-white/40">
-          Host ID
+          User ID
         </label>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -146,7 +146,7 @@ export function PayHostTab({ balance, onPaid }: PayHostTabProps) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") void handleVerify();
               }}
-              placeholder="Enter host ID"
+              placeholder="Enter user ID"
               disabled={verifying}
               className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.04] pl-9 pr-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#CBA35C]/60 disabled:opacity-60"
             />
@@ -158,7 +158,7 @@ export function PayHostTab({ balance, onPaid }: PayHostTabProps) {
             className="flex h-12 items-center gap-1.5 rounded-xl bg-[#CBA35C] px-4 text-sm font-bold text-[#1A1424] transition hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
           >
             {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            Verify Host
+            Verify
           </button>
         </div>
 
@@ -216,13 +216,6 @@ export function PayHostTab({ balance, onPaid }: PayHostTabProps) {
         </motion.section>
       )}
 
-      {verifiedHost && !verifiedHost.eligible && (
-        <p className="text-sm text-rose-300">
-          This host is not eligible for Agency payments.
-        </p>
-      )}
-
-      {/* Continue to confirm */}
       {verifiedHost?.eligible && (
         <button
           type="button"
@@ -393,7 +386,7 @@ function SuccessPanel({
         onClick={onDone}
         className="mt-5 w-full rounded-xl bg-[#CBA35C] py-3 text-sm font-black text-[#1A1424] transition hover:brightness-110 active:scale-[0.99]"
       >
-        Pay Another Host
+        Transfer Again
       </button>
     </motion.div>
   );

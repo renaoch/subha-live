@@ -110,19 +110,14 @@ export const tradingService = {
       throw new AppError(400, "Amount must be a positive whole number", { code: "INVALID_AMOUNT" });
     }
 
-    // Re-verify the host server-side — never trust the earlier verification.
+    // Re-verify the target user server-side — never trust the earlier
+    // verification. ANY existing user can receive an agency payment.
     const host = await lookupHost(input.hostId.trim());
     if (!host) {
       throw new AppError(404, "Host not found", { code: "HOST_NOT_FOUND" });
     }
     if (host.id === userId) {
       throw new AppError(400, "You cannot pay yourself", { code: "SELF_PAYMENT_FORBIDDEN" });
-    }
-    const isMember = await isApprovedMember(agency.id, host.id);
-    if (!isMember) {
-      throw new AppError(403, "This host is not eligible for agency payments", {
-        code: "HOST_NOT_ELIGIBLE",
-      });
     }
 
     try {

@@ -232,6 +232,8 @@ export function toHostVerification(
     isVerified: Boolean(row.is_verified),
     isHost,
     isAgencyMember,
-    eligible: isAgencyMember,
+    // Any existing user can receive an agency payment (owner pays by public ID,
+    // whether a host, a normal user, or any other account).
+    eligible: true,
   };
 }
