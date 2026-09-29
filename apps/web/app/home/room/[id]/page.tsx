@@ -51,7 +51,7 @@ import { LastPKCard } from '@/components/pk/LastPKCard';
 
 import { GamesSheet } from '@/components/games/GamesSheet';
 
-import { SubhaLuckyGame } from '@/components/games/SubhaLuckyGame';
+import { SubhaLuckyRingGame } from '@/components/SubhaLuckyRingGame';
 
 
 import { GiftPickerSheet } from '@/components/GiftPickerSheet';
@@ -945,7 +945,7 @@ useEffect(() => {
         />
 
         {luckyOpen && room?.id && (
-          <SubhaLuckyGame roomId={room.id} onClose={() => setLuckyOpen(false)} />
+          <SubhaLuckyRingGame roomId={room.id} onClose={() => setLuckyOpen(false)} />
         )}
 
         {/* User profile popup — opened from chat, header, viewer list,

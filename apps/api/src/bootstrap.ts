@@ -3,6 +3,7 @@ import { connectRedis } from "./lib/redis";
 import { cloudflareRealtimeProvider } from "./lib/media/cloudflare/cloudflare-realtime";
 import { startPkFinalizer, stopPkFinalizer } from "./modules/pk/pk.finalizer";
 import { startQuizFinalizer, stopQuizFinalizer } from "./modules/quiz/quiz.finalizer";
+import { startLuckyRingFinalizer, stopLuckyRingFinalizer } from "./modules/lucky-ring/lucky-ring.finalizer";
 
 const PORT = Number(process.env.PORT) || 3000;
 const mode = process.env.NODE_ENV || "development";
@@ -49,6 +50,7 @@ export async function bootstrap() {
     logMediaProviderStatus();
     startPkFinalizer();
     startQuizFinalizer();
+    startLuckyRingFinalizer();
 
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running in ${mode} mode on port ${PORT}`);
@@ -58,6 +60,7 @@ export async function bootstrap() {
       console.log(`[shutdown] received ${signal}`);
       stopPkFinalizer();
       stopQuizFinalizer();
+      stopLuckyRingFinalizer();
       server.close(() => process.exit(0));
       setTimeout(() => process.exit(1), 10_000).unref();
     };
