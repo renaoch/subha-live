@@ -12,9 +12,11 @@
 import { useEffect, useState } from "react";
 import { X, HelpCircle, Volume2, VolumeX, Sparkles } from "lucide-react";
 import { useLuckyRing } from "@/hooks/useLuckyRing";
+import { useCountUp } from "@/hooks/useCountUp";
 import { LuckyRingBoard } from "./LuckyRingBoard";
 import { LuckySymbol } from "./LuckySymbol";
-import { playLuckySpinSound, playLuckyStopSound, playLuckyWinSound } from "@/lib/sound";
+import { WinCelebration } from "./WinCelebration";
+import { playLuckySpinSound, playLuckyStopSound, playLuckyWinSound, playLuckyJackpotSound } from "@/lib/sound";
 import { cn } from "@/lib/utils";
 
 interface SubhaLuckyRingGameProps {
@@ -51,33 +53,43 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
   const [soundOn, setSoundOn] = useState(true);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [wonThisRound, setWonThisRound] = useState<number | null>(null);
+  const [isJackpot, setIsJackpot] = useState(false);
+
+  const displayBalance = useCountUp(balance ?? 0);
+  const displayWinnings = useCountUp(todayWinnings);
 
   // Sound cues on phase changes.
   useEffect(() => {
     if (!soundOn) return;
     if (status === "SPINNING") playLuckySpinSound();
-    if (status === "SETTLED") playLuckyStopSound();
-  }, [status, soundOn]);
+    if (status === "SETTLED" && !wonThisRound) playLuckyStopSound();
+  }, [status, soundOn, wonThisRound]);
 
   // Detect a personal win once a round settles (my bet on the winning cell).
+  // A "lucky" cell landing is the jackpot — bigger burst, its own sound.
   useEffect(() => {
     if (status !== "SETTLED" || winningCell == null) {
       setWonThisRound(null);
+      setIsJackpot(false);
       return;
     }
     const myAmount = myBets[winningCell];
-    if (myAmount) {
-      const cell = cells.find((c) => c.index === winningCell);
-      const payout = cell ? myAmount * cell.multiplier : 0;
+    const cell = cells.find((c) => c.index === winningCell);
+    if (myAmount && cell) {
+      const payout = myAmount * cell.multiplier;
       setWonThisRound(payout);
-      if (soundOn && payout > 0) playLuckyWinSound();
+      const jackpot = cell.symbol === "lucky";
+      setIsJackpot(jackpot);
+      if (soundOn) (jackpot ? playLuckyJackpotSound : playLuckyWinSound)();
     } else {
       setWonThisRound(null);
+      setIsJackpot(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, winningCell]);
 
   const secondsLeft = Math.ceil(msLeft / 1000);
+  const urgent = status === "BETTING" && secondsLeft <= 3 && secondsLeft > 0;
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-[#1c0506]">
@@ -88,6 +100,14 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
             "radial-gradient(120% 60% at 50% -10%, rgba(245,185,63,0.16), transparent 60%), radial-gradient(90% 50% at 100% 100%, rgba(180,20,30,0.25), transparent 60%), linear-gradient(180deg, #2a0709 0%, #150304 100%)",
         }}
       />
+
+      {wonThisRound ? (
+        <div className="pointer-events-none absolute inset-0 z-[75] flex items-start justify-center">
+          <div className="mt-[30%] w-full max-w-[430px]">
+            <WinCelebration triggerKey={`shell-${winningCell}-${wonThisRound}`} big={isJackpot} />
+          </div>
+        </div>
+      ) : null}
 
       <div className="relative mx-auto flex h-full w-full max-w-[430px] flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+16px)] overflow-y-auto">
         {/* Header */}
@@ -101,10 +121,11 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
             {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
           </button>
 
-          <div className="grad-brand rounded-full px-6 py-1 shadow-[0_6px_18px_-4px_rgba(245,120,30,0.7)]">
+          <div className="grad-brand relative overflow-hidden rounded-full px-6 py-1 shadow-[0_6px_18px_-4px_rgba(245,120,30,0.7)]">
             <h1 className="text-lg font-black italic tracking-wide text-black drop-shadow-[0_1px_0_rgba(255,255,255,0.3)]">
               lucky pro
             </h1>
+            <span className="animate-shimmer-sweep pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/50 to-transparent" />
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -128,16 +149,28 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
         </header>
 
         {/* Phase banner: what's happening right now, and how long it lasts */}
-        <div className="mt-3 flex items-center justify-center gap-2 rounded-full border border-[#F5B93F]/25 bg-black/25 px-4 py-1.5">
+        <div
+          className={cn(
+            "mt-3 flex items-center justify-center gap-2 rounded-full border px-4 py-1.5 transition-colors",
+            urgent ? "border-red-400/60 bg-red-500/10" : "border-[#F5B93F]/25 bg-black/25",
+          )}
+        >
           {status === "BETTING" ? (
-            <p className="text-xs font-semibold text-white/80">
-              Place your bets — <span className="text-[#FFE08A]">{secondsLeft}s</span> left
+            <p className={cn("text-xs font-semibold", urgent ? "text-red-200" : "text-white/80")}>
+              Place your bets —{" "}
+              <span
+                key={secondsLeft}
+                className={cn("animate-count-flash font-bold", urgent ? "text-red-300" : "text-[#FFE08A]")}
+              >
+                {secondsLeft}s
+              </span>{" "}
+              left
             </p>
           ) : status === "SPINNING" ? (
-            <p className="text-xs font-semibold text-white/80">Spinning…</p>
+            <p className="animate-pulse text-xs font-semibold text-white/80">Spinning…</p>
           ) : wonThisRound ? (
-            <p className="text-xs font-bold text-[#FFE08A]">
-              You won {formatCompact(wonThisRound)}! 🎉
+            <p className={cn("animate-pop-in text-xs font-bold text-[#FFE08A]", isJackpot && "text-sm")}>
+              {isJackpot ? "🎰 JACKPOT! " : ""}You won {formatCompact(wonThisRound)}! 🎉
             </p>
           ) : (
             <p className="text-xs font-semibold text-white/60">No luck this round — next one's starting</p>
@@ -148,11 +181,13 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
         <div className="mt-3 flex items-center justify-between gap-2">
           <div className="flex-1 rounded-2xl border border-[#F5B93F]/25 bg-black/25 px-3 py-2">
             <p className="text-[10px] font-medium uppercase tracking-wide text-[#F5B93F]/60">Balance</p>
-            <p className="mt-0.5 text-lg font-bold text-white">{balance === null ? "—" : formatCompact(balance)}</p>
+            <p className="mt-0.5 text-lg font-bold text-white tabular-nums">
+              {balance === null ? "—" : formatCompact(displayBalance)}
+            </p>
           </div>
           <div className="flex-1 rounded-2xl border border-[#F5B93F]/25 bg-black/25 px-3 py-2">
             <p className="text-[10px] font-medium uppercase tracking-wide text-[#F5B93F]/60">Today&apos;s winnings</p>
-            <p className="mt-0.5 text-lg font-bold text-[#F5B93F]">{formatCompact(todayWinnings)}</p>
+            <p className="mt-0.5 text-lg font-bold text-[#F5B93F] tabular-nums">{formatCompact(displayWinnings)}</p>
           </div>
         </div>
 
@@ -189,7 +224,7 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
                   className={cn(
                     "rounded-full border-2 py-2 text-center text-xs font-black transition active:scale-95",
                     active
-                      ? "border-[#F5B93F] bg-gradient-to-b from-[#7c4dff] to-[#5a2be0] text-white shadow-[0_0_16px_rgba(124,77,255,0.5)]"
+                      ? "animate-glow-pulse border-[#F5B93F] bg-gradient-to-b from-[#7c4dff] to-[#5a2be0] text-white"
                       : "border-[#F5B93F]/50 bg-gradient-to-b from-[#F5B93F] to-[#c98a1f] text-black hover:brightness-110",
                     !affordable && "opacity-60",
                   )}
