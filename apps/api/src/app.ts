@@ -27,6 +27,7 @@ import luckyRingRoutes from "./modules/lucky-ring/lucky-ring.routes";
 import messagesRoutes from "./modules/messages/messages.routes";
 import financialRoutes from "./modules/financial/financial.routes";
 import binanceRoutes from "./modules/binance/binance.routes";
+import tradingRoutes from "./modules/trading/trading.routes";
     import { errorMiddleware } from "./middleware/error.middleware";
 
 
@@ -77,6 +78,7 @@ import binanceRoutes from "./modules/binance/binance.routes";
     app.use("/api/v1/charisma", charismaRoutes);
     app.use("/api/v1/financial", financialRoutes);
     app.use("/api/v1/binance", binanceRoutes);
+    app.use("/api/v1", tradingRoutes);
     app.use("/api/v1", hostTaskRoutes);
     app.use("/api/v1", pkRoutes);
     app.use("/api/v1", quizRoutes);

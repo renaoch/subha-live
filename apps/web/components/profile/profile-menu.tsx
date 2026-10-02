@@ -1,29 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { profileMenuItems } from "./profile-menu-items";
-import { usersApi } from "@/lib/api/users";
 import type { PrivateProfile } from "@/lib/types";
 
-export function ProfileMenu() {
-  const [profile, setProfile] = useState<PrivateProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadProfile() {
-      try {
-        const data = await usersApi.me();
-        setProfile(data);
-      } catch {
-        setProfile(null);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadProfile();
-  }, []);
-
+export function ProfileMenu({ profile }: { profile: PrivateProfile | null }) {
+  const router = useRouter();
   const role = profile?.role ?? "user";
   const isAdmin = Boolean(profile?.is_admin);
 
@@ -59,21 +42,6 @@ export function ProfileMenu() {
     return true;
   });
 
-  if (loading) {
-    return (
-      <nav className="rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 p-4">
-        <div className="grid grid-cols-4 gap-x-2 gap-y-6">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex flex-col items-center gap-2">
-              <div className="h-12 w-12 animate-pulse rounded-full bg-[#2A2238]" />
-              <div className="h-3 w-14 animate-pulse rounded bg-[#2A2238]" />
-            </div>
-          ))}
-        </div>
-      </nav>
-    );
-  }
-
   return (
     <nav
       aria-label="Profile menu"
@@ -85,6 +53,8 @@ export function ProfileMenu() {
             <li key={id}>
               <Link
                 href={href}
+                prefetch
+                onMouseDown={() => router.prefetch(href)}
                 className="group flex min-h-[88px] flex-col items-center justify-start gap-2 rounded-xl px-1 py-1 text-center transition-colors hover:bg-[#2A2238]/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#CBA35C]"
               >
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#2A2238] transition-colors group-hover:bg-[#332A45]">

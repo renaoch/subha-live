@@ -14,12 +14,15 @@ import { ProfileLogout } from "./profile-logout";
 import { ProfileLoading } from "./profile-loading";
 import { ProfileError } from "./profile-error";
 
+// Module-level cache: revisiting the tab paints instantly, then refreshes quietly.
+let cachedProfile: PrivateProfile | null = null;
+
 export function ProfilePage() {
   const [profile, setProfile] =
-    useState<PrivateProfile | null>(null);
+    useState<PrivateProfile | null>(cachedProfile);
 
   const [loading, setLoading] =
-    useState(true);
+    useState(!cachedProfile);
 
   const [error, setError] =
     useState<string | null>(null);
@@ -29,12 +32,13 @@ export function ProfilePage() {
 
     async function loadProfile() {
       try {
-        setLoading(true);
+        if (!cachedProfile) setLoading(true);
         setError(null);
 
         const user = await usersApi.me();
 
         if (!cancelled) {
+          cachedProfile = user;
           setProfile(user);
         }
       } catch (err) {
@@ -69,7 +73,10 @@ export function ProfilePage() {
       usersApi
         .me()
         .then((user) => {
-          if (!cancelled) setProfile(user);
+          if (!cancelled) {
+            cachedProfile = user;
+            setProfile(user);
+          }
         })
         .catch(() => {
           // Keep showing the last known-good profile on a transient failure.
@@ -115,7 +122,7 @@ export function ProfilePage() {
           diamonds={profile.diamonds}
         />
 
-        <ProfileMenu />
+        <ProfileMenu profile={profile} />
 
         <ProfileSupport />
 

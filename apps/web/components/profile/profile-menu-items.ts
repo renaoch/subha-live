@@ -14,7 +14,7 @@ export interface ProfileMenuItem {
   label: string;
   href: string;
   Icon: (props: { className?: string; style?: React.CSSProperties }) => React.JSX.Element;
-  /** Optional secondary label, e.g. the "Agency Operations" tag on BD Center. */
+  /** Optional secondary label, e.g. the "Agency Operations" tag on Trading Coins. */
   subtitle?: string;
 }
 
@@ -57,7 +57,7 @@ export const profileMenuItems: ProfileMenuItem[] = [
   },
   {
     id: "bd-center",
-    label: "BD Center",
+    label: "Trading Coins",
     href: "/bd-center",
     Icon: HeadsetIcon,
     subtitle: "Agency Operations",
