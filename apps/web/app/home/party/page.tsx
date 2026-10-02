@@ -165,7 +165,7 @@ export default function PartyPage() {
             <span className="block text-xs text-white/80">
               {launching
                 ? "Setting up your party…"
-                : `Start an audio room with ${PARTY_SEAT_COUNT} open seats`}
+                : `Start with 4 seats · unlock up to ${PARTY_SEAT_COUNT} with coins`}
             </span>
           </span>
           <ChevronRight className="h-5 w-5 shrink-0 text-white/70" />

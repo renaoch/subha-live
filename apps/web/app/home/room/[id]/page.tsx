@@ -536,6 +536,7 @@ useEffect(() => {
             speakingIds={speakingSpeakerIds ?? new Set()}
             currentUserId={userId}
             isHost={isHost}
+            roomCoins={sessionGiftTotals.totalDiamonds}
             onOpenSeats={() => setSpeakerPanelOpen(true)}
             onOpenProfile={setProfileUserId}
           />
@@ -622,7 +623,7 @@ useEffect(() => {
         {/* Live "gifts this stream" meter — visible to everyone in the
             room, host and viewers alike, tallied from the same gift rows
             already shown in chat. */}
-        {!(isHost && isWaiting) && (
+        {!isAudioRoom && !(isHost && isWaiting) && (
           <HostGiftMeter
             totalDiamonds={sessionGiftTotals.totalDiamonds}
             giftCount={sessionGiftTotals.giftCount}
@@ -663,7 +664,7 @@ useEffect(() => {
 
         {/* Audio stage button */}
 
-        {!(isHost && isWaiting) && (
+        {!isAudioRoom && !(isHost && isWaiting) && (
 <button
 
           type="button"
