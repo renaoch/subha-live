@@ -17,7 +17,7 @@ import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { logAudit } from "../../lib/audit";
 import { getOrSetCache } from "../../lib/redis";
-import { FINANCIAL_ERROR_MAP, extractFinancialErrorCode } from "./financial.logic";
+import { FINANCIAL_ERROR_MAP, extractFinancialErrorCode, mapGiftCatalogRows } from "./financial.logic";
 import type { ContributorPeriod } from "./financial.schema";
 import type {
   ClaimAgencyTaskRewardResult,
@@ -92,15 +92,7 @@ export async function getActiveGiftCatalog(): Promise<GiftCatalogItem[]> {
 
     if (error) throw error;
 
-    return (data ?? []).map((row: any) => ({
-      id: row.id,
-      code: row.code,
-      name: row.name,
-      icon: row.icon,
-      coinPrice: row.coin_price,
-      diamondValue: row.diamond_value,
-      isActive: row.is_active,
-    }));
+    return mapGiftCatalogRows(data ?? []);
   });
 }
 

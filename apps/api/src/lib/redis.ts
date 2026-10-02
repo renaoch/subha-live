@@ -212,15 +212,42 @@ export async function cacheDel(key: string | string[]): Promise<void> {
 export async function getOrSetCache<T>(key: string, ttlSeconds: number, fetcher: () => Promise<T>): Promise<T> {
   const cached = await cacheGet<T>(key);
   if (cached !== null) return cached;
+
   const lockKey = `lock:${key}`;
   const token = `${process.pid}-${Date.now()}-${Math.random()}`;
-  const acquired = redisUrl
-    ? (await (client as any).set(lockKey, token, { NX: true, EX: LOCK_TTL_SECONDS })) === "OK"
-    : (await (client as any).set(lockKey, token, { nx: true, ex: LOCK_TTL_SECONDS })) === "OK";
-  if (acquired) {
-    try { const fresh = await fetcher(); await cacheSet(key, fresh, ttlSeconds); return fresh; }
-    finally { if ((await client.get<string>(lockKey)) === token) await client.del(lockKey); }
+
+  // Lock acquisition talks to Redis directly (not through cacheGet/cacheSet,
+  // which already fail safe), so a stalled/failed Redis command here must not
+  // take the caller down. Treat any failure as "no caching": log and fall
+  // straight through to the fetcher, exactly like cacheGet/cacheSet do.
+  let acquired = false;
+  try {
+    const result = redisUrl
+      ? await (client as any).set(lockKey, token, { NX: true, EX: LOCK_TTL_SECONDS })
+      : await (client as any).set(lockKey, token, { nx: true, ex: LOCK_TTL_SECONDS });
+    acquired = result === "OK";
+  } catch (error) {
+    console.error(`[redis] lock acquire failed for ${lockKey}:`, error);
+    return fetcher();
   }
+
+  if (acquired) {
+    try {
+      const fresh = await fetcher();
+      await cacheSet(key, fresh, ttlSeconds);
+      return fresh;
+    } finally {
+      // Releasing the lock must also never throw and mask the real result.
+      try {
+        if ((await client.get<string>(lockKey)) === token) await client.del(lockKey);
+      } catch (error) {
+        console.error(`[redis] lock release failed for ${lockKey}:`, error);
+      }
+    }
+  }
+
+  // Someone else is fetching; poll briefly, then fall through to a direct
+  // fetch if the cache never populated (bounded wait prevents a hang).
   const start = Date.now();
   while (Date.now() - start < LOCK_MAX_WAIT_MS) {
     await sleep(LOCK_RETRY_DELAY_MS);

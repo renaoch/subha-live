@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler } from "express";
 import { AppError } from "../errors/app-error";
 import { CloudflareRealtimeError } from "../lib/media/cloudflare/cloudflare.errors";
+import { logger } from "../lib/logger";
 
 /**
  * Central error handler.
@@ -17,14 +18,14 @@ export const errorMiddleware: ErrorRequestHandler = (
   res,
   _next
 ) => {
-  const requestId =
-    req.header("x-request-id") ?? req.header("x-correlation-id") ?? undefined;
+  const requestId = req.requestId;
 
-  console.error("API Error:", {
+  logger.error("API error", {
     requestId,
     method: req.method,
     path: req.originalUrl,
-    error,
+    errorMessage: error instanceof Error ? error.message : String(error),
+    statusCode: error instanceof AppError ? error.statusCode : undefined,
   });
 
   if (error instanceof AppError) {
@@ -48,7 +49,7 @@ export const errorMiddleware: ErrorRequestHandler = (
    * never returned to the client.
    */
   if (error instanceof CloudflareRealtimeError) {
-    console.error("[cloudflare] media provider error body:", {
+    logger.error("Cloudflare media provider error", {
       requestId,
       statusCode: error.statusCode,
       responseBody: error.responseBody,

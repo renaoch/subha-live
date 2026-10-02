@@ -6,6 +6,8 @@
 // holds the deterministic math and error-mapping so it can be unit tested
 // without a database, same pattern as pk.logic.ts / host-task.logic.ts.
 
+import type { GiftCatalogItem } from "./financial.types";
+
 export const DEFAULT_HOST_SHARE_RATE = 0.6;
 
 export interface GiftSplit {
@@ -102,4 +104,27 @@ export function extractFinancialErrorCode(pgMessage: string | undefined | null):
   if (!pgMessage) return null;
   const match = Object.keys(FINANCIAL_ERROR_MAP).find((code) => pgMessage.includes(code));
   return match ?? null;
+}
+
+/** Pure gift_catalog row → DTO mapping (extracted for unit testing). */
+export function mapGiftCatalogRows(
+  rows: Array<{
+    id: string;
+    code: string;
+    name: string;
+    icon: string;
+    coin_price: number;
+    diamond_value: number;
+    is_active: boolean;
+  }>,
+): GiftCatalogItem[] {
+  return rows.map((row) => ({
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    icon: row.icon,
+    coinPrice: row.coin_price,
+    diamondValue: row.diamond_value,
+    isActive: row.is_active,
+  }));
 }

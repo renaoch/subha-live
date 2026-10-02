@@ -29,6 +29,7 @@ import financialRoutes from "./modules/financial/financial.routes";
 import binanceRoutes from "./modules/binance/binance.routes";
 import tradingRoutes from "./modules/trading/trading.routes";
     import { errorMiddleware } from "./middleware/error.middleware";
+import { requestIdMiddleware } from "./middleware/request-id.middleware";
 
 
 
@@ -53,6 +54,7 @@ import tradingRoutes from "./modules/trading/trading.routes";
     app.use(cors(corsOptions));
     app.options("/{*splat}", cors(corsOptions));
     app.use(express.json({ limit: "256kb" }));
+    app.use(requestIdMiddleware);
 
     app.use("/health", healthRoutes);
     app.use("/api/v1/auth", authRoutes);

@@ -24,6 +24,7 @@
 import { Request, Response, NextFunction } from "express";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 import { AppError } from "../../errors/app-error";
+import { logger } from "../../lib/logger";
 
 if (!process.env.SUPABASE_URL) {
   throw new Error("SUPABASE_URL must be set in environment variables.");
@@ -89,12 +90,11 @@ export async function authMiddleware(
     });
     payload = result.payload as SupabaseJwtPayload;
   } catch (err) {
-    // Keep this log until you've confirmed things are stable, then
-    // feel free to trim it down.
-    console.log("auth verify FAILED:", (err as Error).message);
-    console.log(
-      `auth (local verify, FAILED): ${(performance.now() - authStart).toFixed(2)}ms`
-    );
+    logger.warn("auth verification failed", {
+      requestId: req.requestId,
+      error: err instanceof Error ? err.message : String(err),
+      durationMs: Math.round(performance.now() - authStart),
+    });
     throw new AppError(401, "Invalid or expired authentication token", {
       code: "INVALID_OR_EXPIRED_TOKEN",
     });
@@ -117,7 +117,10 @@ export async function authMiddleware(
 
     next();
   } catch (error) {
-    console.error("Authentication middleware error:", error);
+    logger.error("Authentication middleware error", {
+      requestId: req.requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     next(error);
   }
 }

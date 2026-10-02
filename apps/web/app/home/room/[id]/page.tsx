@@ -306,7 +306,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   // ---- Viewer's own request status ----
 
 const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
-  useViewerRequestStatus(room?.id ?? '', isHost, userId);
+  useViewerRequestStatus(room?.id ?? '', isHost, userId, room?.status);
 
 
 
