@@ -165,6 +165,7 @@ export const luckyRingService = {
 
     return {
       config: toPublicConfig(),
+      serverTime: Date.now(),
       roundId: state.roundId,
       roundNumber: state.roundNumber,
       status: state.status,

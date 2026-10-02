@@ -84,11 +84,12 @@ export function LuckyRingBoard({
         disabled={status !== "BETTING"}
         onClick={() => onCellTap(index)}
         className={cn(
-          "relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl border-2 transition-all duration-150",
+          "tap-fast relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl border-2",
           "border-[#F5B93F]/30 bg-gradient-to-b from-[#4a1216] to-[#1c0708]",
+          "transition-[transform,box-shadow,border-color] duration-100 ease-out will-change-transform",
           isHead && "border-[#FFE08A] scale-[1.08]",
           isWinner && "border-[#FFE08A] bg-[#F5B93F]/25 animate-coin-shake scale-[1.06]",
-          status === "BETTING" && "active:scale-90",
+          status === "BETTING" && "active:scale-90 active:duration-[50ms]",
         )}
         style={
           glow > 0
@@ -159,8 +160,14 @@ export function LuckyRingBoard({
           )}
         >
           <span
-            key={`${status}-${counterLabel}`}
-            className="animate-count-flash font-mono text-3xl font-black tabular-nums text-[#FFE08A]"
+            // Remount (and flash) only on a genuine phase change — the
+            // once-a-second countdown number itself just updates its text,
+            // no flash, so it doesn't look like it's stuttering every tick.
+            key={status}
+            className={cn(
+              "font-mono text-3xl font-black tabular-nums text-[#FFE08A]",
+              status !== "BETTING" && "animate-count-flash",
+            )}
             style={{ textShadow: "0 0 12px rgba(255,224,138,0.6)" }}
           >
             {counterLabel}

@@ -42,6 +42,11 @@ export interface LuckyRingMyBet {
 
 export interface LuckyRingStateResponse {
   config: LuckyRingPublicConfig;
+  /** Server's own clock at the moment this response was built (epoch ms).
+   *  The client uses this to correct for its own clock drift so the
+   *  countdown it renders matches the server's actual deadline instead of
+   *  silently running fast/slow/jumpy on a device with an off clock. */
+  serverTime: number;
   roundId: string;
   roundNumber: number;
   status: LuckyRingStatus;

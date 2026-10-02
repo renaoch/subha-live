@@ -116,7 +116,7 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
             type="button"
             onClick={() => setSoundOn((v) => !v)}
             aria-label={soundOn ? "Mute sound" : "Enable sound"}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F5B93F]/30 bg-black/30 text-[#F5B93F]/90 transition hover:bg-black/50 active:scale-95"
+            className="tap-fast flex h-9 w-9 items-center justify-center rounded-full border border-[#F5B93F]/30 bg-black/30 text-[#F5B93F]/90 transition-[transform,background-color] duration-100 hover:bg-black/50 active:scale-90 active:duration-[50ms]"
           >
             {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
           </button>
@@ -133,7 +133,7 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
               type="button"
               onClick={() => setRulesOpen(true)}
               aria-label="Rules and help"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F5B93F]/30 bg-black/30 text-[#F5B93F]/90 transition hover:bg-black/50 active:scale-95"
+              className="tap-fast flex h-9 w-9 items-center justify-center rounded-full border border-[#F5B93F]/30 bg-black/30 text-[#F5B93F]/90 transition-[transform,background-color] duration-100 hover:bg-black/50 active:scale-90 active:duration-[50ms]"
             >
               <HelpCircle className="h-4 w-4" />
             </button>
@@ -141,7 +141,7 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
               type="button"
               onClick={onClose}
               aria-label="Close game"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#F5B93F]/30 bg-black/30 text-[#F5B93F]/90 transition hover:bg-black/50 active:scale-95"
+              className="tap-fast flex h-9 w-9 items-center justify-center rounded-full border border-[#F5B93F]/30 bg-black/30 text-[#F5B93F]/90 transition-[transform,background-color] duration-100 hover:bg-black/50 active:scale-90 active:duration-[50ms]"
             >
               <X className="h-4 w-4" />
             </button>
@@ -158,10 +158,7 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
           {status === "BETTING" ? (
             <p className={cn("text-xs font-semibold", urgent ? "text-red-200" : "text-white/80")}>
               Place your bets —{" "}
-              <span
-                key={secondsLeft}
-                className={cn("animate-count-flash font-bold", urgent ? "text-red-300" : "text-[#FFE08A]")}
-              >
+              <span className={cn("font-bold tabular-nums", urgent ? "text-red-300" : "text-[#FFE08A]")}>
                 {secondsLeft}s
               </span>{" "}
               left
@@ -222,7 +219,8 @@ export function SubhaLuckyRingGame({ roomId, onClose }: SubhaLuckyRingGameProps)
                   onClick={() => setSelectedBet(bet)}
                   aria-pressed={active}
                   className={cn(
-                    "rounded-full border-2 py-2 text-center text-xs font-black transition active:scale-95",
+                    "tap-fast rounded-full border-2 py-2 text-center text-xs font-black",
+                    "transition-[transform,box-shadow] duration-100 ease-out active:scale-90 active:duration-[50ms]",
                     active
                       ? "animate-glow-pulse border-[#F5B93F] bg-gradient-to-b from-[#7c4dff] to-[#5a2be0] text-white"
                       : "border-[#F5B93F]/50 bg-gradient-to-b from-[#F5B93F] to-[#c98a1f] text-black hover:brightness-110",

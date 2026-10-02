@@ -47,6 +47,7 @@ export interface LuckyRingRecentResult {
 
 export interface LuckyRingStateResponse {
   config: LuckyRingPublicConfig;
+  serverTime: number;
   roundId: string;
   roundNumber: number;
   status: LuckyRingStatus;

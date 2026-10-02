@@ -395,3 +395,12 @@
 .animate-ring-urgent { animation: ring-urgent-pulse 0.6s ease-in-out infinite; }
 .animate-count-flash { animation: count-flash 0.35s ease-out both; }
 .animate-chip-toss { animation: chip-toss 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* Kills the classic mobile-browser ~300ms tap delay on buttons (the #1 cause
+ * of a game feeling laggy to the touch) and the grey flash some browsers
+ * paint on tap. Apply to anything meant to feel instantly responsive. */
+.tap-fast {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
