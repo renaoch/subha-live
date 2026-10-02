@@ -13,6 +13,7 @@ import {
 import { ApiError } from "@/lib/api/client";
 import { tradingApi, type TradingLedgerEntry, type TradingOverview } from "@/lib/api/trading";
 import { cn } from "@/lib/utils";
+import { KEYS, fetchers, load as loadCached, peek, put } from "@/lib/page-cache";
 import { BuyCoinsTab } from "./buy-coins-tab";
 import { PayHostTab } from "./pay-host-tab";
 
@@ -20,22 +21,20 @@ type Tab = "buy-coins" | "host-transfer";
 type Status = "loading" | "unauthorized" | "ready" | "error";
 
 export function TradingCenter() {
-  const [status, setStatus] = useState<Status>("loading");
-  const [overview, setOverview] = useState<TradingOverview | null>(null);
-  const [balance, setBalance] = useState(0);
-  const [transactions, setTransactions] = useState<TradingLedgerEntry[]>([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const cached = peek<Awaited<ReturnType<typeof fetchers.trading>>>(KEYS.trading);
+  const [status, setStatus] = useState<Status>(cached ? "ready" : "loading");
+  const [overview, setOverview] = useState<TradingOverview | null>(cached?.[0] ?? null);
+  const [balance, setBalance] = useState(cached?.[0].account.availableBalance ?? 0);
+  const [transactions, setTransactions] = useState<TradingLedgerEntry[]>(cached?.[1] ?? []);
+  const [transactionsLoading, setTransactionsLoading] = useState(!cached);
   const [tab, setTab] = useState<Tab>("buy-coins");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setStatus("loading");
+    if (!peek(KEYS.trading)) setStatus("loading");
     setErrorMessage(null);
     try {
-      const [ov, txns] = await Promise.all([
-        tradingApi.overview(),
-        tradingApi.transactions(20, 0),
-      ]);
+      const [ov, txns] = await loadCached(KEYS.trading, fetchers.trading);
       setOverview(ov);
       setBalance(ov.account.availableBalance);
       setTransactions(txns);
@@ -58,7 +57,19 @@ export function TradingCenter() {
   const handlePaid = useCallback((newBalance: number) => {
     setBalance(newBalance);
     // Refresh the activity feed to include the new payment.
-    tradingApi.transactions(20, 0).then(setTransactions).catch(() => {});
+    tradingApi
+      .transactions(20, 0)
+      .then((t) => {
+        setTransactions(t);
+        const prev = peek<Awaited<ReturnType<typeof fetchers.trading>>>(KEYS.trading);
+        if (prev) {
+          put(KEYS.trading, [
+            { ...prev[0], account: { ...prev[0].account, availableBalance: newBalance } },
+            t,
+          ]);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   if (status === "loading") {
@@ -90,7 +101,7 @@ export function TradingCenter() {
           <Landmark className="h-6 w-6 text-[#CBA35C]" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-lg font-black tracking-tight text-white">Agency Trading Center</h1>
+          <h1 className="text-lg font-black tracking-tight text-white">Trading Coins</h1>
           <p className="truncate text-xs font-medium text-white/40">
             {overview.agency.name} · ID: {overview.agency.code}
           </p>

@@ -1,12 +1,18 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { profileMenuItems } from "./profile-menu-items";
+import { warmProfilePages } from "@/lib/page-cache";
 import type { PrivateProfile } from "@/lib/types";
 
 export function ProfileMenu({ profile }: { profile: PrivateProfile | null }) {
   const router = useRouter();
+
+  useEffect(() => {
+    warmProfilePages();
+  }, []);
   const role = profile?.role ?? "user";
   const isAdmin = Boolean(profile?.is_admin);
 

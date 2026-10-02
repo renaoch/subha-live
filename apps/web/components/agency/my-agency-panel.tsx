@@ -550,7 +550,7 @@ export function MyAgencyPanel({
                   className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-3.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-black shadow-[0_0_20px_rgba(245,158,11,0.25)] transition hover:brightness-105"
                 >
                   <Coins className="h-3.5 w-3.5" />
-                  Trading Center
+                  Trading Coins
                 </Link>
               )}
 

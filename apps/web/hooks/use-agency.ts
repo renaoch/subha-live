@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 
+import { KEYS, fetchers, load as loadCached, peek } from "@/lib/page-cache";
 import {
   agencyApi,
   type Agency,
@@ -18,17 +19,19 @@ type AgencyView =
   | "my-agency";
 
 export function useAgency() {
+  const cached = peek<Awaited<ReturnType<typeof fetchers.agency>>>(KEYS.agency);
+
   const [myAgency, setMyAgency] =
-    useState<Agency | null>(null);
+    useState<Agency | null>(cached?.[0] ?? null);
 
   const [agencies, setAgencies] =
-    useState<Agency[]>([]);
+    useState<Agency[]>(cached?.[1] ?? []);
 
   const [applications, setApplications] =
     useState<AgencyApplication[]>([]);
 
   const [loading, setLoading] =
-    useState(true);
+    useState(!cached);
 
   const [joining, setJoining] =
     useState<string | null>(null);
@@ -37,7 +40,7 @@ export function useAgency() {
     useState("");
 
   const [view, setView] =
-    useState<AgencyView>("discover");
+    useState<AgencyView>(cached?.[0] ? "my-agency" : "discover");
 
   const [error, setError] =
     useState<string | null>(null);
@@ -67,16 +70,13 @@ export function useAgency() {
   const load = useCallback(
     async () => {
       try {
-        setLoading(true);
+        if (!peek(KEYS.agency)) setLoading(true);
         setError(null);
 
         const [
           currentAgency,
           availableAgencies,
-        ] = await Promise.all([
-          agencyApi.myAgency(),
-          agencyApi.list(),
-        ]);
+        ] = await loadCached(KEYS.agency, fetchers.agency);
 
         setMyAgency(
           currentAgency,

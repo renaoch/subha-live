@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { tasksApi, type TaskItem } from "@/lib/api/tasks";
+import { KEYS, fetchers, load as loadCached, peek, put } from "@/lib/page-cache";
 
 interface Celebration {
   taskId: string;
@@ -12,17 +13,18 @@ interface Celebration {
 }
 
 export function useTasks() {
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = peek<TaskItem[]>(KEYS.tasks);
+  const [tasks, setTasks] = useState<TaskItem[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [celebration, setCelebration] = useState<Celebration | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!peek(KEYS.tasks)) setLoading(true);
       setError(null);
-      const result = await tasksApi.list();
+      const result = await loadCached(KEYS.tasks, fetchers.tasks);
       setTasks(result);
     } catch (err) {
       console.error("TASKS API ERROR:", err);
@@ -35,6 +37,10 @@ export function useTasks() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (tasks.length) put(KEYS.tasks, tasks);
+  }, [tasks]);
 
   const claim = useCallback(
     async (task: TaskItem) => {

@@ -17,6 +17,7 @@ import {
   type CharismaGiftItem,
 } from "@/lib/api/charisma";
 
+import { KEYS, fetchers, load as loadCached, peek } from "@/lib/page-cache";
 import { LevelHero } from "./level-hero";
 import { LevelRewards } from "./level-rewards";
 import { LevelHistory } from "./level-history";
@@ -50,12 +51,14 @@ function toGiftData(
 export function LevelPage() {
   const router = useRouter();
 
-  const [progress, setProgress] = useState<LevelProgress | null>(null);
-  const [rewards, setRewards] = useState<LevelReward[]>([]);
-  const [history, setHistory] = useState<LevelHistoryItem[]>([]);
-  const [charisma, setCharisma] = useState<CharismaProgress | null>(null);
+  const cached = peek<Awaited<ReturnType<typeof fetchers.level>>>(KEYS.level);
 
-  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState<LevelProgress | null>(cached?.[0].progress ?? null);
+  const [rewards, setRewards] = useState<LevelReward[]>(cached?.[1] ?? []);
+  const [history, setHistory] = useState<LevelHistoryItem[]>(cached?.[2] ?? []);
+  const [charisma, setCharisma] = useState<CharismaProgress | null>(cached?.[3].progress ?? null);
+
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<TabType>("level");
@@ -92,16 +95,11 @@ export function LevelPage() {
 
     async function load() {
       try {
-        setLoading(true);
+        if (!peek(KEYS.level)) setLoading(true);
         setError(null);
 
         const [overview, rewardsResult, historyResult, charismaOverview] =
-          await Promise.all([
-            levelsApi.me(),
-            levelsApi.rewards(),
-            levelsApi.history(),
-            charismaApi.me(),
-          ]);
+          await loadCached(KEYS.level, fetchers.level);
 
         if (cancelled) return;
 

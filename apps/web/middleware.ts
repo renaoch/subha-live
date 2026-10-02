@@ -32,6 +32,14 @@ function isAuthOnlyPath(pathname: string): boolean {
 export async function middleware(
   request: NextRequest,
 ) {
+  // Fast path: every non-auth page skips the Supabase network round-trip
+  // (supabase.auth.getUser() is a remote call and was delaying every
+  // navigation and link prefetch). Session refresh is handled client-side
+  // by AuthListener.
+  if (!isAuthOnlyPath(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({
     request,
   });
