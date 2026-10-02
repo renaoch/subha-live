@@ -24,6 +24,10 @@ import { RoomHeader } from '@/components/RoomHeader';
 
 import { LiveVideo } from '@/components/LiveVideo';
 
+import { AudioStage } from '@/components/audio/AudioStage';
+
+import { StageControlBar } from '@/components/audio/StageControlBar';
+
 import { RoomMoreActions } from '@/components/RoomMoreActions';
 
 import { GoLiveSetup } from '@/components/GoLiveSetup';
@@ -34,6 +38,8 @@ import { RoomChat } from '@/components/RoomChat';
 import { RoomJoinFeed, type RoomJoinEvent } from '@/components/RoomJoinFeed';
 
 import { useRoomChat } from '@/hooks/useRoomChat';
+
+import { useRoomStage } from '@/hooks/useRoomStage';
 
 import { usePk } from '@/hooks/usePk';
 
@@ -63,6 +69,8 @@ import { HostGiftMeter } from '@/components/HostGiftMeter';
 import { WalletBalancePill } from '@/components/WalletBalancePill';
 
 import { financialApi, type GiftCatalogItem } from '@/lib/api/financial';
+
+import { roomsApi } from '@/lib/api/rooms';
 
 import { AudioStageModal } from '@/components/AudioStageModal';
 
@@ -192,6 +200,20 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
     useRoomChat(room?.id ?? '', room?.status);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
 
+  // Audio party-room stage (authoritative seats / host / listeners via
+  // GET /rooms/:id/stage). Only active for live audio rooms.
+  const isAudioRoom = room?.media_type === 'audio';
+  const {
+    stage: stageSnapshot,
+    profiles: stageProfiles,
+    report: reportStage,
+    leaveSeat: leaveStageSeat,
+  } = useRoomStage({
+    roomId: room?.id ?? '',
+    isLive,
+    enabled: !!isAudioRoom && isLive,
+  });
+
   const [sentGift, setSentGift] = useState<SentGift | null>(null);
 
   // Bumped every time this viewer sends a gift, so WalletBalancePill knows
@@ -311,6 +333,27 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
 
   const [guestMicEnabled, setGuestMicEnabled] = useState(true);
+
+  // Audio room stage controls: mute (host or seated guest) + leave seat.
+  const stageMuted = isHost ? micEnabled : guestMicEnabled;
+  const handleStageToggleMute = () => {
+    if (isHost) {
+      setMicEnabled((v) => !v);
+      void reportStage({ muted: !micEnabled });
+    } else {
+      setGuestMicEnabled((v) => !v);
+      void reportStage({ muted: !guestMicEnabled });
+    }
+  };
+  const handleStageLeaveSeat = async () => {
+    await leaveStageSeat();
+    await refetch();
+  };
+  const handleStageCancelRequest = async () => {
+    if (!room?.id) return;
+    await roomsApi.cancelAudioRequest(room.id).catch(() => {});
+    await refetch();
+  };
 
   // Cache of userId -> {name, avatar} picked up from speaker requests, so
   // approved speakers still show a real name/avatar (instead of "Guest N")
@@ -486,6 +529,16 @@ useEffect(() => {
             primaryLabel={isHost ? 'You' : room.host?.name || 'Host'}
             opponentLabel="Opponent"
           />
+        ) : isAudioRoom && isLive && stageSnapshot ? (
+          <AudioStage
+            stage={stageSnapshot}
+            profiles={stageProfiles}
+            speakingIds={speakingSpeakerIds ?? new Set()}
+            currentUserId={userId}
+            isHost={isHost}
+            onOpenSeats={() => setSpeakerPanelOpen(true)}
+            onOpenProfile={setProfileUserId}
+          />
         ) : (
           <LiveVideo
 
@@ -501,7 +554,7 @@ useEffect(() => {
 
             filter={localPreviewFilter}
 
-            isAudioRoom={room.media_type === "audio"}
+            isAudioRoom={isAudioRoom}
 
             hostName={room.host?.name}
 
@@ -880,6 +933,22 @@ useEffect(() => {
         )}
 
         {/* Audio stage modal */}
+
+        {isAudioRoom && isLive && (
+          <StageControlBar
+            isHost={isHost}
+            isLive={isLive}
+            mySeat={stageSnapshot?.me.seat ?? null}
+            requestPending={stageSnapshot?.me.requestPending ?? false}
+            muted={stageMuted}
+            loading={actionLoading}
+            onToggleMute={handleStageToggleMute}
+            onLeaveSeat={handleStageLeaveSeat}
+            onRequest={() => setSpeakerPanelOpen(true)}
+            onCancelRequest={handleStageCancelRequest}
+            onManage={() => setSpeakerPanelOpen(true)}
+          />
+        )}
 
         {speakerPanelOpen && (
           <AudioStageModal
