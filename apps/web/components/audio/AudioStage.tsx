@@ -16,6 +16,7 @@ import { Coins, Crown, Lock, MicOff, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
+import { StageChair } from "./StageChair";
 import type { StageSnapshotResult } from "@/lib/api/rooms";
 import type { StageProfile } from "@/hooks/useRoomStage";
 import {
@@ -40,8 +41,11 @@ interface AudioStageProps {
 
 const SPEAKING_FALLBACK_MS = 3500;
 // Avatar size scales with viewport height so 3 tiers + host always fit on one screen.
-const AV = "clamp(44px, 7.4svh, 60px)";
-const HOST_AV = "clamp(64px, 11svh, 88px)";
+const AV = "clamp(38px, 6.2svh, 54px)";
+const HOST_AV = "clamp(56px, 9svh, 76px)";
+// Each chair is a square 1.5x the avatar; the avatar sits in the backrest.
+const CHAIR = "calc(var(--av) * 1.5)";
+const HOST_CHAIR = "calc(var(--hav) * 1.5)";
 
 export function AudioStage({
   stage,
@@ -89,7 +93,7 @@ export function AudioStage({
       {/* Spotlight cone over the host */}
       <div className="pointer-events-none absolute left-1/2 top-[70px] h-[300px] w-[300px] -translate-x-1/2 bg-[radial-gradient(ellipse_at_50%_0%,rgba(245,201,106,0.20),transparent_65%)]" />
 
-      <div className="relative flex h-full flex-col items-center px-3 pb-[150px] pt-[104px]">
+      <div className="relative flex h-full flex-col items-center px-3 pb-[140px] pt-[100px]" style={{ "--av": AV, "--hav": HOST_AV } as React.CSSProperties}>
         {/* Host */}
         <HostSeat
           profile={hostProfile}
@@ -105,7 +109,7 @@ export function AudioStage({
         {/* Seats — 3 tiers, never scrolls */}
         <div className="mt-2 flex min-h-0 w-full flex-1 flex-col justify-evenly">
           {tiers.map((tier, ti) => (
-            <div key={ti} className="flex items-start justify-center gap-x-2.5">
+            <div key={ti} className="flex items-start justify-center gap-x-1.5">
               {tier.map((index) => {
                 const seat = stage.seats[index] ?? null;
                 if (seat) {
@@ -275,26 +279,27 @@ function HostSeat({
   const name = profile?.name ?? "Host";
   return (
     <div className="flex flex-col items-center">
-      <div className="relative flex items-center justify-center" style={{ width: HOST_AV, height: HOST_AV }}>
-        {/* halo */}
-        <span className="absolute -inset-3 rounded-full bg-[#F5C96A]/20 blur-xl" />
-        <span className="absolute -inset-1.5 rounded-full border border-[#F5C96A]/30" />
-        {speaking && <SpeakRing tone="host" />}
-        <button type="button" onClick={onOpenProfile} className="relative z-10 h-full w-full" aria-label={`${name} host`}>
-          <Avatar
-            name={name}
-            src={profile?.avatar ?? undefined}
-            size="md"
-            className={cn(
-              "!h-full !w-full border-[2.5px] shadow-[0_8px_30px_rgba(245,201,106,0.35)] transition-transform duration-150",
-              speaking ? "scale-[1.04] border-transparent" : "border-[#F5C96A]",
-            )}
-          />
-        </button>
-        <Crown className="absolute -top-3.5 left-1/2 z-20 h-5 w-5 -translate-x-1/2 fill-[#F5C96A] text-[#F5C96A] drop-shadow-[0_2px_6px_rgba(245,201,106,0.7)]" />
-        {muted && <MuteBadge className="bottom-0 right-0 h-5 w-5" />}
+      <div className="relative" style={{ width: HOST_CHAIR, height: HOST_CHAIR }}>
+        <span className="absolute inset-x-2 top-1 bottom-2 rounded-full bg-[#F5C96A]/20 blur-xl" />
+        <StageChair tone="host" className="absolute inset-0 h-full w-full" />
+        <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "calc(var(--hav) * 0.09)", width: HOST_AV, height: HOST_AV }}>
+          {speaking && <SpeakRing tone="host" />}
+          <button type="button" onClick={onOpenProfile} className="relative z-10 h-full w-full" aria-label={`${name} host`}>
+            <Avatar
+              name={name}
+              src={profile?.avatar ?? undefined}
+              size="md"
+              className={cn(
+                "!h-full !w-full border-[2.5px] shadow-[0_8px_30px_rgba(245,201,106,0.35)] transition-transform duration-150",
+                speaking ? "scale-[1.04] border-transparent" : "border-[#F5C96A]",
+              )}
+            />
+          </button>
+          <Crown className="absolute -top-3.5 left-1/2 z-20 h-5 w-5 -translate-x-1/2 fill-[#F5C96A] text-[#F5C96A] drop-shadow-[0_2px_6px_rgba(245,201,106,0.7)]" />
+          {muted && <MuteBadge className="bottom-0 right-0 h-5 w-5" />}
+        </div>
       </div>
-      <div className="mt-1.5 flex items-center gap-1.5">
+      <div className="-mt-1 flex items-center gap-1.5">
         <span className="rounded-full bg-[#F5C96A] px-1.5 py-px text-[9px] font-black uppercase tracking-wider text-black">Host</span>
         <p className="max-w-[120px] truncate text-[12px] font-bold text-white">{isMe ? "You" : name}</p>
       </div>
@@ -302,7 +307,40 @@ function HostSeat({
   );
 }
 
-const CELL = "flex w-[70px] flex-col items-center gap-1";
+const CELL = "flex flex-col items-center gap-0.5";
+const CELL_STYLE = { width: CHAIR } as const;
+
+/** Chair + avatar slot. `children` is rendered inside the backrest. */
+function ChairSlot({
+  tone = "guest",
+  dim,
+  index,
+  children,
+}: {
+  tone?: "host" | "guest";
+  dim?: "empty" | "locked";
+  index: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative" style={{ width: CHAIR, height: CHAIR }}>
+      <StageChair
+        tone={tone}
+        className={cn(
+          "absolute inset-0 h-full w-full transition",
+          dim === "empty" && "opacity-55 group-hover:opacity-85",
+          dim === "locked" && "opacity-35 grayscale",
+        )}
+      />
+      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "calc(var(--av) * 0.09)", width: AV, height: AV }}>
+        {children}
+      </div>
+      <span className="absolute bottom-[13%] left-1/2 z-10 -translate-x-1/2 text-[8px] font-black leading-none text-white/75">
+        {index + 1}
+      </span>
+    </div>
+  );
+}
 
 function Seat({
   seatIndex,
@@ -325,8 +363,8 @@ function Seat({
   const name = profile?.name ?? `Guest ${seatIndex + 1}`;
   const reconnecting = status === "reconnecting" || status === "connecting";
   return (
-    <motion.div layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className={CELL}>
-      <div className="relative" style={{ width: AV, height: AV }}>
+    <motion.div layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className={CELL} style={CELL_STYLE}>
+      <ChairSlot index={seatIndex}>
         {speaking && <SpeakRing tone="guest" />}
         <button type="button" onClick={onOpenProfile} className="relative z-10 h-full w-full" aria-label={name}>
           <Avatar
@@ -339,13 +377,10 @@ function Seat({
             )}
           />
         </button>
-        <span className="absolute -bottom-1 left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/70 px-1 text-[8px] font-bold text-white/70 ring-1 ring-white/10">
-          {seatIndex + 1}
-        </span>
         {muted && <MuteBadge className="-right-0.5 top-0 h-4 w-4" />}
         {reconnecting && <span className="absolute left-0 top-0 z-20 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-black/50" />}
-      </div>
-      <p className={cn("w-full truncate text-center text-[10.5px] font-semibold", isMe ? "text-[#E8C27A]" : "text-white/80")}>
+      </ChairSlot>
+      <p className={cn("-mt-1 w-full truncate text-center text-[10.5px] font-semibold", isMe ? "text-[#E8C27A]" : "text-white/80")}>
         {isMe ? "You" : name}
       </p>
     </motion.div>
@@ -359,18 +394,15 @@ function EmptySeat({ index, onOpenSeats }: { index: number; onOpenSeats: () => v
       onClick={onOpenSeats}
       whileTap={{ scale: 0.93 }}
       className={cn(CELL, "group")}
+      style={CELL_STYLE}
       aria-label={`Join seat ${index + 1}`}
     >
-      <span
-        className="relative flex items-center justify-center rounded-full border border-dashed border-[#E8C27A]/45 bg-[#E8C27A]/[0.05] transition group-hover:bg-[#E8C27A]/15"
-        style={{ width: AV, height: AV }}
-      >
-        <Plus className="h-5 w-5 text-[#E8C27A]/80" strokeWidth={2} />
-        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-1 text-[8px] font-bold text-white/50 ring-1 ring-white/10">
-          {index + 1}
+      <ChairSlot index={index} dim="empty">
+        <span className="flex h-full w-full items-center justify-center rounded-full border border-dashed border-[#E8C27A]/50 bg-[#E8C27A]/[0.06] transition group-hover:bg-[#E8C27A]/15">
+          <Plus className="h-5 w-5 text-[#E8C27A]/85" strokeWidth={2} />
         </span>
-      </span>
-      <span className="text-[10px] font-medium text-white/40">Join</span>
+      </ChairSlot>
+      <span className="-mt-1 text-[10px] font-medium text-white/45">Join</span>
     </motion.button>
   );
 }
@@ -382,18 +414,15 @@ function LockedSeat({ index, onTap }: { index: number; onTap: () => void }) {
       onClick={onTap}
       whileTap={{ x: [0, -3, 3, -2, 0], transition: { duration: 0.3 } }}
       className={CELL}
+      style={CELL_STYLE}
       aria-label={`Seat ${index + 1} locked, unlocks at ${formatLakh(coinsToUnlockSeat(index))} room coins`}
     >
-      <span
-        className="relative flex items-center justify-center rounded-full border border-white/10 bg-black/35 shadow-inner"
-        style={{ width: AV, height: AV }}
-      >
-        <Lock className="h-4 w-4 text-white/35" strokeWidth={2} />
-        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-1 text-[8px] font-bold text-white/40 ring-1 ring-white/10">
-          {index + 1}
+      <ChairSlot index={index} dim="locked">
+        <span className="flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-black/50">
+          <Lock className="h-4 w-4 text-white/50" strokeWidth={2} />
         </span>
-      </span>
-      <span className="flex items-center gap-0.5 text-[10px] font-bold text-[#F5C96A]/70">
+      </ChairSlot>
+      <span className="-mt-1 flex items-center gap-0.5 text-[10px] font-bold text-[#F5C96A]/80">
         <Coins className="h-2.5 w-2.5" />
         {formatLakh(coinsToUnlockSeat(index))}
       </span>

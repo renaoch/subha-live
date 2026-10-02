@@ -81,29 +81,26 @@ export async function authMiddleware(
     let payload: SupabaseJwtPayload;
 
     try {
-      // Local verification against Supabase's public keys — no network
-      // call once JWKS is warm.
-      const result = await jwtVerify(token, JWKS, {
-        audience: "authenticated",
-      });
-      payload = result.payload as SupabaseJwtPayload;
-    } catch (err) {
-      // Keep this log until you've confirmed things are stable, then
-      // feel free to trim it down.
-      console.log("auth verify FAILED:", (err as Error).message);
-      console.log(
-        `auth (local verify, FAILED): ${(performance.now() - authStart).toFixed(2)}ms`
-      );
-      throw new AppError(401, "Invalid or expired authentication token", {
-        code: "INVALID_OR_EXPIRED_TOKEN",
-      });
-    }
-
+    // Local verification against Supabase's public keys — no network
+    // call once JWKS is warm. (The per-request success log was removed:
+    // it fired on every authenticated request and only added log noise.)
+    const result = await jwtVerify(token, JWKS, {
+      audience: "authenticated",
+    });
+    payload = result.payload as SupabaseJwtPayload;
+  } catch (err) {
+    // Keep this log until you've confirmed things are stable, then
+    // feel free to trim it down.
+    console.log("auth verify FAILED:", (err as Error).message);
     console.log(
-      `auth.verify (local JWKS): ${(performance.now() - authStart).toFixed(2)}ms`
+      `auth (local verify, FAILED): ${(performance.now() - authStart).toFixed(2)}ms`
     );
+    throw new AppError(401, "Invalid or expired authentication token", {
+      code: "INVALID_OR_EXPIRED_TOKEN",
+    });
+  }
 
-    if (!payload.sub) {
+  if (!payload.sub) {
       throw new AppError(401, "Invalid or expired authentication token", {
         code: "INVALID_OR_EXPIRED_TOKEN",
       });

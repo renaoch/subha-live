@@ -52,7 +52,9 @@ function throwMappedError(error: unknown, fallback: string): never {
     const mapped = TRADING_ERROR_MAP[code];
     throw new AppError(mapped.status, mapped.message, { code: mapped.code });
   }
-  throw new AppError(500, fallback, { code: "TRADING_OPERATION_FAILED", details: message });
+  // Server-side only: never leak raw DB/PostgREST error text to the client.
+  console.error("[trading] unmapped operation error:", message);
+  throw new AppError(500, fallback, { code: "TRADING_OPERATION_FAILED" });
 }
 
 /** Resolve the caller's owned, active agency. Throws for non-owners. */

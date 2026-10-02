@@ -16,6 +16,7 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { logAudit } from "../../lib/audit";
+import { getOrSetCache } from "../../lib/redis";
 import { FINANCIAL_ERROR_MAP, extractFinancialErrorCode } from "./financial.logic";
 import type { ContributorPeriod } from "./financial.schema";
 import type {
@@ -35,9 +36,11 @@ function throwMappedError(error: { message?: string } | null, fallbackMessage: s
     const mapped = FINANCIAL_ERROR_MAP[code];
     throw new AppError(mapped.status, mapped.message, { code: mapped.code });
   }
+  // Log the raw provider error server-side only — never leak raw DB/PostgREST
+  // messages (table/constraint names, query hints) to the client.
+  console.error("[financial] unmapped financial error:", error?.message);
   throw new AppError(500, fallbackMessage, {
     code: "FINANCIAL_OPERATION_FAILED",
-    details: error?.message,
   });
 }
 
@@ -71,44 +74,39 @@ export async function assertIsPlatformAdmin(userId: string): Promise<void> {
 }
 
 // ─── Gift catalog (server-side prices — never trust the client) ──────────
+//
+// The catalog is small and semi-static, but it is read on every room open and
+// every gift send, so it is cached (60s). This is a display/pre-check cache
+// only: the authoritative price is re-read inside fin_send_gift(), so a
+// stale cached entry can never change what is actually charged.
+
+const GIFT_CATALOG_TTL_SECONDS = 60;
+const GIFT_CATALOG_CACHE_KEY = "gift:catalog";
 
 export async function getActiveGiftCatalog(): Promise<GiftCatalogItem[]> {
-  const { data, error } = await (supabase.from("gift_catalog" as any) as any)
-    .select("id, code, name, icon, coin_price, diamond_value, is_active")
-    .eq("is_active", true)
-    .order("coin_price", { ascending: true });
+  return getOrSetCache<GiftCatalogItem[]>(GIFT_CATALOG_CACHE_KEY, GIFT_CATALOG_TTL_SECONDS, async () => {
+    const { data, error } = await (supabase.from("gift_catalog" as any) as any)
+      .select("id, code, name, icon, coin_price, diamond_value, is_active")
+      .eq("is_active", true)
+      .order("coin_price", { ascending: true });
 
-  if (error) throw error;
+    if (error) throw error;
 
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    code: row.code,
-    name: row.name,
-    icon: row.icon,
-    coinPrice: row.coin_price,
-    diamondValue: row.diamond_value,
-    isActive: row.is_active,
-  }));
+    return (data ?? []).map((row: any) => ({
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      icon: row.icon,
+      coinPrice: row.coin_price,
+      diamondValue: row.diamond_value,
+      isActive: row.is_active,
+    }));
+  });
 }
 
 export async function getGiftCatalogItem(giftId: string): Promise<GiftCatalogItem | null> {
-  const { data, error } = await (supabase.from("gift_catalog" as any) as any)
-    .select("id, code, name, icon, coin_price, diamond_value, is_active")
-    .eq("id", giftId)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!data) return null;
-
-  return {
-    id: data.id,
-    code: data.code,
-    name: data.name,
-    icon: data.icon,
-    coinPrice: data.coin_price,
-    diamondValue: data.diamond_value,
-    isActive: data.is_active,
-  };
+  const catalog = await getActiveGiftCatalog();
+  return catalog.find((g) => g.id === giftId) ?? null;
 }
 
 // ─── Gifts ─────────────────────────────────────────────────────────────

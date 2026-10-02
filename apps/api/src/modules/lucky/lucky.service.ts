@@ -43,9 +43,10 @@ function throwMappedError(error: unknown, fallbackMessage: string): never {
     const mapped = LUCKY_ERROR_MAP[code];
     throw new AppError(mapped.status, mapped.message, { code: mapped.code });
   }
+  // Server-side only: never leak raw DB/PostgREST error text to the client.
+  console.error("[lucky] unmapped spin error:", message);
   throw new AppError(500, fallbackMessage, {
     code: "LUCKY_SPIN_FAILED",
-    details: message,
   });
 }
 
