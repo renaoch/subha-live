@@ -26,7 +26,9 @@ export function getPromoBanners(): BannerItem[] {
       subtitle: "Log in every day for bonus coins",
       Icon: Sparkles,
       gradient: [themeVar("--accent-hot"), themeVar("--accent-gold")],
-      onClick: () => toast.info("Daily rewards are coming soon ✨"),
+      onClick: () => {
+        if (typeof window !== "undefined") window.location.assign("/rewards");
+      },
     },
     {
       id: "refer-earn",
@@ -34,7 +36,9 @@ export function getPromoBanners(): BannerItem[] {
       subtitle: "Invite friends, earn coins when they join",
       Icon: Gift,
       gradient: [themeVar("--accent-hot"), themeVar("--accent-gold")],
-      onClick: () => toast.info("Refer & Earn is coming soon 🎁"),
+      onClick: () => {
+        if (typeof window !== "undefined") window.location.assign("/referrals");
+      },
     },
     {
       id: "top-up-bonus",

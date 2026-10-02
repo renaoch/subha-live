@@ -28,6 +28,8 @@ import messagesRoutes from "./modules/messages/messages.routes";
 import financialRoutes from "./modules/financial/financial.routes";
 import binanceRoutes from "./modules/binance/binance.routes";
 import tradingRoutes from "./modules/trading/trading.routes";
+import rewardsRoutes from "./modules/rewards/daily-reward.routes";
+import referralsRoutes from "./modules/referrals/referral.routes";
     import { errorMiddleware } from "./middleware/error.middleware";
 import { requestIdMiddleware } from "./middleware/request-id.middleware";
 
@@ -81,6 +83,8 @@ import { requestIdMiddleware } from "./middleware/request-id.middleware";
     app.use("/api/v1/financial", financialRoutes);
     app.use("/api/v1/binance", binanceRoutes);
     app.use("/api/v1", tradingRoutes);
+    app.use("/api/v1", rewardsRoutes);
+    app.use("/api/v1", referralsRoutes);
     app.use("/api/v1", hostTaskRoutes);
     app.use("/api/v1", pkRoutes);
     app.use("/api/v1", quizRoutes);

@@ -23,6 +23,8 @@ export function ProfileMenu({ profile }: { profile: PrivateProfile | null }) {
       "level",
       "store",
       "tasks",
+      "rewards",
+      "referrals",
       "family",
       "vip",
       "cp",

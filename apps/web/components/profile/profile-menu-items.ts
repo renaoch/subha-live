@@ -38,6 +38,18 @@ export const profileMenuItems: ProfileMenuItem[] = [
     Icon: GameIcon,
   },
   {
+    id: "rewards",
+    label: "Rewards",
+    href: "/rewards",
+    Icon: GiftIcon,
+  },
+  {
+    id: "referrals",
+    label: "Refer & Earn",
+    href: "/referrals",
+    Icon: InviteIcon,
+  },
+  {
     id: "family",
     label: "Family",
     href: "/family",
