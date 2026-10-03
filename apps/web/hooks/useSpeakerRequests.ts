@@ -11,14 +11,21 @@ export function useSpeakerRequests(
   const [pending, setPending] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const inFlightRef = useRef(false);
+
   const fetchRequests = useCallback(async () => {
     if (!roomId || roomStatus !== 'live') return;
+    // No overlapping polls, and no polling while the tab is hidden.
+    if (inFlightRef.current || document.visibilityState === 'hidden') return;
+    inFlightRef.current = true;
 
     try {
       const list = await roomsApi.listSpeakerRequests(roomId);
       setRequests(list);
     } catch (e) {
       console.error('[useSpeakerRequests] failed to fetch requests:', e);
+    } finally {
+      inFlightRef.current = false;
     }
   }, [roomId, roomStatus]);
 
@@ -36,8 +43,13 @@ export function useSpeakerRequests(
     fetchRequests();
 
     intervalRef.current = setInterval(fetchRequests, 2000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void fetchRequests();
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
+      document.removeEventListener('visibilitychange', onVisible);
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;

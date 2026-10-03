@@ -19,8 +19,7 @@ function requireUser(req: Request) {
 export async function getCampaignConfig(req: Request, res: Response, next: NextFunction) {
   try {
     const user = requireUser(req);
-    const config = await campaignService.getConfig();
-    void user;
+    const config = await campaignService.getConfig(user.id);
     res.status(200).json({ success: true, data: config });
   } catch (error) {
     next(error);

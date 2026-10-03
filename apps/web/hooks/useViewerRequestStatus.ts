@@ -27,8 +27,13 @@ export function useViewerRequestStatus(
       return;
     }
     let active = true;
+    let inFlight = false;
 
     const checkStatus = async () => {
+      // Skip when a request is still running or the tab is hidden: both only
+      // add load without any visible benefit.
+      if (inFlight || document.visibilityState === 'hidden') return;
+      inFlight = true;
       try {
         const status = await roomsApi.getMyRequestStatus(roomId);
         if (!active) return;
@@ -55,13 +60,21 @@ export function useViewerRequestStatus(
           toast.error('Could not check your request status');
           hasShownToast.current = true;
         }
+      } finally {
+        inFlight = false;
       }
     };
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void checkStatus();
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     checkStatus();
     intervalRef.current = setInterval(checkStatus, 2000);
     return () => {
       active = false;
+      document.removeEventListener('visibilitychange', onVisible);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [roomId, isHost, userId, roomStatus]);

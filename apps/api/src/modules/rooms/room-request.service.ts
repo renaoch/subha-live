@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
+import { createCoalescer } from "../../lib/coalesce";
 import { roomState } from "./room-state.service";
 import { roomStageService } from "./room-stage.service";
 import { resolveMaxGuestSlots } from "./room-media.service";
@@ -47,7 +48,7 @@ async function getRoom(roomId: string) {
   return data;
 }
 
-export const roomRequestService = {
+const baseService = {
   async createSpeakerRequest(
     input: CreateSpeakerRequestInput,
   ): Promise<RoomJoinRequest> {
@@ -554,5 +555,56 @@ export const roomRequestService = {
         details: error.message,
       });
     }
+  },
+};
+
+/*
+ * Viewers poll getMyRequestStatus and hosts poll listPendingRequests every
+ * couple of seconds. Coalesce identical reads (shared in-flight promise + a
+ * ~1s reuse window) so N tabs / rapid polls cost one DB query. Any mutation
+ * clears the cache so a viewer never sees stale state after an action.
+ */
+type MyStatus = Awaited<ReturnType<typeof baseService.getMyRequestStatus>>;
+type PendingList = Awaited<ReturnType<typeof baseService.listPendingRequests>>;
+
+const STATUS_COALESCE_TTL_MS = 1000;
+const myStatusCache = createCoalescer<MyStatus>(STATUS_COALESCE_TTL_MS);
+const pendingListCache = createCoalescer<PendingList>(STATUS_COALESCE_TTL_MS);
+
+function clearReadCaches() {
+  myStatusCache.invalidate("");
+  pendingListCache.invalidate("");
+}
+
+function invalidating<A extends unknown[], R>(fn: (...args: A) => Promise<R>) {
+  return async (...args: A): Promise<R> => {
+    try {
+      return await fn(...args);
+    } finally {
+      clearReadCaches();
+    }
+  };
+}
+
+export const roomRequestService = {
+  ...baseService,
+  createSpeakerRequest: invalidating(baseService.createSpeakerRequest),
+  cancelSpeakerRequest: invalidating(baseService.cancelSpeakerRequest),
+  respondToRequest: invalidating(baseService.respondToRequest),
+  acceptHostInvitation: invalidating(baseService.acceptHostInvitation),
+  removeSpeaker: invalidating(baseService.removeSpeaker),
+
+  getMyRequestStatus(roomId: string, userId: string): Promise<MyStatus> {
+    return myStatusCache.run(`${roomId}:${userId}`, () =>
+      baseService.getMyRequestStatus(roomId, userId),
+    );
+  },
+
+  // Keyed by room AND host so the host-authorization check is never bypassed
+  // by another caller's cached result.
+  listPendingRequests(roomId: string, hostId: string): Promise<PendingList> {
+    return pendingListCache.run(`${roomId}:${hostId}`, () =>
+      baseService.listPendingRequests(roomId, hostId),
+    );
   },
 };
