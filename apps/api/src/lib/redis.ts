@@ -11,36 +11,22 @@ const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_AP
 const client: RedisBackend = redisUrl
   ? createClient({
       url: redisUrl,
+      // Send a PING every 30s: keeps idle sockets from being reaped by the
+      // provider/load balancer and detects half-open connections.
+      pingInterval: 30_000,
+      // While disconnected, reject commands immediately instead of queueing
+      // them behind a dead socket. Callers already fail open (cacheGet,
+      // getOrSetCache) so this turns hangs into fast, handled errors.
+      disableOfflineQueue: true,
       socket: {
-        // Upstash's REST client never held an open TCP socket, so a
-        // dropped connection there was just a single failed HTTP call.
-        // node-redis (used now that REDIS_URL points at Redis Cloud)
-        // keeps a persistent socket open and reconnects on its own —
-        // but with NO connectTimeout set, a stalled TCP handshake
-        // (firewall drop, wrong TLS port, etc.) hangs indefinitely
-        // instead of failing fast, and every command sent while
-        // disconnected queues up behind it rather than erroring.
         connectTimeout: 10_000,
-        reconnectStrategy: (retries) => {
-          // Bounded exponential backoff, capped at 5s per attempt.
-          //
-          // IMPORTANT: after 20 failed attempts (worst case ~100s of
-          // retrying), give up by returning an Error instead of a
-          // number. node-redis queues commands sent while disconnected
-          // and only rejects them once reconnection is abandoned — if
-          // reconnectStrategy always returns a number, it retries
-          // FOREVER, and every Redis call anywhere in the app (locks,
-          // room state, viewer-session bookkeeping) hangs forever
-          // waiting on a connection that may never come back (e.g.
-          // wrong password/host after the Upstash -> Redis Cloud
-          // migration). Returning an Error here converts that
-          // infinite hang into a real rejected promise almost every
-          // caller already has a try/catch or timeout around.
-          if (retries > 20) {
-            return new Error("Redis reconnection attempts exhausted");
-          }
-          return Math.min(retries * 200, 5_000);
-        },
+        keepAlive: true,
+        keepAliveInitialDelay: 30_000,
+        // Never give up: returning an Error here permanently stops
+        // reconnection, leaving the client dead until the process restarts
+        // (the "healthy again after a deploy" symptom). Bounded backoff,
+        // capped at 5s; disableOfflineQueue prevents the old hang problem.
+        reconnectStrategy: (retries) => Math.min(retries * 200, 5_000),
       },
     })
   : restUrl && restToken
