@@ -36,6 +36,12 @@ const PARTY_SEAT_COUNT = 10;
 
 const GAMES = [
   {
+    id: "teen-patti",
+    name: "Teen Patti",
+    description: "Solo practice: draw 3 cards and see who wins. No real money.",
+    available: true,
+  },
+  {
     id: "quiz",
     name: "Quiz",
     description: "Live multiplayer trivia with rounds and a leaderboard.",

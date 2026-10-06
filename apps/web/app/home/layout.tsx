@@ -17,6 +17,7 @@ export default function HomeLayout({
   const pathname = usePathname();
   const isFullScreenRoute =
     pathname?.includes("/room/") ||
+    pathname?.includes("/party/games/") ||
     /\/chats\/.+/.test(pathname ?? "");
 
   const isAuthed = useAuthStore((s) => s.isAuthed);
