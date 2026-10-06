@@ -6,7 +6,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, Sparkles, ChevronRight } from "lucide-react";
+import { X, Sparkles, ChevronRight, Spade } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LuckySymbol } from "@/components/games/LuckySymbol";
 
@@ -14,9 +14,10 @@ interface GamesSheetProps {
   open: boolean;
   onClose: () => void;
   onPlayLucky: () => void;
+  onPlayTeenPatti?: () => void;
 }
 
-export function GamesSheet({ open, onClose, onPlayLucky }: GamesSheetProps) {
+export function GamesSheet({ open, onClose, onPlayLucky, onPlayTeenPatti }: GamesSheetProps) {
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -79,6 +80,25 @@ export function GamesSheet({ open, onClose, onPlayLucky }: GamesSheetProps) {
           </span>
           <ChevronRight className="h-5 w-5 shrink-0 text-white/40 transition group-hover:text-white" />
         </button>
+
+        {onPlayTeenPatti && (
+          <button
+            type="button"
+            onClick={onPlayTeenPatti}
+            className="group mt-2.5 flex w-full items-center gap-3 rounded-2xl border border-[#F5B93F]/25 bg-gradient-to-r from-[#10261c] to-[#0b1812] p-3 text-left transition hover:border-[#F5B93F]/50 active:scale-[0.99]"
+          >
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-black/40 ring-1 ring-white/10">
+              <Spade className="h-8 w-8 fill-[#E8C27A] text-[#E8C27A]" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-black text-white">Teen Patti</span>
+              <span className="mt-0.5 block text-xs text-white/50">
+                Solo practice vs 4 players — your room keeps running
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-white/40 transition group-hover:text-white" />
+          </button>
+        )}
       </div>
     </>
   );

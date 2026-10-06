@@ -1012,6 +1012,13 @@ useEffect(() => {
             setGamesOpen(false);
             setLuckyOpen(true);
           }}
+          onPlayTeenPatti={() => {
+            // Solo game lives on its own page: keep the live room running in
+            // the mini player (same as "minimize") while the user plays.
+            setGamesOpen(false);
+            minimize();
+            router.push('/home/party/games/teen-patti');
+          }}
         />
 
         {luckyOpen && room?.id && (
