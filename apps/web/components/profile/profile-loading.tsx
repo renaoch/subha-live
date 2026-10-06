@@ -31,7 +31,7 @@ export function ProfileLoading() {
         {/* Menu skeleton */}
         <div className="h-[210px] animate-pulse rounded-2xl bg-white/[0.06]" />
 
-        {/* Support skeleton */}
+        {/* Support skeleeton */}
         <div className="h-[68px] animate-pulse rounded-2xl bg-white/[0.06]" />
       </div>
     </main>
