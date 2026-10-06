@@ -51,11 +51,11 @@ export function ProfileLogout() {
       onClick={handleLogout}
       disabled={loading}
       className={cn(
-        "flex w-full items-center gap-3 rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 px-4 py-3.5 text-left transition-colors hover:border-red-500/40 hover:bg-red-500/5",
+        "flex w-full items-center gap-3 rounded-2xl border border-white/[0.09] bg-white/[0.06] shadow-[0_10px_30px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl px-4 py-3.5 text-left transition-colors hover:border-red-500/40 hover:bg-red-500/5",
         loading && "pointer-events-none opacity-70",
       )}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2A2238]">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10">
         <LogOut className="h-4.5 w-4.5 text-red-400" />
       </span>
 
@@ -64,7 +64,7 @@ export function ProfileLogout() {
           {loading ? "Logging out…" : "Log out"}
         </p>
 
-        <p className="truncate text-xs text-[#9088A0]">
+        <p className="truncate text-xs text-[#B7AECB]">
           Sign out of your Subha account on this device.
         </p>
       </div>

@@ -13,6 +13,7 @@ import { ProfileSupport } from "./profile-support";
 import { ProfileLogout } from "./profile-logout";
 import { ProfileLoading } from "./profile-loading";
 import { ProfileError } from "./profile-error";
+import { ProfileBackdrop } from "./profile-backdrop";
 
 // Module-level cache: revisiting the tab paints instantly, then refreshes quietly.
 let cachedProfile: PrivateProfile | null = null;
@@ -106,8 +107,9 @@ export function ProfilePage() {
   }
 
   return (
-    <main className="min-h-dvh bg-[#17131F] font-[family-name:var(--font-body)] text-[#F3ECE0] antialiased">
-      <div className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-10 pt-6">
+    <main className="relative min-h-dvh overflow-hidden bg-[#0E0A18] font-[family-name:var(--font-body)] text-[#F3ECE0] antialiased">
+      <ProfileBackdrop />
+      <div className="relative z-10 mx-auto flex max-w-md flex-col gap-5 px-4 pb-32 pt-6">
         <ProfileHero profile={profile} />
 
         <ProfileVip

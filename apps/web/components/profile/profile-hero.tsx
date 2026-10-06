@@ -230,7 +230,7 @@ export function ProfileHero({
       <Link
         href="/profile/edit"
         aria-label="Edit profile"
-        className="absolute right-0 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-[#2A2238] bg-[#1D1829]/80 text-[#9088A0] transition-all duration-200 hover:border-[#CBA35C]/40 hover:bg-[#2A2238] hover:text-[#CBA35C] active:scale-95"
+        className="absolute right-0 top-4 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/10 text-[#D9D2E0] backdrop-blur-md transition-all duration-200 hover:border-[#CBA35C]/40 hover:bg-white/20 hover:text-[#CBA35C] active:scale-95"
       >
         <Pencil className="h-4 w-4" />
       </Link>
@@ -260,7 +260,7 @@ export function ProfileHero({
 
             {profile.is_verified && (
               <BadgeCheck
-                className="h-5 w-5 shrink-0 fill-[#CBA35C] text-[#17131F]"
+                className="h-5 w-5 shrink-0 fill-[#F5C96A] text-[#170F2E]"
                 aria-label="Verified"
               />
             )}
@@ -285,16 +285,16 @@ export function ProfileHero({
               type="button"
               onClick={handleCopy}
               className={cn(
-                "group relative flex items-center gap-1.5 rounded-full border border-[#2A2238] bg-[#1D1829]/80 px-3 py-1 transition-all duration-200 hover:border-[#CBA35C]/50 hover:bg-[#2A2238] hover:shadow-[0_0_20px_rgba(203,163,92,0.1)]",
+                "group relative flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 backdrop-blur-md transition-all duration-200 hover:border-[#CBA35C]/50 hover:bg-white/20 hover:shadow-[0_0_20px_rgba(203,163,92,0.1)]",
                 copied &&
                   "border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_20px_rgba(52,211,153,0.15)]",
               )}
             >
-              <span className="font-mono text-xs font-bold tracking-wider text-[#9088A0] transition-colors group-hover:text-[#F3ECE0]">
+              <span className="font-mono text-xs font-bold tracking-wider text-[#B7AECB] transition-colors group-hover:text-[#F3ECE0]">
                 {userId}
               </span>
 
-              <span className="text-[#9088A0] transition-colors group-hover:text-[#CBA35C]">
+              <span className="text-[#B7AECB] transition-colors group-hover:text-[#CBA35C]">
                 {copied ? (
                   <Check className="h-3.5 w-3.5 text-emerald-400" />
                 ) : (
@@ -333,7 +333,7 @@ export function ProfileHero({
               Lv.{profile.level}
             </span>
 
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#2A2238] px-2.5 py-1 text-xs font-semibold tabular-nums text-[#9088A0]">
+            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-xs font-semibold tabular-nums text-[#E6DFF0]">
               <Gem className="h-3 w-3 text-[#7FD8E8]" />
 
               {numberFormat.format(
@@ -514,13 +514,13 @@ function AvatarWithHalo({
               }
         }
       >
-        <div className="h-full w-full rounded-full bg-[#17131F]" />
+        <div className="h-full w-full rounded-full bg-[#170F2E]" />
       </div>
 
       <div
         className="absolute inset-[6px] overflow-hidden rounded-full"
         style={{
-          boxShadow: `0 0 18px ${theme.primary}55`,
+          boxShadow: `0 0 28px ${theme.primary}99`,
         }}
       >
         {showImage ? (
@@ -596,7 +596,7 @@ function StatsRow({
   ];
 
   return (
-    <dl className="mt-5 flex items-stretch justify-between rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 px-2 py-3.5">
+    <dl className="mt-5 flex items-stretch justify-between rounded-2xl border border-white/[0.09] bg-white/[0.06] shadow-[0_10px_30px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl px-2 py-3.5">
       {stats.map(
         (stat, index) => {
           const content = (
@@ -605,12 +605,12 @@ function StatsRow({
                 "flex flex-1 flex-col items-center justify-center gap-1",
                 index !==
                   stats.length - 1 &&
-                  "border-r border-[#2A2238]",
+                  "border-r border-white/10",
                 stat.href &&
                   "cursor-pointer transition-colors active:opacity-70",
               )}
             >
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#9088A0]">
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-[#B7AECB]">
                 {stat.label}
               </dt>
 

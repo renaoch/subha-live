@@ -18,14 +18,14 @@ export function ProfileWallet({
     {
       label: "Coins",
       value: coins,
-      color: "#CBA35C",
+      color: "#F5C96A",
       href: "/wallet",
       aria: "Open Coins",
     },
     {
       label: "Diamonds",
       value: diamonds,
-      color: "#D98FA0",
+      color: "#FF7AB0",
       href: "/wallet/diamonds",
       aria: "Open Diamonds",
     },
@@ -39,17 +39,19 @@ export function ProfileWallet({
             key={item.label}
             href={item.href}
             aria-label={item.aria}
-            className="rounded-2xl border border-[#2A2238] bg-[#1D1829]/60 px-4 py-3.5 transition hover:border-[#CBA35C]/50 active:scale-[0.98]"
+            className="relative overflow-hidden rounded-2xl border px-4 py-3.5 shadow-[0_10px_30px_rgba(0,0,0,0.28)] backdrop-blur-xl transition active:scale-[0.98]"
+            style={{ borderColor: `${item.color}55`, background: `linear-gradient(135deg, ${item.color}30, rgba(255,255,255,0.04) 70%)` }}
           >
-            <p className="text-xs text-[#9088A0]">
+            <p className="text-xs font-medium text-[#D9CFE6]">
               {item.label}
             </p>
 
-            <p className="mt-1 flex items-center gap-1.5 text-lg font-semibold tabular-nums">
+            <p className="mt-1 flex items-center gap-1.5 text-xl font-bold tabular-nums">
               <span
-                className="h-2 w-2 rounded-full"
+                className="h-2.5 w-2.5 rounded-full"
                 style={{
                   backgroundColor: item.color,
+                  boxShadow: `0 0 10px ${item.color}`,
                 }}
                 aria-hidden="true"
               />
@@ -62,7 +64,7 @@ export function ProfileWallet({
 
       <Link
         href="/wallet"
-        className="flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl bg-[#CBA35C] text-sm font-bold text-[#17131F] transition hover:bg-[#DDBA78] active:scale-[0.98]"
+        className="flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-[#FFE29A] via-[#F5C96A] to-[#E8A22E] text-sm font-extrabold text-[#2E1C04] shadow-[0_8px_26px_rgba(245,185,63,0.45)] transition hover:brightness-110 active:scale-[0.98]"
       >
         <Plus className="h-4 w-4" /> Recharge
       </Link>
