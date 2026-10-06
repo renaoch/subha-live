@@ -26,8 +26,6 @@ import { LiveVideo } from '@/components/LiveVideo';
 
 import { AudioStage } from '@/components/audio/AudioStage';
 
-import { StageControlBar } from '@/components/audio/StageControlBar';
-import { SeatLevelsDrawer } from '@/components/audio/SeatLevelsDrawer';
 
 import { RoomMoreActions } from '@/components/RoomMoreActions';
 
@@ -325,7 +323,7 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
 
 
   const [speakerPanelOpen, setSpeakerPanelOpen] = useState(false);
-  const [seatLevelsOpen, setSeatLevelsOpen] = useState(false);
+  const [moreView, setMoreView] = useState<'menu' | 'levels'>('menu');
 
   const [viewersOpen, setViewersOpen] = useState(false);
 
@@ -540,7 +538,10 @@ useEffect(() => {
             isHost={isHost}
             roomCoins={sessionGiftTotals.totalDiamonds}
             onOpenSeats={() => setSpeakerPanelOpen(true)}
-            onOpenLevels={() => setSeatLevelsOpen(true)}
+            onOpenLevels={() => {
+              setMoreView('levels');
+              setMoreOpen(true);
+            }}
             onOpenProfile={setProfileUserId}
           />
         ) : (
@@ -727,6 +728,27 @@ useEffect(() => {
           onClose={() => setMoreOpen(false)}
           isHost={isHost}
           isAudioRoom={room.media_type === "audio"}
+          view={moreView}
+          onViewChange={setMoreView}
+          stage={
+            isAudioRoom && isLive
+              ? {
+                  onStage: isHost || (stageSnapshot?.me.seat ?? null) !== null,
+                  isHost,
+                  muted: stageMuted,
+                  requestPending: stageSnapshot?.me.requestPending ?? false,
+                  loading: actionLoading,
+                  pendingCount: pendingRequestCount,
+                  roomCoins: sessionGiftTotals.totalDiamonds,
+                  seatCount,
+                  onToggleMute: handleStageToggleMute,
+                  onLeaveSeat: handleStageLeaveSeat,
+                  onRequest: () => setSpeakerPanelOpen(true),
+                  onCancelRequest: handleStageCancelRequest,
+                  onManage: () => setSpeakerPanelOpen(true),
+                }
+              : undefined
+          }
           onShare={() => {
             const url = typeof window !== 'undefined' ? window.location.href : '';
             if (navigator.share) {
@@ -781,7 +803,10 @@ useEffect(() => {
 
             onSend={sendChat}
             onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
-            onOpenMore={() => setMoreOpen(true)}
+            onOpenMore={() => {
+              setMoreView('menu');
+              setMoreOpen(true);
+            }}
             onOpenPk={() => setPkOpen(true)}
             onOpenGames={() => setGamesOpen(true)}
             onToggleMic={isHost && room.media_type !== 'audio' ? () => setMicEnabled((v) => !v) : undefined}
@@ -937,33 +962,6 @@ useEffect(() => {
         )}
 
         {/* Audio stage modal */}
-
-        {isAudioRoom && isLive && (
-          <StageControlBar
-            isHost={isHost}
-            isLive={isLive}
-            mySeat={stageSnapshot?.me.seat ?? null}
-            requestPending={stageSnapshot?.me.requestPending ?? false}
-            muted={stageMuted}
-            loading={actionLoading}
-            onToggleMute={handleStageToggleMute}
-            onLeaveSeat={handleStageLeaveSeat}
-            onRequest={() => setSpeakerPanelOpen(true)}
-            onCancelRequest={handleStageCancelRequest}
-            pendingCount={pendingRequestCount}
-            onManage={() => setSpeakerPanelOpen(true)}
-            onOpenLevels={() => setSeatLevelsOpen(true)}
-          />
-        )}
-
-        {isAudioRoom && (
-          <SeatLevelsDrawer
-            open={seatLevelsOpen}
-            onClose={() => setSeatLevelsOpen(false)}
-            roomCoins={sessionGiftTotals.totalDiamonds}
-            seatCount={seatCount}
-          />
-        )}
 
         {speakerPanelOpen && (
           <AudioStageModal
