@@ -103,9 +103,9 @@ export function BannerCarousel({
           overflow-hidden
           rounded-[24px]
           border
-          border-accent-hot/30
-          bg-[linear-gradient(145deg,rgba(64,31,8,0.92),rgba(24,12,4,0.96))]
-          shadow-[inset_0_1px_0_rgba(255,255,255,0.03),0_18px_50px_-28px_rgba(255,140,0,0.45)]
+          border-white/10
+          bg-[linear-gradient(145deg,rgba(74,38,22,0.92),rgba(38,22,72,0.92))]
+          shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_50px_-24px_rgba(255,140,0,0.5)]
           sm:h-[155px]
           sm:min-h-[155px]
         "
@@ -209,7 +209,7 @@ function BannerSlide({
       "
       style={{
         background:
-          "radial-gradient(circle at 86% 58%, rgba(255,145,34,0.14), transparent 23%), linear-gradient(135deg, rgba(72,35,9,0.94), rgba(27,14,6,0.98) 58%, rgba(18,9,4,0.99))",
+          "radial-gradient(circle at 86% 58%, rgba(255,145,34,0.22), transparent 30%), linear-gradient(135deg, rgba(86,42,18,0.9), rgba(44,26,84,0.92) 62%, rgba(26,16,52,0.95))",
       }}
     >
       {/* Background glow - left */}

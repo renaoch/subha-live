@@ -23,6 +23,7 @@ import { useRooms, useCreateRoom } from "@/hooks/queries/use-rooms";
 import { useActivePkBattles } from "@/hooks/queries/use-pk";
 import type { RoomRecord } from "@/lib/api/rooms";
 import { cn } from "@/lib/utils";
+import { ProfileBackdrop } from "@/components/profile/profile-backdrop";
 
 /** Audio party rooms created from "Go Party" always open with 10 seats. */
 const PARTY_SEAT_COUNT = 10;
@@ -131,25 +132,26 @@ export default function PartyPage() {
   }
 
   return (
-    <main className="mx-auto min-h-dvh w-full max-w-[680px] bg-surface pb-10">
-      <header className="glass-panel sticky top-0 z-30 rounded-none border-x-0 border-t-0 px-4 pb-3 pt-5">
-        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.2em] text-accent-hot">
+    <main className="relative mx-auto min-h-dvh w-full max-w-[680px] overflow-hidden bg-[#0E0A18] pb-32">
+      <ProfileBackdrop />
+      <header className="relative z-10 px-5 pb-2 pt-6">
+        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[#FFB27A]">
           <Sparkles className="h-3 w-3" />
           Subha Live
         </p>
-        <h1 className="mt-0.5 font-display text-[1.8rem] font-black tracking-[-0.04em] text-ink">
+        <h1 className="mt-1 bg-gradient-to-r from-white via-[#FFE6CC] to-[#FFB27A] bg-clip-text font-display text-[2rem] font-black tracking-[-0.04em] text-transparent">
           Discover
         </h1>
-        <p className="mt-1 text-sm text-ink-muted">
+        <p className="mt-1 text-sm text-white/60">
           Join a PK battle, play a game, or catch a live event.
         </p>
       </header>
 
-      <div className="px-4 pt-4">
+      <div className="relative z-10 px-4 pt-3">
         <BannerCarousel items={promoBanners} />
       </div>
 
-      <section className="px-4 pt-5">
+      <section className="relative z-10 px-4 pt-5">
         {/* Go Party — one tap creates a 10-seat audio party room and jumps
             straight into it. This is the only place audio rooms are
             created now; Home only creates video rooms. */}
@@ -157,29 +159,26 @@ export default function PartyPage() {
           type="button"
           onClick={goParty}
           disabled={launching}
-          className="grad-brand animate-gradient-shift glow-hot-lg relative mb-5 flex w-full items-center gap-4 overflow-hidden rounded-[28px] px-5 py-5 text-left text-white transition active:scale-[0.98] disabled:opacity-70"
+          className="group relative mb-6 flex w-full items-center gap-3 overflow-hidden rounded-full border border-[#FFB27A]/35 bg-[#1A1226]/80 p-2 pr-2 text-left shadow-[0_10px_30px_rgba(255,138,91,0.18)] backdrop-blur-xl transition active:scale-[0.98] disabled:opacity-70"
         >
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
-            {launching ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <PartyPopper className="h-6 w-6" />
-            )}
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#FFD36E] to-[#FF7A45] text-white shadow-[0_0_18px_rgba(255,138,91,0.55)]">
+            {launching ? <Loader2 className="h-5 w-5 animate-spin" /> : <PartyPopper className="h-5 w-5" />}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-lg font-black tracking-tight">Go Party</span>
-            <span className="block text-xs text-white/80">
-              {launching
-                ? "Setting up your party…"
-                : `Start with 4 seats · unlock up to ${PARTY_SEAT_COUNT} with coins`}
+            <span className="block text-[15px] font-extrabold tracking-tight text-white">Go Party</span>
+            <span className="block truncate text-[11px] text-white/60">
+              {launching ? "Setting up your party…" : `4 seats free · unlock up to ${PARTY_SEAT_COUNT} with coins`}
             </span>
           </span>
-          <ChevronRight className="h-5 w-5 shrink-0 text-white/70" />
+          <span className="flex h-11 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-[#FFB04A] to-[#FF6A3D] px-5 text-sm font-extrabold text-[#2B1204] shadow-[0_6px_18px_rgba(255,106,61,0.45)]">
+            Start
+            <ChevronRight className="h-4 w-4" />
+          </span>
         </button>
 
         {loading ? (
           <div className="flex min-h-[30vh] items-center justify-center">
-            <div className="flex items-center gap-2 text-sm text-ink-muted">
+            <div className="flex items-center gap-2 text-sm text-white/60">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading Party…
             </div>
@@ -202,11 +201,11 @@ export default function PartyPage() {
         )}
 
         {roomsError && !loading && (
-          <div className="mt-4 flex items-center justify-between rounded-2xl border border-border bg-surface-raised p-3 text-xs text-ink-muted">
+          <div className="mt-4 flex items-center justify-between rounded-2xl border border-border bg-surface-raised p-3 text-xs text-white/60">
             Some activity data couldn&apos;t load.
             <button
               onClick={() => refetchRooms()}
-              className="flex items-center gap-1 font-semibold text-ink"
+              className="flex items-center gap-1 font-semibold text-white"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Retry
@@ -215,6 +214,30 @@ export default function PartyPage() {
         )}
       </section>
     </main>
+  );
+}
+
+const FEATURED_CLASS =
+  "relative block overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#2C1B4D]/90 via-[#1A1226]/90 to-[#2A1410]/90 p-4 shadow-[0_14px_36px_rgba(0,0,0,0.4)] backdrop-blur-xl transition active:scale-[0.99]";
+
+function FeaturedGlow() {
+  return (
+    <>
+      <span className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-[#FF7A45]/35 blur-3xl" />
+      <span className="pointer-events-none absolute -bottom-12 -left-8 h-32 w-32 rounded-full bg-[#8B5CF6]/35 blur-3xl" />
+    </>
+  );
+}
+
+function LiveChip({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF4F6D] opacity-70" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#FF4F6D]" />
+      </span>
+      Live · {label}
+    </span>
   );
 }
 
@@ -236,18 +259,23 @@ function FeaturedActivity({
       <Link
         href={`/home/room/${battle.room_a_id}`}
         onClick={guardLinkClick(battle.room_a_id)}
-        className="grad-brand animate-gradient-shift glow-hot-lg relative block overflow-hidden rounded-[28px] px-5 py-6 text-white"
+        className={FEATURED_CLASS}
       >
-        <Swords className="absolute -right-3 -top-3 h-24 w-24 text-white/15" />
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/80">
-          Featured · PK Battle
-        </p>
-        <p className="mt-1 font-display text-2xl font-bold">
-          {roomA?.host?.name ?? "Host"} vs {roomB?.host?.name ?? "Host"}
-        </p>
-        <p className="mt-1 text-sm text-white/85">
-          Tap in to watch the battle live
-        </p>
+        <FeaturedGlow />
+        <div className="relative flex items-center gap-3">
+          <div className="flex -space-x-4">
+            <Avatar name={roomA?.host?.name ?? "Host A"} src={roomA?.host?.avatar ?? undefined} size="lg" className="ring-2 ring-[#FF6A3D]" />
+            <Avatar name={roomB?.host?.name ?? "Host B"} src={roomB?.host?.avatar ?? undefined} size="lg" className="ring-2 ring-[#8B5CF6]" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <LiveChip label="PK Battle" />
+            <p className="mt-1.5 truncate font-display text-xl font-extrabold text-white">
+              {roomA?.host?.name ?? "Host"} <span className="text-[#FFB27A]">vs</span> {roomB?.host?.name ?? "Host"}
+            </p>
+            <p className="text-xs text-white/60">Tap in to watch the battle live</p>
+          </div>
+          <Swords className="h-6 w-6 shrink-0 text-[#FFB27A]" />
+        </div>
       </Link>
     );
   }
@@ -257,27 +285,41 @@ function FeaturedActivity({
       <Link
         href={`/home/room/${room.id}`}
         onClick={guardLinkClick(room.id)}
-        className="grad-brand animate-gradient-shift glow-hot-lg relative block overflow-hidden rounded-[28px] px-5 py-6 text-white"
+        className={FEATURED_CLASS}
       >
-        <Sparkles className="absolute -right-3 -top-3 h-24 w-24 text-white/15" />
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/80">
-          Featured · Trending host
-        </p>
-        <p className="mt-1 font-display text-2xl font-bold">
-          {room.host?.name ?? "Subha host"}
-        </p>
-        <p className="mt-1 truncate text-sm text-white/85">{room.title}</p>
+        <FeaturedGlow />
+        <div className="relative flex items-center gap-3.5">
+          <span className="rounded-full bg-gradient-to-br from-[#FFD36E] via-[#FF7A45] to-[#FF4F93] p-[2.5px] shadow-[0_0_22px_rgba(255,122,69,0.5)]">
+            <Avatar name={room.host?.name ?? "Host"} src={room.host?.avatar ?? undefined} size="lg" className="ring-2 ring-[#170F2E]" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <LiveChip label="Trending" />
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-white/70">
+                <Users className="h-3 w-3" />
+                {room.viewerCount ?? 0}
+              </span>
+            </div>
+            <p className="mt-1.5 truncate font-display text-xl font-extrabold text-white">
+              {room.host?.name ?? "Subha host"}
+            </p>
+            <p className="truncate text-xs text-white/60">{room.title}</p>
+          </div>
+          <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold text-white">
+            Watch
+          </span>
+        </div>
       </Link>
     );
   }
 
   return (
-    <div className="stage-card relative overflow-hidden rounded-[28px] px-5 py-6 text-center">
-      <Sparkles className="mx-auto h-6 w-6 text-ink-muted" />
-      <p className="mt-2 text-sm font-semibold text-ink">
+    <div className="border border-white/[0.09] bg-white/[0.05] shadow-[0_10px_28px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-xl rounded-[22px] relative overflow-hidden rounded-[28px] px-5 py-6 text-center">
+      <Sparkles className="mx-auto h-6 w-6 text-white/60" />
+      <p className="mt-2 text-sm font-semibold text-white">
         Nothing featured right now
       </p>
-      <p className="mt-1 text-xs text-ink-muted">
+      <p className="mt-1 text-xs text-white/60">
         Start a PK battle or go live to be featured here.
       </p>
     </div>
@@ -294,10 +336,12 @@ function SectionHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="mb-3 mt-7 flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4.5 w-4.5 text-ink" />
-        <h2 className="text-base font-bold tracking-tight text-ink">
+    <div className="mb-3 mt-8 flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#FFB04A]/30 to-[#FF6A3D]/15 text-[#FFB27A]">
+          <Icon className="h-4 w-4" />
+        </span>
+        <h2 className="text-base font-extrabold tracking-tight text-white">
           {title}
         </h2>
       </div>
@@ -325,7 +369,7 @@ function PkSection({
         icon={Swords}
         title="PK Battles"
         action={
-          <span className="text-xs font-medium text-ink-muted">
+          <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-white/70">
             {battles?.length ?? 0} active
           </span>
         }
@@ -334,13 +378,13 @@ function PkSection({
       {error ? (
         <button
           onClick={onRetry}
-          className="stage-card flex w-full items-center justify-center gap-2 p-4 text-xs font-semibold text-ink-muted"
+          className="border border-white/[0.09] bg-white/[0.05] shadow-[0_10px_28px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-xl rounded-[22px] flex w-full items-center justify-center gap-2 p-4 text-xs font-semibold text-white/60"
         >
           <RotateCcw className="h-3.5 w-3.5" />
           Couldn&apos;t load PK battles — tap to retry
         </button>
       ) : !battles || battles.length === 0 ? (
-        <div className="rounded-[20px] border border-dashed border-white/15 bg-surface-raised/40 p-4 text-center text-xs text-ink-muted">
+        <div className="rounded-[20px] border border-dashed border-white/15 bg-white/[0.03] p-4 text-center text-xs text-white/60">
           No PK battles right now. Start one from inside a live room.
         </div>
       ) : (
@@ -354,7 +398,7 @@ function PkSection({
                 key={battle.id}
                 href={`/home/room/${battle.room_a_id}`}
                 onClick={guardLinkClick(battle.room_a_id)}
-                className="stage-card flex items-center gap-3 p-3 transition-colors hover:border-accent-hot/40"
+                className="border border-white/[0.09] bg-white/[0.05] shadow-[0_10px_28px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-xl rounded-[22px] flex items-center gap-3 p-3 transition-colors hover:border-accent-hot/40"
               >
                 <div className="flex -space-x-3">
                   <span className="avatar-ring">
@@ -375,11 +419,11 @@ function PkSection({
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-ink">
+                  <p className="truncate text-sm font-bold text-white">
                     {roomA?.host?.name ?? "Host A"} vs{" "}
                     {roomB?.host?.name ?? "Host B"}
                   </p>
-                  <p className="mt-0.5 text-xs text-ink-muted">
+                  <p className="mt-0.5 text-xs text-white/60">
                     {isLive
                       ? `${battle.score_a} — ${battle.score_b}`
                       : battle.status === "INVITED"
@@ -392,12 +436,12 @@ function PkSection({
                     "shrink-0 rounded-full px-2 py-1 text-[10px] font-bold",
                     isLive
                       ? "bg-accent-hot/15 text-accent-hot"
-                      : "bg-surface text-ink-muted",
+                      : "bg-surface text-white/60",
                   )}
                 >
                   {isLive ? "LIVE" : battle.status}
                 </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-ink-muted" />
+                <ChevronRight className="h-4 w-4 shrink-0 text-white/60" />
               </Link>
             );
           })}
@@ -427,18 +471,18 @@ function GamesSection() {
             <Link
               key={game.id}
               href={`/home/party/games/${game.id}`}
-              className="stage-card group flex flex-col justify-between p-3.5 text-left transition hover:border-accent-hot/40"
+              className="border border-white/[0.09] bg-white/[0.05] shadow-[0_10px_28px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-xl rounded-[22px] group flex flex-col justify-between p-3.5 text-left transition hover:border-accent-hot/40"
             >
               <span
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br text-white",
+                  "flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg",
                   TILE_GRADIENTS[index % TILE_GRADIENTS.length],
                 )}
               >
                 <Gamepad2 className="h-4.5 w-4.5" />
               </span>
-              <p className="mt-2.5 text-sm font-bold text-ink">{game.name}</p>
-              <p className="mt-1 text-[11px] leading-4 text-ink-muted">
+              <p className="mt-2.5 text-sm font-bold text-white">{game.name}</p>
+              <p className="mt-1 text-[11px] leading-4 text-white/60">
                 {game.description}
               </p>
               <span className="mt-2.5 inline-flex w-fit items-center gap-1 rounded-full bg-accent-hot/15 px-2 py-0.5 text-[10px] font-bold text-accent-hot">
@@ -448,7 +492,7 @@ function GamesSection() {
           ) : (
             <div
               key={game.id}
-              className="flex flex-col justify-between rounded-[26px] border border-dashed border-white/12 bg-surface-raised/50 p-3.5 text-left opacity-70"
+              className="flex flex-col justify-between rounded-[22px] border border-dashed border-white/12 bg-white/[0.03] p-3.5 text-left opacity-70"
             >
               <span
                 className={cn(
@@ -458,11 +502,11 @@ function GamesSection() {
               >
                 <Gamepad2 className="h-4.5 w-4.5" />
               </span>
-              <p className="mt-2.5 text-sm font-bold text-ink">{game.name}</p>
-              <p className="mt-1 text-[11px] leading-4 text-ink-muted">
+              <p className="mt-2.5 text-sm font-bold text-white">{game.name}</p>
+              <p className="mt-1 text-[11px] leading-4 text-white/60">
                 {game.description}
               </p>
-              <span className="mt-2.5 inline-flex w-fit items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[10px] font-bold text-ink-muted">
+              <span className="mt-2.5 inline-flex w-fit items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[10px] font-bold text-white/60">
                 Coming soon
               </span>
             </div>
@@ -477,15 +521,15 @@ function EventsSection() {
   return (
     <section>
       <SectionHeader icon={CalendarClock} title="Events" />
-      <div className="flex items-center gap-3 rounded-[20px] border border-dashed border-white/15 bg-surface-raised/40 p-4 text-left">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-surface-raised text-ink-muted">
+      <div className="flex items-center gap-3 rounded-[20px] border border-dashed border-white/15 bg-white/[0.03] p-4 text-left">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-surface-raised text-white/60">
           <Users className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-sm font-bold text-ink">
+          <p className="text-sm font-bold text-white">
             Scheduled events are coming soon
           </p>
-          <p className="mt-0.5 text-xs text-ink-muted">
+          <p className="mt-0.5 text-xs text-white/60">
             We&apos;ll surface hosted events and special activities here.
           </p>
         </div>
