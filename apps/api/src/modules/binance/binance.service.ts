@@ -1,6 +1,7 @@
 import { binancePublicRequest, binanceSignedRequest, isBinanceConfigured } from "../../lib/binance";
 import { AppError } from "../../errors/app-error";
 import { confirmPayment } from "../financial/financial.service";
+import { supabase } from "../../lib/supabase";
 
 // Only these symbols can be traded/quoted through the app. Prevents any
 // caller from asking the backend to sign a request for an arbitrary
@@ -132,6 +133,52 @@ export async function findDepositByTxId(coin: string, txId: string) {
   return history.find((d) => d.txId === txId) ?? null;
 }
 
+// ─── Shared safety checks for every deposit-crediting path ─────────────
+
+/**
+ * Claims a deposit platform-wide (binance_deposit_claims PK = coin + txId) so
+ * the same deposit can never be credited by two different flows or users.
+ * A retry by the same claimant (credit step failed earlier) is allowed.
+ */
+export async function claimDeposit(input: {
+  coin: string;
+  txId: string;
+  purpose: "wallet_recharge" | "crypto_recharge";
+  userId: string;
+}) {
+  const { data, error } = await (supabase as any).rpc("claim_binance_deposit", {
+    p_coin: input.coin,
+    p_tx_id: input.txId,
+    p_purpose: input.purpose,
+    p_reference: `${input.coin.toUpperCase()}:${input.txId}`,
+    p_user_id: input.userId,
+  });
+  if (error) {
+    console.error("[binance] claim failed:", error.message);
+    throw new AppError(500, "Could not process this deposit right now.", { code: "DEPOSIT_CLAIM_FAILED" });
+  }
+  if (data === "taken") {
+    throw new AppError(409, "This transaction has already been used.", { code: "TX_ALREADY_USED" });
+  }
+}
+
+/**
+ * On-chain deposits must have landed on OUR current deposit address for that
+ * coin/network. Internal Binance transfers (transferType 1) have no address.
+ */
+export async function assertDepositIsOurs(deposit: {
+  coin: string;
+  network: string;
+  address: string;
+  transferType?: number;
+}) {
+  if (deposit.transferType === 1) return;
+  const ours = await getDepositAddress(deposit.coin, deposit.network);
+  if (!ours?.address || ours.address.trim() !== (deposit.address ?? "").trim()) {
+    throw new AppError(409, "This deposit was not sent to our address.", { code: "DEPOSIT_WRONG_ADDRESS" });
+  }
+}
+
 // ─── Private: successful deposits in a time window ────────────────────
 // Read-only. Used by the agency coin-order poller to auto-detect payments.
 // status=1 asks Binance for fully successful deposits only; callers still
@@ -245,15 +292,17 @@ export async function verifyAndCreditDeposit(params: {
     };
   }
 
-  // 1 = fully credited on Binance's side, 6 = credited but withdrawal
-  // temporarily restricted (e.g. new address risk hold) — funds have
-  // still actually arrived in either case, so both are creditable here.
-  if (deposit.status !== 1 && deposit.status !== 6) {
+  // Only status 1 (fully successful) is creditable. Status 6 (credited but
+  // flagged/withdraw-restricted) is NOT trusted for crediting real value.
+  if (deposit.status !== 1) {
     throw new AppError(409, "This deposit could not be verified as successful.", {
       code: "BINANCE_DEPOSIT_NOT_CONFIRMED",
       details: { status: deposit.status },
     });
   }
+
+  await assertDepositIsOurs(deposit);
+  await claimDeposit({ coin, txId, purpose: "crypto_recharge", userId: params.userId });
 
   const amount = parseFloat(deposit.amount);
   const amountUsd = await estimateUsdValue(coin, amount);

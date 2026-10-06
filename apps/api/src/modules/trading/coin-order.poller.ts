@@ -12,7 +12,7 @@
 
 import { setInterval, clearInterval } from "node:timers";
 import { supabase } from "../../lib/supabase";
-import { isBinanceConfigured, isBinanceTestnet } from "../../lib/binance";
+import { isBinanceConfigured } from "../../lib/binance";
 import { listSuccessfulDeposits } from "../binance/binance.service";
 import { evaluateDeposit, ORDER_COIN, type BinanceDeposit } from "./coin-order.logic";
 import { settleOrder, type CoinOrderRow } from "./coin-order.service";
@@ -27,8 +27,8 @@ let lastExpirySweep = 0;
 
 export function startCoinOrderPoller(): void {
   if (timer) return;
-  if (!isBinanceConfigured() || isBinanceTestnet()) {
-    console.warn("[coin-orders] poller not started (Binance not configured for live deposits)");
+  if (!isBinanceConfigured()) {
+    console.warn("[coin-orders] poller NOT started — BINANCE_API_KEY / BINANCE_API_SECRET missing; coin orders will not auto-credit");
     return;
   }
   timer = setInterval(() => void tick(), INTERVAL_MS);

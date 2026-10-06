@@ -21,7 +21,10 @@ import { AppError } from "../errors/app-error";
 // - Fails loudly and immediately if credentials are missing, instead
 //   of silently sending unsigned/broken requests.
 
-const BINANCE_BASE_URL = process.env.BINANCE_BASE_URL || "https://api.binance.com";
+// Production Binance only. There is deliberately NO environment override: the
+// endpoint cannot be redirected to a testnet, mock, or look-alike host.
+const BINANCE_BASE_URL = "https://api.binance.com";
+const REQUEST_TIMEOUT_MS = 10_000;
 const RECV_WINDOW = 5000;
 
 function getCredentials() {
@@ -61,7 +64,7 @@ export async function binancePublicRequest<T>(
   const qs = toQueryString(params);
   const url = `${BINANCE_BASE_URL}${path}${qs ? `?${qs}` : ""}`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new AppError(res.status === 429 ? 429 : 502, "Binance request failed", {
@@ -94,6 +97,7 @@ export async function binanceSignedRequest<T>(
 
   const res = await fetch(url, {
     method,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       "X-MBX-APIKEY": apiKey,
       ...(method === "POST" ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
@@ -157,20 +161,4 @@ function emptyBodyHint(status: number): string {
 
 export function isBinanceConfigured() {
   return Boolean(process.env.BINANCE_API_KEY && process.env.BINANCE_API_SECRET);
-}
-
-/**
- * True when BINANCE_BASE_URL points at the Spot Testnet
- * (testnet.binance.vision) rather than production Binance.
- *
- * Important: the testnet only implements the core `api/v3/*` spot
- * endpoints (account, order, ticker/price, allOrders). It does NOT
- * implement the `sapi/v1/capital/*` wallet endpoints (deposit address,
- * deposit history, withdrawals, etc.) — calling those against
- * testnet.binance.vision will always 404, no matter how the request is
- * signed. Callers that need those endpoints should check this flag and
- * return mocked data in test mode instead of calling Binance.
- */
-export function isBinanceTestnet() {
-  return BINANCE_BASE_URL.includes("testnet.binance.vision");
 }

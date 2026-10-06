@@ -12,7 +12,7 @@ import { AppError } from "../../errors/app-error";
 import { logAudit } from "../../lib/audit";
 import { supabase } from "../../lib/supabase";
 import { getDepositAddress, findDepositByTxId, listSuccessfulDeposits } from "../binance/binance.service";
-import { isBinanceConfigured, isBinanceTestnet } from "../../lib/binance";
+import { isBinanceConfigured } from "../../lib/binance";
 import {
   COIN_ORDER_NETWORKS,
   MAX_PENDING_ORDERS_PER_AGENCY,
@@ -142,11 +142,6 @@ async function requireOwnedAgency(userId: string) {
 function assertBinanceReady() {
   if (!isBinanceConfigured()) {
     throw new AppError(503, "Automated payments are temporarily unavailable.", { code: "BINANCE_NOT_CONFIGURED" });
-  }
-  // The testnet has no wallet/deposit endpoints, so a "verified" payment there
-  // could never be real. Refuse rather than ever credit against mock data.
-  if (isBinanceTestnet()) {
-    throw new AppError(503, "Automated payments are unavailable in test mode.", { code: "BINANCE_TESTNET" });
   }
 }
 

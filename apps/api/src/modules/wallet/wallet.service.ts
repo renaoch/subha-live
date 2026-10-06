@@ -6,7 +6,7 @@ import {
   requestWithdrawalTransaction,
   getLedgerHistory,
 } from "../financial/financial.service";
-import { getDepositAddress, findDepositByTxId } from "../binance/binance.service";
+import { getDepositAddress, findDepositByTxId, assertDepositIsOurs, claimDeposit } from "../binance/binance.service";
 
 // ─── Coin Packages ──────────────────────────────────────────────
 // Prices are defined here, server-side, and are the only prices
@@ -169,6 +169,9 @@ export async function verifyCryptoRecharge(
       code: "DEPOSIT_AMOUNT_INSUFFICIENT",
     });
   }
+
+  await assertDepositIsOurs(deposit);
+  await claimDeposit({ coin: "USDT", txId: txId.trim(), purpose: "wallet_recharge", userId });
 
   const result = await confirmPayment({
     userId,
