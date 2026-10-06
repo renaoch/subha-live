@@ -434,7 +434,7 @@ function ChairSlot({
         tone={tone}
         className="absolute inset-0 h-full w-full transition group-hover:brightness-110"
         style={{
-          filter: `drop-shadow(0 0 7px ${pal.glow}${dim === "locked" ? "99" : "ff"}) drop-shadow(0 6px 8px rgba(0,0,0,0.5)) saturate(${dim === "locked" ? 0.7 : 1.3}) brightness(${dim === "locked" ? 1.15 : 1.2}) contrast(1.05)`,
+          filter: `drop-shadow(0 0 7px ${pal.glow}${dim === "locked" ? "99" : "ff"}) drop-shadow(0 6px 8px rgba(0,0,0,0.5)) saturate(${dim === "locked" ? 0.7 : 1.3}) brightness(${dim === "locked" ? 1.05 : 1.08})`,
         }}
       />
 
