@@ -3,6 +3,7 @@ import { connectRedis } from "./lib/redis";
 import { cloudflareRealtimeProvider } from "./lib/media/cloudflare/cloudflare-realtime";
 import { startPkFinalizer, stopPkFinalizer } from "./modules/pk/pk.finalizer";
 import { startQuizFinalizer, stopQuizFinalizer } from "./modules/quiz/quiz.finalizer";
+import { startCoinOrderPoller, stopCoinOrderPoller } from "./modules/trading/coin-order.poller";
 import { startLuckyRingFinalizer, stopLuckyRingFinalizer } from "./modules/lucky-ring/lucky-ring.finalizer";
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -51,6 +52,7 @@ export async function bootstrap() {
     startPkFinalizer();
     startQuizFinalizer();
     startLuckyRingFinalizer();
+    startCoinOrderPoller();
 
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running in ${mode} mode on port ${PORT}`);
@@ -61,6 +63,7 @@ export async function bootstrap() {
       stopPkFinalizer();
       stopQuizFinalizer();
       stopLuckyRingFinalizer();
+      stopCoinOrderPoller();
       server.close(() => process.exit(0));
       setTimeout(() => process.exit(1), 10_000).unref();
     };

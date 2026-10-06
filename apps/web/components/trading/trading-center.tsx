@@ -146,9 +146,8 @@ export function TradingCenter() {
           {tab === "buy-coins" ? (
             <motion.div key="buy-coins" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
               <BuyCoinsTab
-                agencyId={overview.agency.id}
-                agencyName={overview.agency.name}
                 balance={balance}
+                onCredited={handlePaid}
                 transactions={transactions}
                 transactionsLoading={transactionsLoading}
               />

@@ -73,6 +73,33 @@ export interface HostPaymentResult {
   hostId: string;
 }
 
+export type CoinOrderStatus = "pending" | "completed" | "expired";
+export type CoinOrderNetwork = "TRC20" | "BEP20";
+
+export interface CoinOrder {
+  id: string;
+  status: CoinOrderStatus;
+  tierUsd: number;
+  totalCoins: number;
+  baseCoins: number;
+  bonusPct: number;
+  coin: string;
+  networkLabel: CoinOrderNetwork;
+  depositAddress: string;
+  /** Exact amount to send, e.g. "1000.37". Server-generated. */
+  payAmount: string;
+  createdAt: string;
+  expiresAt: string;
+  completedAt: string | null;
+}
+
+export interface CoinOrderVerifyResult {
+  status: "completed" | "pending" | "expired" | "not_found" | "rejected";
+  order: CoinOrder;
+  newBalance?: number;
+  message?: string;
+}
+
 export { newClientRequestId };
 
 export const tradingApi = {
@@ -100,5 +127,24 @@ export const tradingApi = {
       method: "POST",
       body: JSON.stringify(input),
     }).then((r) => r.data);
+  },
+
+  // ── Automated agency coin purchase (server prices + verifies via Binance) ──
+  createCoinOrder(input: { tierUsd: number; network: CoinOrderNetwork }) {
+    return apiFetch<TradingEnvelope<CoinOrder>>("/api/v1/trading/coin-orders", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.data);
+  },
+
+  coinOrders() {
+    return apiFetch<TradingEnvelope<CoinOrder[]>>("/api/v1/trading/coin-orders").then((r) => r.data);
+  },
+
+  verifyCoinOrder(orderId: string, txId?: string) {
+    return apiFetch<TradingEnvelope<CoinOrderVerifyResult>>(
+      `/api/v1/trading/coin-orders/${encodeURIComponent(orderId)}/verify`,
+      { method: "POST", body: JSON.stringify(txId ? { txId } : {}) },
+    ).then((r) => r.data);
   },
 };

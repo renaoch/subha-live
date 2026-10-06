@@ -37,3 +37,17 @@ export const transactionsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
+
+export const createCoinOrderSchema = z.object({
+  // Must be one of the server-side tiers; the server re-validates and prices it.
+  tierUsd: z.number().int().positive(),
+  network: z.enum(["TRC20", "BEP20"]),
+});
+
+export const verifyCoinOrderSchema = z.object({
+  txId: z.string().trim().min(8).max(200).optional(),
+});
+
+export const orderIdParamSchema = z.object({
+  id: z.string().uuid(),
+});

@@ -132,6 +132,32 @@ export async function findDepositByTxId(coin: string, txId: string) {
   return history.find((d) => d.txId === txId) ?? null;
 }
 
+// ─── Private: successful deposits in a time window ────────────────────
+// Read-only. Used by the agency coin-order poller to auto-detect payments.
+// status=1 asks Binance for fully successful deposits only; callers still
+// re-validate every row (see coin-order.logic.ts#evaluateDeposit).
+export async function listSuccessfulDeposits(coin: string, startTime: number, endTime: number) {
+  return binanceSignedRequest<
+    {
+      id: string;
+      amount: string;
+      coin: string;
+      network: string;
+      status: number;
+      address: string;
+      txId: string;
+      insertTime: number;
+      transferType?: number;
+    }[]
+  >("GET", "/sapi/v1/capital/deposit/hisrec", {
+    coin,
+    status: 1,
+    startTime,
+    endTime,
+    limit: 1000,
+  });
+}
+
 /* ────────────────────────────────────────────────────────────────────── */
 /* AUTOMATED, BACKEND-VERIFIED CRYPTO RECHARGE (no admin step)            */
 /* ────────────────────────────────────────────────────────────────────── */

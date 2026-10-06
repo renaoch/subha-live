@@ -16,7 +16,7 @@ import { Coins, Crown, Lock, MicOff, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
-import { StageChair } from "./StageChair";
+import { StageChair, chairPalette, type ChairTone } from "./StageChair";
 import type { StageSnapshotResult } from "@/lib/api/rooms";
 import type { StageProfile } from "@/hooks/useRoomStage";
 import {
@@ -41,11 +41,13 @@ interface AudioStageProps {
 
 const SPEAKING_FALLBACK_MS = 3500;
 // Avatar size scales with viewport height so 3 tiers + host always fit on one screen.
-const AV = "clamp(38px, 6.2svh, 54px)";
-const HOST_AV = "clamp(56px, 9svh, 76px)";
-// Each chair is a square 1.5x the avatar; the avatar sits in the backrest.
-const CHAIR = "calc(var(--av) * 1.5)";
-const HOST_CHAIR = "calc(var(--hav) * 1.5)";
+const AV = "clamp(36px, 5.9svh, 52px)";
+const HOST_AV = "clamp(50px, 8svh, 68px)";
+// Chairs are squares sized off the avatar; the avatar sits in the backrest.
+const CHAIR = "calc(var(--av) * 1.62)";
+const HOST_CHAIR = "calc(var(--hav) * 1.7)";
+// Guest chairs change colour per unlock tier, so a freshly opened row stands out.
+const TIER_TONES: ChairTone[] = ["violet", "cyan", "rose"];
 
 export function AudioStage({
   stage,
@@ -112,9 +114,11 @@ export function AudioStage({
             <div key={ti} className="flex items-start justify-center gap-x-1.5">
               {tier.map((index) => {
                 const seat = stage.seats[index] ?? null;
+                const tone = TIER_TONES[ti % TIER_TONES.length];
                 if (seat) {
                   return (
                     <Seat
+                      tone={tone}
                       key={`seat-${seat.userId}`}
                       userId={seat.userId}
                       seatIndex={index}
@@ -132,11 +136,12 @@ export function AudioStage({
                     <LockedSeat
                       key={`lock-${index}`}
                       index={index}
+                      tone={tone}
                       onTap={() => handleLockedTap(index)}
                     />
                   );
                 }
-                return <EmptySeat key={`empty-${index}`} index={index} onOpenSeats={onOpenSeats} />;
+                return <EmptySeat key={`empty-${index}`} index={index} tone={tone} onOpenSeats={onOpenSeats} />;
               })}
             </div>
           ))}
@@ -178,6 +183,42 @@ export function AudioStage({
 
       <style jsx>{`
         @keyframes audio-seat-speak {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        @keyframes audio-eq {
+          0%,
+          100% {
+            transform: scaleY(0.25);
+          }
+          50% {
+            transform: scaleY(1);
+          }
+        }
+        @keyframes audio-breathe {
+          0%,
+          100% {
+            transform: scale(1);
+            opacity: 0.75;
+          }
+          50% {
+            transform: scale(1.07);
+            opacity: 1;
+          }
+        }
+        @keyframes audio-twinkle {
+          0%,
+          100% {
+            opacity: 0;
+            transform: translateY(4px) scale(0.5);
+          }
+          50% {
+            opacity: 1;
+            transform: translateY(-6px) scale(1);
+          }
+        }
+        @keyframes audio-halo {
           to {
             transform: rotate(360deg);
           }
@@ -278,11 +319,34 @@ function HostSeat({
 }) {
   const name = profile?.name ?? "Host";
   return (
-    <div className="flex flex-col items-center">
+    <div className="mt-3 flex flex-col items-center">
       <div className="relative" style={{ width: HOST_CHAIR, height: HOST_CHAIR }}>
-        <span className="absolute inset-x-2 top-1 bottom-2 rounded-full bg-[#F5C96A]/20 blur-xl" />
-        <StageChair tone="host" className="absolute inset-0 h-full w-full" />
-        <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "calc(var(--hav) * 0.09)", width: HOST_AV, height: HOST_AV }}>
+        {/* Rotating golden halo + soft aura */}
+        <span
+          className="absolute -inset-3 rounded-full opacity-60 blur-md"
+          style={{
+            background: "conic-gradient(from 0deg, transparent, #F5C96A 18%, transparent 36%, #FFD36E 60%, transparent 78%)",
+            animation: "audio-halo 9s linear infinite",
+          }}
+        />
+        <span className={cn("absolute inset-0 rounded-full bg-[#F5C96A]/25 blur-2xl", speaking && "animate-pulse")} />
+
+        {/* Floating sparkles */}
+        {[
+          { l: "4%", t: "22%", d: "0s" },
+          { l: "92%", t: "30%", d: "0.9s" },
+          { l: "80%", t: "4%", d: "1.7s" },
+        ].map((sp, i) => (
+          <Sparkles
+            key={i}
+            className="absolute h-3 w-3 text-[#FFE29A]"
+            style={{ left: sp.l, top: sp.t, animation: `audio-twinkle 2.6s ease-in-out ${sp.d} infinite` }}
+          />
+        ))}
+
+        <StageChair tone="host" className="absolute inset-0 h-full w-full drop-shadow-[0_10px_18px_rgba(245,201,106,0.35)]" />
+
+        <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "calc(var(--hav) * 0.18)", width: HOST_AV, height: HOST_AV }}>
           {speaking && <SpeakRing tone="host" />}
           <button type="button" onClick={onOpenProfile} className="relative z-10 h-full w-full" aria-label={`${name} host`}>
             <Avatar
@@ -290,20 +354,43 @@ function HostSeat({
               src={profile?.avatar ?? undefined}
               size="md"
               className={cn(
-                "!h-full !w-full border-[2.5px] shadow-[0_8px_30px_rgba(245,201,106,0.35)] transition-transform duration-150",
+                "!h-full !w-full border-[3px] shadow-[0_8px_30px_rgba(245,201,106,0.45)] transition-transform duration-150",
                 speaking ? "scale-[1.04] border-transparent" : "border-[#F5C96A]",
               )}
             />
           </button>
-          <Crown className="absolute -top-3.5 left-1/2 z-20 h-5 w-5 -translate-x-1/2 fill-[#F5C96A] text-[#F5C96A] drop-shadow-[0_2px_6px_rgba(245,201,106,0.7)]" />
           {muted && <MuteBadge className="bottom-0 right-0 h-5 w-5" />}
         </div>
+
+        {/* Crown floating over the crest */}
+        <Crown className="absolute -top-3 left-1/2 z-20 h-6 w-6 -translate-x-1/2 fill-[#F5C96A] text-[#FFE29A] drop-shadow-[0_3px_8px_rgba(245,201,106,0.85)]" />
+        {speaking && <Equalizer className="bottom-[17%]" />}
       </div>
-      <div className="-mt-1 flex items-center gap-1.5">
-        <span className="rounded-full bg-[#F5C96A] px-1.5 py-px text-[9px] font-black uppercase tracking-wider text-black">Host</span>
-        <p className="max-w-[120px] truncate text-[12px] font-bold text-white">{isMe ? "You" : name}</p>
+
+      {/* Gold pedestal */}
+      <span
+        className="-mt-2 h-2.5 rounded-[50%] border border-[#FFE29A]/60 bg-gradient-to-b from-[#F5C96A] to-[#8A5A1C] shadow-[0_6px_20px_rgba(245,201,106,0.55)]"
+        style={{ width: `calc(${HOST_CHAIR} * 0.9)` }}
+      />
+      <div className="mt-1 flex items-center gap-1.5">
+        <span className="rounded-full bg-gradient-to-r from-[#FFE29A] to-[#F5C96A] px-1.5 py-px text-[9px] font-black uppercase tracking-wider text-black shadow-[0_2px_10px_rgba(245,201,106,0.5)]">Host</span>
+        <p className="max-w-[130px] truncate text-[12.5px] font-extrabold text-white">{isMe ? "You" : name}</p>
       </div>
     </div>
+  );
+}
+
+function Equalizer({ className }: { className?: string }) {
+  return (
+    <span className={cn("absolute left-1/2 z-10 flex h-2.5 -translate-x-1/2 items-end gap-[2px]", className)}>
+      {[0, 1, 2, 3].map((i) => (
+        <span
+          key={i}
+          className="h-full w-[2.5px] origin-bottom rounded-full bg-white shadow-[0_0_4px_rgba(255,255,255,0.8)]"
+          style={{ animation: `audio-eq 0.85s ease-in-out ${i * 0.13}s infinite` }}
+        />
+      ))}
+    </span>
   );
 }
 
@@ -312,38 +399,58 @@ const CELL_STYLE = { width: CHAIR } as const;
 
 /** Chair + avatar slot. `children` is rendered inside the backrest. */
 function ChairSlot({
-  tone = "guest",
+  tone,
   dim,
   index,
+  speaking,
   children,
 }: {
-  tone?: "host" | "guest";
+  tone: ChairTone;
   dim?: "empty" | "locked";
   index: number;
+  speaking?: boolean;
   children: React.ReactNode;
 }) {
+  const pal = chairPalette(tone);
   return (
-    <div className="relative" style={{ width: CHAIR, height: CHAIR }}>
+    <div
+      className="relative"
+      style={{ width: CHAIR, height: CHAIR, "--ring": pal.trim } as React.CSSProperties}
+    >
+      {/* floor glow + speaking aura */}
+      <span
+        className="absolute bottom-[2%] left-[10%] right-[10%] h-[9%] rounded-full blur-md transition-opacity"
+        style={{ background: pal.glow, opacity: dim === "locked" ? 0.06 : speaking ? 0.85 : 0.32 }}
+      />
+      {speaking && <span className="absolute inset-[4%] animate-pulse rounded-full blur-xl" style={{ background: pal.glow, opacity: 0.4 }} />}
+
       <StageChair
-        tone={tone}
+        tone={dim === "locked" ? "locked" : tone}
         className={cn(
-          "absolute inset-0 h-full w-full transition",
-          dim === "empty" && "opacity-55 group-hover:opacity-85",
-          dim === "locked" && "opacity-35 grayscale",
+          "absolute inset-0 h-full w-full drop-shadow-[0_6px_10px_rgba(0,0,0,0.45)] transition",
+          dim === "empty" && "opacity-60 group-hover:opacity-95",
+          dim === "locked" && "opacity-75",
         )}
       />
-      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "calc(var(--av) * 0.09)", width: AV, height: AV }}>
+
+      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "calc(var(--av) * 0.15)", width: AV, height: AV }}>
         {children}
       </div>
-      <span className="absolute bottom-[13%] left-1/2 z-10 -translate-x-1/2 text-[8px] font-black leading-none text-white/75">
-        {index + 1}
-      </span>
+
+      {speaking ? (
+        <Equalizer className="bottom-[17%]" />
+      ) : (
+        <span className="absolute bottom-[17%] left-1/2 z-10 -translate-x-1/2 text-[8px] font-black leading-none text-white/80 drop-shadow">
+          {index + 1}
+        </span>
+      )}
     </div>
   );
 }
 
 function Seat({
   seatIndex,
+  tone,
   profile,
   speaking,
   muted,
@@ -353,6 +460,7 @@ function Seat({
 }: {
   userId: string;
   seatIndex: number;
+  tone: ChairTone;
   profile?: StageProfile;
   speaking: boolean;
   muted: boolean;
@@ -363,8 +471,15 @@ function Seat({
   const name = profile?.name ?? `Guest ${seatIndex + 1}`;
   const reconnecting = status === "reconnecting" || status === "connecting";
   return (
-    <motion.div layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className={CELL} style={CELL_STYLE}>
-      <ChairSlot index={seatIndex}>
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.7, y: 10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 260, damping: 18 }}
+      className={CELL}
+      style={CELL_STYLE}
+    >
+      <ChairSlot index={seatIndex} tone={tone} speaking={speaking}>
         {speaking && <SpeakRing tone="guest" />}
         <button type="button" onClick={onOpenProfile} className="relative z-10 h-full w-full" aria-label={name}>
           <Avatar
@@ -372,42 +487,56 @@ function Seat({
             src={profile?.avatar ?? undefined}
             size="sm"
             className={cn(
-              "!h-full !w-full border-2 shadow-lg transition-transform duration-150",
-              speaking ? "scale-[1.05] border-transparent" : isMe ? "border-[#E8C27A]" : "border-white/25",
+              "!h-full !w-full border-2 shadow-[0_4px_14px_rgba(0,0,0,0.5)] transition-transform duration-150",
+              speaking
+                ? "scale-[1.05] border-transparent"
+                : isMe
+                  ? "border-[#F5C96A]"
+                  : "border-[color:var(--ring)]",
             )}
           />
         </button>
         {muted && <MuteBadge className="-right-0.5 top-0 h-4 w-4" />}
         {reconnecting && <span className="absolute left-0 top-0 z-20 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-black/50" />}
       </ChairSlot>
-      <p className={cn("-mt-1 w-full truncate text-center text-[10.5px] font-semibold", isMe ? "text-[#E8C27A]" : "text-white/80")}>
+      <p className={cn("-mt-1 w-full truncate text-center text-[10.5px] font-semibold", isMe ? "text-[#F5C96A]" : "text-white/85")}>
         {isMe ? "You" : name}
       </p>
     </motion.div>
   );
 }
 
-function EmptySeat({ index, onOpenSeats }: { index: number; onOpenSeats: () => void }) {
+function EmptySeat({ index, tone, onOpenSeats }: { index: number; tone: ChairTone; onOpenSeats: () => void }) {
+  const c = chairPalette(tone);
   return (
     <motion.button
       type="button"
       onClick={onOpenSeats}
-      whileTap={{ scale: 0.93 }}
+      initial={{ opacity: 0, scale: 0.6, rotate: -8, filter: "brightness(2.4)" }}
+      animate={{ opacity: 1, scale: 1, rotate: 0, filter: "brightness(1)" }}
+      transition={{ type: "spring", stiffness: 240, damping: 15, delay: index * 0.04 }}
+      whileTap={{ scale: 0.92 }}
       className={cn(CELL, "group")}
       style={CELL_STYLE}
       aria-label={`Join seat ${index + 1}`}
     >
-      <ChairSlot index={index} dim="empty">
-        <span className="flex h-full w-full items-center justify-center rounded-full border border-dashed border-[#E8C27A]/50 bg-[#E8C27A]/[0.06] transition group-hover:bg-[#E8C27A]/15">
-          <Plus className="h-5 w-5 text-[#E8C27A]/85" strokeWidth={2} />
+      <ChairSlot index={index} tone={tone} dim="empty">
+        <span
+          className="flex h-full w-full items-center justify-center rounded-full border border-dashed bg-white/[0.05] backdrop-blur-sm transition group-hover:bg-white/15"
+          style={{ borderColor: c.trim, animation: "audio-breathe 2.6s ease-in-out infinite", boxShadow: `0 0 14px ${c.glow}55` }}
+        >
+          <Plus className="h-5 w-5" style={{ color: c.trim }} strokeWidth={2.2} />
         </span>
       </ChairSlot>
-      <span className="-mt-1 text-[10px] font-medium text-white/45">Join</span>
+      <span className="-mt-1 text-[10px] font-semibold" style={{ color: `${c.trim}aa` }}>
+        Join
+      </span>
     </motion.button>
   );
 }
 
-function LockedSeat({ index, onTap }: { index: number; onTap: () => void }) {
+function LockedSeat({ index, tone, onTap }: { index: number; tone: ChairTone; onTap: () => void }) {
+  const c = chairPalette(tone);
   return (
     <motion.button
       type="button"
@@ -417,12 +546,15 @@ function LockedSeat({ index, onTap }: { index: number; onTap: () => void }) {
       style={CELL_STYLE}
       aria-label={`Seat ${index + 1} locked, unlocks at ${formatLakh(coinsToUnlockSeat(index))} room coins`}
     >
-      <ChairSlot index={index} dim="locked">
-        <span className="flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-black/50">
-          <Lock className="h-4 w-4 text-white/50" strokeWidth={2} />
+      <ChairSlot index={index} tone={tone} dim="locked">
+        <span className="flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-gradient-to-b from-white/10 to-black/60 shadow-inner backdrop-blur-sm">
+          <Lock className="h-4 w-4" style={{ color: c.trim, filter: `drop-shadow(0 0 5px ${c.glow})` }} strokeWidth={2.2} />
         </span>
       </ChairSlot>
-      <span className="-mt-1 flex items-center gap-0.5 text-[10px] font-bold text-[#F5C96A]/80">
+      <span
+        className="-mt-1 flex items-center gap-0.5 rounded-full border px-1.5 py-px text-[9.5px] font-extrabold"
+        style={{ color: c.trim, borderColor: `${c.glow}66`, background: `${c.glow}1f` }}
+      >
         <Coins className="h-2.5 w-2.5" />
         {formatLakh(coinsToUnlockSeat(index))}
       </span>

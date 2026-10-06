@@ -1,7 +1,11 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../../errors/app-error";
 import { tradingService } from "./trading.service";
+import { coinOrderService } from "./coin-order.service";
 import {
+  createCoinOrderSchema,
+  orderIdParamSchema,
+  verifyCoinOrderSchema,
   creditSchema,
   payHostSchema,
   transactionsQuerySchema,
@@ -82,6 +86,55 @@ export async function creditTrading(req: Request, res: Response, next: NextFunct
     }
     const newBalance = await tradingService.credit(user.id, parsed.data);
     res.status(200).json({ success: true, data: { newBalance } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function createCoinOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = requireUser(req);
+    const parsed = createCoinOrderSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "Invalid order", { code: "INVALID_ORDER_PAYLOAD" });
+    }
+    const order = await coinOrderService.create(user.id, parsed.data);
+    res.status(201).json({ success: true, data: order });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listCoinOrders(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = requireUser(req);
+    res.status(200).json({ success: true, data: await coinOrderService.list(user.id) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getCoinOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = requireUser(req);
+    const params = orderIdParamSchema.safeParse(req.params);
+    if (!params.success) throw new AppError(400, "Invalid order id", { code: "INVALID_ORDER_ID" });
+    res.status(200).json({ success: true, data: await coinOrderService.get(user.id, params.data.id) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function verifyCoinOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    const user = requireUser(req);
+    const params = orderIdParamSchema.safeParse(req.params);
+    const body = verifyCoinOrderSchema.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      throw new AppError(400, "Invalid request", { code: "INVALID_VERIFY_PAYLOAD" });
+    }
+    const result = await coinOrderService.verify(user.id, params.data.id, body.data.txId);
+    res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }

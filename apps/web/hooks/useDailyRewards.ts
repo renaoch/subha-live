@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { rewardsApi, type DailyRewardClaimResult, type DailyRewardOverview } from "@/lib/api/rewards";
 
+const CELEBRATION_MS = 2200;
+
 export function useDailyRewards() {
   const [overview, setOverview] = useState<DailyRewardOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,6 +29,14 @@ export function useDailyRewards() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The celebration is transient: `justClaimed` was never reset, so the popup
+  // stayed on screen forever. Auto-dismiss it after a short moment.
+  useEffect(() => {
+    if (!justClaimed) return;
+    const timer = setTimeout(() => setJustClaimed(false), CELEBRATION_MS);
+    return () => clearTimeout(timer);
+  }, [justClaimed]);
 
   const claim = useCallback(async () => {
     if (claiming) return;
