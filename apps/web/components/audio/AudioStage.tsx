@@ -417,20 +417,25 @@ function ChairSlot({
       className="relative"
       style={{ width: CHAIR, height: CHAIR, "--ring": pal.trim } as React.CSSProperties}
     >
+      {/* colour halo behind the chair so it pops off the background */}
+      <span
+        className="pointer-events-none absolute inset-[6%] rounded-full blur-xl transition-opacity"
+        style={{ background: pal.glow, opacity: dim === "locked" ? 0.14 : speaking ? 0.55 : 0.3 }}
+      />
       {/* floor glow + speaking aura */}
       <span
         className="absolute bottom-[2%] left-[10%] right-[10%] h-[9%] rounded-full blur-md transition-opacity"
-        style={{ background: pal.glow, opacity: dim === "locked" ? 0.06 : speaking ? 0.85 : 0.32 }}
+        style={{ background: pal.glow, opacity: dim === "locked" ? 0.3 : speaking ? 0.95 : 0.6 }}
       />
       {speaking && <span className="absolute inset-[4%] animate-pulse rounded-full blur-xl" style={{ background: pal.glow, opacity: 0.4 }} />}
 
+      {/* Chair is fully opaque (no see-through) with a coloured rim glow */}
       <StageChair
         tone={dim === "locked" ? "locked" : tone}
-        className={cn(
-          "absolute inset-0 h-full w-full drop-shadow-[0_6px_10px_rgba(0,0,0,0.45)] transition",
-          dim === "empty" && "opacity-60 group-hover:opacity-95",
-          dim === "locked" && "opacity-75",
-        )}
+        className="absolute inset-0 h-full w-full transition group-hover:brightness-110"
+        style={{
+          filter: `drop-shadow(0 0 7px ${pal.glow}${dim === "locked" ? "55" : "aa"}) drop-shadow(0 6px 8px rgba(0,0,0,0.5)) saturate(${dim === "locked" ? 1 : 1.15}) brightness(${dim === "locked" ? 1.25 : 1.1})`,
+        }}
       />
 
       <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "calc(var(--av) * 0.15)", width: AV, height: AV }}>

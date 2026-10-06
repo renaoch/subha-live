@@ -34,15 +34,16 @@ export function chairPalette(tone: ChairTone): Palette {
 interface StageChairProps {
   tone?: ChairTone;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export function StageChair({ tone = "violet", className }: StageChairProps) {
+export function StageChair({ tone = "violet", className, style }: StageChairProps) {
   const t = tone === "guest" ? "violet" : tone;
   const p = CHAIR_PALETTES[t];
   const id = `chair-${t}`;
 
   return (
-    <svg viewBox="0 0 96 96" className={className} aria-hidden style={{ display: "block" }}>
+    <svg viewBox="0 0 96 96" className={className} aria-hidden style={{ display: "block", ...style }}>
       <defs>
         <linearGradient id={`${id}-back`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={p.light} />
