@@ -21,7 +21,7 @@ export interface RoomAction {
   label: string;
   icon: React.ReactNode;
   onClick?: () => void;
-  active?: boolean; // visually "on" (white f ill) — e.g. mic muted
+  active?: boolean; // visually "on" (white  f ill) — e.g. mic muted
   tone?: "plain" | "gold" | "danger" | "hot";
   badge?: number;
   disabled?: boolean;
