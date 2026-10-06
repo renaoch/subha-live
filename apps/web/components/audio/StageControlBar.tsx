@@ -5,7 +5,7 @@
 // mute + leave seat; listener → request / cancel request to speak. Mute is
 // reported to the server via reportStage so the stage badge is authoritative.
 
-import { Loader2, Mic, MicOff, PhoneOff, Users } from "lucide-react";
+import { Layers, Loader2, Mic, MicOff, PhoneOff, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface StageControlBarProps {
@@ -15,11 +15,62 @@ interface StageControlBarProps {
   requestPending: boolean;
   muted: boolean;
   loading: boolean;
+  pendingCount?: number;
   onToggleMute: () => void;
   onLeaveSeat: () => void;
   onRequest: () => void;
   onCancelRequest: () => void;
   onManage: () => void;
+  onOpenLevels: () => void;
+}
+
+// Vertical glass rail pinned to the top-right (under the room header) so the
+// bottom of the screen stays free for chat. Each action = icon + tiny label.
+function RailButton({
+  label,
+  aria,
+  onClick,
+  disabled,
+  tone = "plain",
+  badge,
+  children,
+}: {
+  label: string;
+  aria: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "plain" | "light" | "danger" | "gold" | "hot";
+  badge?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={aria}
+      className="group flex w-[52px] flex-col items-center gap-1 transition active:scale-90 disabled:opacity-50"
+    >
+      <span
+        className={cn(
+          "relative flex h-11 w-11 items-center justify-center rounded-2xl border shadow-lg backdrop-blur-xl transition",
+          tone === "plain" && "border-white/15 bg-white/10 text-white group-hover:bg-white/20",
+          tone === "light" && "border-white bg-white text-black",
+          tone === "danger" && "border-rose-400/30 bg-rose-500/20 text-rose-300 group-hover:bg-rose-500/30",
+          tone === "gold" && "border-[#F5C96A]/40 bg-[#F5C96A]/20 text-[#FFE29A] group-hover:bg-[#F5C96A]/30",
+          tone === "hot" && "border-transparent bg-gradient-to-br from-[#FFB04A] to-[#FF5A5F] text-white shadow-[0_4px_18px_rgba(255,106,61,0.5)]",
+        )}
+      >
+        {children}
+        {!!badge && badge > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF3B5C] px-1 text-[9px] font-bold text-white ring-2 ring-[#170F2E]">
+            {badge}
+          </span>
+        )}
+      </span>
+      <span className="text-[9px] font-bold leading-none text-white/75 drop-shadow">{label}</span>
+    </button>
+  );
 }
 
 export function StageControlBar({
@@ -29,79 +80,60 @@ export function StageControlBar({
   requestPending,
   muted,
   loading,
+  pendingCount,
   onToggleMute,
   onLeaveSeat,
   onRequest,
   onCancelRequest,
   onManage,
+  onOpenLevels,
 }: StageControlBarProps) {
   const onStage = isHost || mySeat !== null;
 
   if (!isLive) return null;
 
   return (
-    <div className="pointer-events-auto absolute inset-x-0 bottom-[78px] z-30 flex justify-center">
-      <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-        {onStage && (
-          <button
-            type="button"
-            onClick={onToggleMute}
-            aria-label={muted ? "Unmute microphone" : "Mute microphone"}
-            className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-full transition active:scale-90",
-              muted ? "bg-white text-black" : "bg-white/10 text-white hover:bg-white/20",
-            )}
-          >
-            {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          </button>
-        )}
+    <div className="pointer-events-auto absolute right-2 top-[118px] z-30 flex flex-col items-center gap-2.5 rounded-[26px] border border-white/10 bg-black/35 px-1 py-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+      {onStage && (
+        <RailButton
+          label={muted ? "Unmute" : "Mute"}
+          aria={muted ? "Unmute microphone" : "Mute microphone"}
+          onClick={onToggleMute}
+          tone={muted ? "light" : "plain"}
+        >
+          {muted ? <MicOff className="h-[18px] w-[18px]" /> : <Mic className="h-[18px] w-[18px]" />}
+        </RailButton>
+      )}
 
-        {onStage && (
-          <button
-            type="button"
-            onClick={onLeaveSeat}
-            aria-label="Leave seat"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-rose-500/15 text-rose-300 transition hover:bg-rose-500/25 active:scale-90"
-          >
-            <PhoneOff className="h-4 w-4" />
-          </button>
-        )}
+      {isHost && (
+        <RailButton label="Manage" aria="Manage seats" onClick={onManage} tone="gold" badge={pendingCount}>
+          <Users className="h-[18px] w-[18px]" />
+        </RailButton>
+      )}
 
-        {isHost && (
-          <button
-            type="button"
-            onClick={onManage}
-            aria-label="Manage seats"
-            className="flex items-center gap-1.5 rounded-full bg-[#F5C96A]/15 px-3.5 py-2 text-xs font-bold text-[#F5C96A] transition hover:bg-[#F5C96A]/25 active:scale-95"
-          >
-            <Users className="h-4 w-4" />
-            Manage
-          </button>
-        )}
+      {onStage && (
+        <RailButton label={isHost ? "End" : "Leave"} aria={isHost ? "Leave stage" : "Leave seat"} onClick={onLeaveSeat} tone="danger">
+          <PhoneOff className="h-[18px] w-[18px]" />
+        </RailButton>
+      )}
 
-        {!onStage && !requestPending && (
-          <button
-            type="button"
-            onClick={onRequest}
-            disabled={loading}
-            className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[hsl(var(--accent-hot))] to-[#FF6B4A] px-4 py-2 text-xs font-bold text-white shadow-[0_4px_20px_hsl(var(--shadow-color)/0.5)] transition active:scale-95 disabled:opacity-50"
-          >
-            <Mic className="h-4 w-4" />
-            Request to speak
-          </button>
-        )}
+      {!onStage && !requestPending && (
+        <RailButton label="Speak" aria="Request to speak" onClick={onRequest} disabled={loading} tone="hot">
+          <Mic className="h-[18px] w-[18px]" />
+        </RailButton>
+      )}
 
-        {!onStage && requestPending && (
-          <button
-            type="button"
-            onClick={onCancelRequest}
-            className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-xs font-bold text-white/80 transition hover:bg-white/15 active:scale-95"
-          >
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#E8C27A]" />
-            Request pending · Cancel
-          </button>
-        )}
-      </div>
+      {!onStage && requestPending && (
+        <RailButton label="Cancel" aria="Cancel request to speak" onClick={onCancelRequest}>
+          <Loader2 className="h-[18px] w-[18px] animate-spin text-[#E8C27A]" />
+        </RailButton>
+      )}
+
+      <span className="h-px w-7 bg-white/10" />
+
+      <RailButton label="Seats" aria="Seat levels and unlock coins" onClick={onOpenLevels}>
+        <Layers className="h-[18px] w-[18px]" />
+      </RailButton>
     </div>
   );
 }

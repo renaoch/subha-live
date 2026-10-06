@@ -27,6 +27,7 @@ import { LiveVideo } from '@/components/LiveVideo';
 import { AudioStage } from '@/components/audio/AudioStage';
 
 import { StageControlBar } from '@/components/audio/StageControlBar';
+import { SeatLevelsDrawer } from '@/components/audio/SeatLevelsDrawer';
 
 import { RoomMoreActions } from '@/components/RoomMoreActions';
 
@@ -324,6 +325,7 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
 
 
   const [speakerPanelOpen, setSpeakerPanelOpen] = useState(false);
+  const [seatLevelsOpen, setSeatLevelsOpen] = useState(false);
 
   const [viewersOpen, setViewersOpen] = useState(false);
 
@@ -538,6 +540,7 @@ useEffect(() => {
             isHost={isHost}
             roomCoins={sessionGiftTotals.totalDiamonds}
             onOpenSeats={() => setSpeakerPanelOpen(true)}
+            onOpenLevels={() => setSeatLevelsOpen(true)}
             onOpenProfile={setProfileUserId}
           />
         ) : (
@@ -947,7 +950,18 @@ useEffect(() => {
             onLeaveSeat={handleStageLeaveSeat}
             onRequest={() => setSpeakerPanelOpen(true)}
             onCancelRequest={handleStageCancelRequest}
+            pendingCount={pendingRequestCount}
             onManage={() => setSpeakerPanelOpen(true)}
+            onOpenLevels={() => setSeatLevelsOpen(true)}
+          />
+        )}
+
+        {isAudioRoom && (
+          <SeatLevelsDrawer
+            open={seatLevelsOpen}
+            onClose={() => setSeatLevelsOpen(false)}
+            roomCoins={sessionGiftTotals.totalDiamonds}
+            seatCount={seatCount}
           />
         )}
 

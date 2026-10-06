@@ -36,6 +36,7 @@ interface AudioStageProps {
   /** Total coins the room has received; drives which seats are unlocked. */
   roomCoins: number;
   onOpenSeats: () => void;
+  onOpenLevels?: () => void;
   onOpenProfile: (userId: string) => void;
 }
 
@@ -57,6 +58,7 @@ export function AudioStage({
   isHost,
   roomCoins,
   onOpenSeats,
+  onOpenLevels,
   onOpenProfile,
 }: AudioStageProps) {
   const seatCount = stage.seatCount;
@@ -106,7 +108,7 @@ export function AudioStage({
         />
 
         {/* Unlock progress */}
-        <UnlockCard roomCoins={roomCoins} unlocked={unlocked} seatCount={seatCount} />
+        <UnlockCard roomCoins={roomCoins} unlocked={unlocked} seatCount={seatCount} onOpen={onOpenLevels} />
 
         {/* Seats — 3 tiers, never scrolls */}
         <div className="mt-2 flex min-h-0 w-full flex-1 flex-col justify-evenly">
@@ -254,10 +256,12 @@ function UnlockCard({
   roomCoins,
   unlocked,
   seatCount,
+  onOpen,
 }: {
   roomCoins: number;
   unlocked: number;
   seatCount: number;
+  onOpen?: () => void;
 }) {
   const allOpen = unlocked >= seatCount;
   const nextAt = allOpen ? 0 : coinsToUnlockSeat(unlocked);
@@ -265,7 +269,12 @@ function UnlockCard({
   const nextTo = Math.min(seatCount, unlocked + 3);
 
   return (
-    <div className="relative mt-2 w-full max-w-[330px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 backdrop-blur-xl">
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Open seat levels"
+      className="relative mt-2 block w-full max-w-[330px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-left backdrop-blur-xl transition active:scale-[0.99]"
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F5C96A]/20">
@@ -300,7 +309,7 @@ function UnlockCard({
           />
         </motion.div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -420,12 +429,12 @@ function ChairSlot({
       {/* colour halo behind the chair so it pops off the background */}
       <span
         className="pointer-events-none absolute inset-[6%] rounded-full blur-xl transition-opacity"
-        style={{ background: pal.glow, opacity: dim === "locked" ? 0.25 : speaking ? 0.75 : 0.5 }}
+        style={{ background: pal.glow, opacity: dim === "locked" ? 0 : speaking ? 0.75 : 0.5 }}
       />
       {/* floor glow + speaking aura */}
       <span
         className="absolute bottom-[2%] left-[10%] right-[10%] h-[9%] rounded-full blur-md transition-opacity"
-        style={{ background: pal.glow, opacity: dim === "locked" ? 0.3 : speaking ? 0.95 : 0.6 }}
+        style={{ background: dim === "locked" ? "#000" : pal.glow, opacity: dim === "locked" ? 0.5 : speaking ? 0.95 : 0.6 }}
       />
       {speaking && <span className="absolute inset-[4%] animate-pulse rounded-full blur-xl" style={{ background: pal.glow, opacity: 0.4 }} />}
 
@@ -434,7 +443,10 @@ function ChairSlot({
         tone={tone}
         className="absolute inset-0 h-full w-full transition group-hover:brightness-110"
         style={{
-          filter: `drop-shadow(0 0 7px ${pal.glow}${dim === "locked" ? "99" : "ff"}) drop-shadow(0 6px 8px rgba(0,0,0,0.5)) saturate(${dim === "locked" ? 0.7 : 1.3}) brightness(${dim === "locked" ? 1.05 : 1.08})`,
+          filter:
+            dim === "locked"
+              ? "brightness(0.34) saturate(0.4) contrast(1.1) drop-shadow(0 6px 8px rgba(0,0,0,0.7))"
+              : `drop-shadow(0 0 7px ${pal.glow}ff) drop-shadow(0 6px 8px rgba(0,0,0,0.5)) saturate(1.3) brightness(1.08)`,
         }}
       />
 
@@ -552,8 +564,8 @@ function LockedSeat({ index, tone, onTap }: { index: number; tone: ChairTone; on
       aria-label={`Seat ${index + 1} locked, unlocks at ${formatLakh(coinsToUnlockSeat(index))} room coins`}
     >
       <ChairSlot index={index} tone={tone} dim="locked">
-        <span className="flex h-full w-full items-center justify-center rounded-full border border-white/20 shadow-inner" style={{ background: `radial-gradient(circle at 50% 30%, ${c.glow}55, #14101f 85%)` }}>
-          <Lock className="h-4 w-4" style={{ color: c.trim, filter: `drop-shadow(0 0 5px ${c.glow})` }} strokeWidth={2.2} />
+        <span className="flex h-full w-full items-center justify-center rounded-full border border-white/20 shadow-inner" style={{ background: "radial-gradient(circle at 50% 30%, #1d1830, #07050c 85%)" }}>
+          <Lock className="h-4 w-4 text-white/55" strokeWidth={2.2} />
         </span>
       </ChairSlot>
       <span
