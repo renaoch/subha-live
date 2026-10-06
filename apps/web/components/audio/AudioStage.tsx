@@ -420,7 +420,7 @@ function ChairSlot({
       {/* colour halo behind the chair so it pops off the background */}
       <span
         className="pointer-events-none absolute inset-[6%] rounded-full blur-xl transition-opacity"
-        style={{ background: pal.glow, opacity: dim === "locked" ? 0.14 : speaking ? 0.55 : 0.3 }}
+        style={{ background: pal.glow, opacity: dim === "locked" ? 0.25 : speaking ? 0.75 : 0.5 }}
       />
       {/* floor glow + speaking aura */}
       <span
@@ -431,10 +431,10 @@ function ChairSlot({
 
       {/* Chair is fully opaque (no see-through) with a coloured rim glow */}
       <StageChair
-        tone={dim === "locked" ? "locked" : tone}
+        tone={tone}
         className="absolute inset-0 h-full w-full transition group-hover:brightness-110"
         style={{
-          filter: `drop-shadow(0 0 7px ${pal.glow}${dim === "locked" ? "55" : "aa"}) drop-shadow(0 6px 8px rgba(0,0,0,0.5)) saturate(${dim === "locked" ? 1 : 1.15}) brightness(${dim === "locked" ? 1.25 : 1.1})`,
+          filter: `drop-shadow(0 0 7px ${pal.glow}${dim === "locked" ? "99" : "ff"}) drop-shadow(0 6px 8px rgba(0,0,0,0.5)) saturate(${dim === "locked" ? 0.7 : 1.3}) brightness(${dim === "locked" ? 1.15 : 1.2}) contrast(1.05)`,
         }}
       />
 
@@ -527,8 +527,8 @@ function EmptySeat({ index, tone, onOpenSeats }: { index: number; tone: ChairTon
     >
       <ChairSlot index={index} tone={tone} dim="empty">
         <span
-          className="flex h-full w-full items-center justify-center rounded-full border border-dashed bg-white/[0.05] backdrop-blur-sm transition group-hover:bg-white/15"
-          style={{ borderColor: c.trim, animation: "audio-breathe 2.6s ease-in-out infinite", boxShadow: `0 0 14px ${c.glow}55` }}
+          className="flex h-full w-full items-center justify-center rounded-full border-2 border-dashed transition group-hover:brightness-125"
+          style={{ background: `radial-gradient(circle at 50% 30%, ${c.mid}88, ${c.dark}ee)`, borderColor: c.trim, animation: "audio-breathe 2.6s ease-in-out infinite", boxShadow: `0 0 14px ${c.glow}55` }}
         >
           <Plus className="h-5 w-5" style={{ color: c.trim }} strokeWidth={2.2} />
         </span>
@@ -552,7 +552,7 @@ function LockedSeat({ index, tone, onTap }: { index: number; tone: ChairTone; on
       aria-label={`Seat ${index + 1} locked, unlocks at ${formatLakh(coinsToUnlockSeat(index))} room coins`}
     >
       <ChairSlot index={index} tone={tone} dim="locked">
-        <span className="flex h-full w-full items-center justify-center rounded-full border border-white/10 bg-gradient-to-b from-white/10 to-black/60 shadow-inner backdrop-blur-sm">
+        <span className="flex h-full w-full items-center justify-center rounded-full border border-white/20 shadow-inner" style={{ background: `radial-gradient(circle at 50% 30%, ${c.glow}55, #14101f 85%)` }}>
           <Lock className="h-4 w-4" style={{ color: c.trim, filter: `drop-shadow(0 0 5px ${c.glow})` }} strokeWidth={2.2} />
         </span>
       </ChairSlot>
