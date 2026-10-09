@@ -458,7 +458,7 @@ function EmptyState() {
         📡
       </span>
       <p className="text-sm font-medium text-white/60">No one's live right now</p>
-      <p className="text-xs text-white/40">Be the first — tap Go Live above.</p>
+      <p className="text-xs text-white/40">Be the first — tap Go Live above. </p>
     </div>
   );
 }
