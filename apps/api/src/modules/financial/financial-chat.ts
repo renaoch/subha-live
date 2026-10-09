@@ -17,7 +17,7 @@
 // recorded (financial_ledger / host_earnings / agency_commissions), only the
 // chat animation/row is skipped.
 
-import { redis } from "../../lib/redis";
+import { redis, cacheGet, cacheSet } from "../../lib/redis";
 import { getChatProfile } from "../users/users.service";
 import { getGiftCatalogItem } from "./financial.service";
 
@@ -63,6 +63,31 @@ async function addGiftToHotHistory(roomId: string, message: Record<string, unkno
   await redis.expire(key, CHAT_REDIS_RETENTION_SECONDS);
 }
 
+// Combo window: the same sender sending the same gift again within this many
+// seconds extends ONE chat row ("Sent Rose x10") instead of adding a new row
+// per tap — the row keeps a stable id and its quantity grows, and clients
+// upsert by id. Counted server-side (Redis INCR), never trusted from clients.
+const GIFT_COMBO_WINDOW_SECONDS = 6;
+
+async function nextComboState(
+  roomId: string,
+  senderId: string,
+  giftId: string,
+  giftTransactionId: string,
+): Promise<{ quantity: number; rowId: string }> {
+  const base = `gift:combo:${roomId}:${senderId}:${giftId}`;
+  try {
+    const quantity = Number(await redis.incr(`${base}:n`));
+    await redis.expire(`${base}:n`, GIFT_COMBO_WINDOW_SECONDS + 2);
+    let firstId = quantity === 1 ? null : await cacheGet<string>(`${base}:id`);
+    if (!firstId) firstId = giftTransactionId;
+    await cacheSet(`${base}:id`, firstId, GIFT_COMBO_WINDOW_SECONDS + 2);
+    return { quantity, rowId: `gift-${firstId}` };
+  } catch {
+    return { quantity: 1, rowId: `gift-${giftTransactionId}` };
+  }
+}
+
 export async function publishGiftToRoomChat(input: {
   roomId: string;
   senderId: string;
@@ -78,6 +103,8 @@ export async function publishGiftToRoomChat(input: {
 
     if (!gift) return; // Shouldn't happen (fin_send_gift already validated it), but never throw from here.
 
+    const combo = await nextComboState(input.roomId, input.senderId, input.giftId, input.giftTransactionId);
+    const quantity = input.quantity ?? combo.quantity;
     const payload = {
       // `type` drives the LIVE websocket envelope (useRoomChat.ts checks
       // `msg.type === "gift"`); `kind` + `gift` mirror the shape
@@ -86,7 +113,7 @@ export async function publishGiftToRoomChat(input: {
       // one write serves both paths.
       type: "gift" as const,
       kind: "gift" as const,
-      id: `gift-${input.giftTransactionId}`,
+      id: combo.rowId,
       roomId: input.roomId,
       userId: input.senderId,
       username: sender.username,
@@ -98,14 +125,14 @@ export async function publishGiftToRoomChat(input: {
       giftName: gift.name,
       giftIcon: gift.icon,
       giftCode: gift.code,
-      quantity: input.quantity ?? 1,
+      quantity,
       createdAt: Date.now(),
       gift: {
         giftId: gift.id,
         name: gift.name,
         icon: gift.icon,
         code: gift.code,
-        quantity: input.quantity ?? 1,
+        quantity,
       },
     };
 

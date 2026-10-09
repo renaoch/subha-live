@@ -1,22 +1,15 @@
 // components/RoomHeader.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Plus, Star, User, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { usersApi } from "@/lib/api/users";
 import { HostTaskCard } from "@/components/HostTaskCard";
+import { ExplorePill, MoreDotsButton, TopRankPill } from "@/components/room/hud/RoomPills";
 import type { HostTaskStats, ViewerHostTask } from "@/lib/api/host-task";
-import {
-  BadgeCheck,
-  ChevronDown,
-  Crown,
-  Trophy,
-  Users,
-  UsersRound,
-  Wrench,
-  X,
-} from "lucide-react";
+import type { RoomOverview } from "@/lib/api/room-overview";
 
 interface RoomHeaderHost {
   id?: string;
@@ -26,6 +19,7 @@ interface RoomHeaderHost {
   is_verified?: boolean | null;
   is_admin?: boolean | null;
   level?: number | null;
+  public_id?: string | null;
 }
 
 interface RoomHeaderProps {
@@ -33,74 +27,28 @@ interface RoomHeaderProps {
   viewerCount: number;
   isLive: boolean;
   onLeave: () => void;
-  /** Optional: drop into the floating mini player instead of closing
-   * outright. Only rendered when provided. */
-  onMinimize?: () => void;
-  /** Currently logged-in user, so we can hide Follow on your own room. */
+  /** Explore pill: keep this room alive in the mini player and open the room list. */
+  onExplore?: () => void;
+  /** Opens the "more" sheet (share, levels, camera…). */
+  onOpenMore?: () => void;
   currentUserId?: string | null;
-  /** Host's live task/reward, if one is active for this user. */
+  /** Real header data: host public ID, today's top gifters, host rank. */
+  overview?: RoomOverview | null;
   task?: ViewerHostTask | null;
-  /** Whether the current user is the room host (shows rollup stats instead of CLAIM). */
   isHost?: boolean;
-  /** Viewer taps CLAIM on a completed task's reward. Omit to hide the button (e.g. host's own view). */
   onClaimTask?: () => void;
   claimingTask?: boolean;
-  /** Host-only rollup stats for the active task. */
   taskStats?: HostTaskStats | null;
-  /** Tapping the viewer count opens the live viewer list. Omit to keep it static. */
   onOpenViewers?: () => void;
-  /** Opens the "Top contributors" modal. Omit to hide the trophy icon. */
+  /** Tapping the top-3 avatars opens the full contributors leaderboard. */
   onOpenContributors?: () => void;
-  /** Tapping the host's avatar/name opens their profile popup in place. */
   onOpenProfile?: (userId: string) => void;
-}
-
-type Tag = {
-  label: string;
-  Icon: typeof Crown;
-  primary: string;
-  accent: string;
-};
-
-/**
- * Role tag. Mirrors the badge set already used on the profile page
- * (see components/profile/profile-hero.tsx) so a host's tag looks the
- * same whether you're viewing their profile or their live room.
- */
-function roleTag(role: string | null | undefined): Tag | null {
-  switch (role) {
-    case "agency_owner":
-      return { label: "Agency Owner", Icon: Crown, primary: "#F5B93F", accent: "#FFE29E" };
-    case "agency_admin":
-    case "agency_agent":
-      return { label: "Host Manager", Icon: UsersRound, primary: "#57C2FF", accent: "#B3E6FF" };
-    case "agency_host":
-      return { label: "Host", Icon: UsersRound, primary: "#5FD9C4", accent: "#B4F5E7" };
-    default:
-      return null;
-  }
-}
-
-/** Platform admin/engineer tag — separate from agency role. */
-function adminTag(isAdmin: boolean | null | undefined): Tag | null {
-  if (!isAdmin) return null;
-  return { label: "Engineer", Icon: Wrench, primary: "#A86CFF", accent: "#DCC2FF" };
-}
-
-function TagPill({ tag }: { tag: Tag }) {
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold leading-none"
-      style={{
-        color: tag.accent,
-        borderColor: `${tag.primary}66`,
-        background: `linear-gradient(135deg, ${tag.primary}33, ${tag.primary}0D)`,
-      }}
-    >
-      <tag.Icon className="h-2.5 w-2.5" style={{ color: tag.primary }} />
-      {tag.label}
-    </span>
-  );
+  /** Small status chip rendered in the pill row (host: LIVE / CONNECTING). */
+  statusChip?: ReactNode;
+  /** Cards rendered under the pill row (Star Target, Regional Challenge…). */
+  cards?: ReactNode;
+  /** Anything that should flow under the cards (e.g. "Last PK" card). */
+  footer?: ReactNode;
 }
 
 function formatCount(n: number) {
@@ -109,74 +57,109 @@ function formatCount(n: number) {
   return `${n}`;
 }
 
-/**
- * Follow / Following toggle for the room host.
- *
- * - Fetches the initial follow status once, on mount.
- * - Follow -> unfilled pill, "Follow".
- * - Following -> filled/subdued pill, "Following"; tapping it unfollows.
- * - Optimistic UI: flips immediately on tap, rolls back if the request
- *   fails, so it doesn't feel laggy inside a live room.
- */
+/** Follow / Following toggle with optimistic UI and rollback. */
 function FollowButton({ hostId }: { hostId: string }) {
   const [following, setFollowing] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-
     usersApi
       .getFollowStatus(hostId)
-      .then((status) => {
-        if (!cancelled) setFollowing(Boolean(status.following));
-      })
-      .catch(() => {
-        if (!cancelled) setFollowing(false);
-      });
-
+      .then((s) => !cancelled && setFollowing(Boolean(s.following)))
+      .catch(() => !cancelled && setFollowing(false));
     return () => {
       cancelled = true;
     };
   }, [hostId]);
 
-  const handleToggle = async () => {
+  const toggle = async () => {
     if (pending || following === null) return;
-
     const next = !following;
     setFollowing(next);
     setPending(true);
-
     try {
-      if (next) {
-        await usersApi.follow(hostId);
-      } else {
-        await usersApi.unfollow(hostId);
-      }
+      if (next) await usersApi.follow(hostId);
+      else await usersApi.unfollow(hostId);
     } catch {
-      // Roll back on failure.
       setFollowing(!next);
     } finally {
       setPending(false);
     }
   };
 
-  // Don't render anything until we know the real status — avoids a
-  // flash of the wrong label.
   if (following === null) return null;
 
   return (
     <button
       type="button"
-      onClick={handleToggle}
+      onClick={toggle}
       disabled={pending}
       className={cn(
-        "shrink-0 rounded-full px-3 py-1 text-xs font-bold leading-none transition active:scale-95 disabled:opacity-60",
-        following
-          ? "bg-white/15 text-white/80 backdrop-blur-sm hover:bg-white/20"
-          : "bg-accent-hot text-white hover:brightness-110",
+        "flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[14px] font-bold leading-none text-white transition active:scale-95 disabled:opacity-60",
+        following ? "bg-white/15 backdrop-blur-sm" : "shadow-[0_4px_16px_rgba(255,40,100,0.45)]",
       )}
+      style={
+        following ? undefined : { background: "linear-gradient(135deg,#ff4d8d 0%,#ff1f5a 100%)" }
+      }
     >
+      {!following && <Plus className="h-4 w-4" strokeWidth={2.6} />}
       {following ? "Following" : "Follow"}
+    </button>
+  );
+}
+
+const RANK_RING: Record<number, string> = {
+  1: "linear-gradient(135deg,#ffe28a,#f2a81d)",
+  2: "linear-gradient(135deg,#d7e3f4,#8fa2bd)",
+  3: "linear-gradient(135deg,#ffc79a,#c9783a)",
+};
+
+function TopGifters({
+  list,
+  onClick,
+}: {
+  list: RoomOverview["topContributors"];
+  onClick?: () => void;
+}) {
+  if (list.length === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Top contributors"
+      className="flex shrink-0 items-center -space-x-1.5 transition active:scale-95"
+    >
+      {list.slice(0, 3).map((c) => (
+        <span key={c.userId} className="relative">
+          {c.rank === 1 && (
+            <svg
+              viewBox="0 0 24 16"
+              className="absolute -top-[11px] left-1/2 z-10 h-[13px] w-[19px] -translate-x-1/2"
+              aria-hidden
+            >
+              <path
+                d="M2 14 L1 4 L7 8 L12 1 L17 8 L23 4 L22 14 Z"
+                fill="#ffc83d"
+                stroke="#fff0b0"
+                strokeWidth="1"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
+          <span
+            className="block rounded-full p-[2px]"
+            style={{ background: RANK_RING[c.rank] ?? RANK_RING[3] }}
+          >
+            <Avatar
+              name={c.name}
+              src={c.avatar ?? undefined}
+              size="sm"
+              className="!h-[34px] !w-[34px] border border-black/60"
+            />
+          </span>
+        </span>
+      ))}
     </button>
   );
 }
@@ -186,8 +169,10 @@ export function RoomHeader({
   viewerCount,
   isLive,
   onLeave,
-  onMinimize,
+  onExplore,
+  onOpenMore,
   currentUserId,
+  overview,
   task,
   isHost,
   onClaimTask,
@@ -196,119 +181,100 @@ export function RoomHeader({
   onOpenViewers,
   onOpenContributors,
   onOpenProfile,
+  statusChip,
+  cards,
+  footer,
 }: RoomHeaderProps) {
   const hostName = host?.name || "Host";
-  const avatarUrl = host?.avatar || undefined;
-
-  const tags = [roleTag(host?.role), adminTag(host?.is_admin)].filter(
-    (t): t is Tag => t !== null,
-  );
-
   const showFollow = Boolean(host?.id && host.id !== currentUserId);
+  const publicId = overview?.host.publicId ?? host?.public_id ?? null;
+  const verified = overview?.host.isVerified ?? Boolean(host?.is_verified);
 
   return (
     <div className="absolute inset-x-0 top-0 z-30">
-      {/* Legibility scrim: the header now carries more info (tags,
-          two pills, avatar), so it needs a real gradient behind it
-          rather than floating directly on top of the video. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/70 via-black/25 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black/75 via-black/30 to-transparent" />
 
-      <div className="relative flex items-start justify-between gap-3 px-4 pt-10">
-        {/* Left group: host identity + follow button, min-w-0 so the
-            name truncates instead of pushing the right cluster off. */}
-        <div className="flex min-w-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => host?.id && onOpenProfile?.(host.id)}
-            disabled={!host?.id}
-            className="flex min-w-0 items-center gap-2.5 rounded-full py-0.5 text-left transition active:scale-[0.98] disabled:cursor-default"
-          >
-            <Avatar
-              name={hostName}
-              src={avatarUrl}
-              size="md"
-              online={isLive}
-              className="h-10 w-10 shrink-0 border-2 border-white/15"
-            />
+      <div className="relative flex items-center gap-2 px-3 pt-[calc(env(safe-area-inset-top,0px)+14px)]">
+        {/* Host identity */}
+        <button
+          type="button"
+          onClick={() => host?.id && onOpenProfile?.(host.id)}
+          disabled={!host?.id}
+          className="relative flex min-w-0 shrink items-center gap-2 text-left transition active:scale-[0.98] disabled:cursor-default"
+        >
+          <span className="relative shrink-0 pb-2">
+            <span
+              className="block rounded-full p-[2px]"
+              style={{ background: "linear-gradient(135deg,#ff6aa5,#a65bff)" }}
+            >
+              <Avatar
+                name={hostName}
+                src={host?.avatar || undefined}
+                size="md"
+                online={isLive}
+                className="!h-[48px] !w-[48px] border-2 border-black"
+              />
+            </span>
+            <span
+              className="absolute inset-x-1 bottom-0 rounded-full py-[1px] text-center text-[10px] font-bold leading-[13px] text-white"
+              style={{ background: "linear-gradient(135deg,#ff4d8d,#ff1f5a)" }}
+            >
+              Host
+            </span>
+          </span>
+          <span className="min-w-0 pb-1">
+            <span className="flex items-center gap-1">
+              <span className="truncate text-[17px] font-bold leading-tight text-white">{hostName}</span>
+              {verified && <Star className="h-4 w-4 shrink-0 fill-[#ffc83d] text-[#ffc83d]" aria-label="Verified" />}
+            </span>
+            {publicId && (
+              <span className="block truncate text-[12px] font-medium leading-tight text-white/75">
+                ID: {publicId}
+              </span>
+            )}
+          </span>
+        </button>
 
-            <div className="min-w-0">
-              <div className="flex items-center gap-1">
-                <p className="truncate text-[15px] font-semibold leading-tight text-white">
-                  {hostName}
-                </p>
-                {host?.is_verified && (
-                  <BadgeCheck
-                    className="h-4 w-4 shrink-0 fill-[#57C2FF] text-black"
-                    aria-label="Verified"
-                  />
-                )}
-              </div>
+        {showFollow && host?.id && <FollowButton hostId={host.id} />}
 
-              {tags.length > 0 && (
-                <div className="mt-1 flex flex-wrap items-center gap-1">
-                  {tags.map((tag) => (
-                    <TagPill key={tag.label} tag={tag} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </button>
-
-          {showFollow && host?.id && <FollowButton hostId={host.id} />}
-        </div>
-
-        {/* Right group: LIVE pill, viewer count, close */}
-        <div className="flex shrink-0 items-center gap-2">
+        {/* Right cluster */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <TopGifters list={overview?.topContributors ?? []} onClick={onOpenContributors} />
           <button
             type="button"
             onClick={onOpenViewers}
             disabled={!onOpenViewers}
             aria-label={`${formatCount(viewerCount)} viewers — view list`}
-            className="flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-sm transition enabled:hover:bg-black/60 enabled:active:scale-95"
+            className="flex items-center gap-1 rounded-full border border-[#5b7cff]/30 bg-[#0e1230]/60 px-2.5 py-1.5 text-[14px] font-semibold leading-none text-white backdrop-blur-xl transition enabled:active:scale-95"
           >
-            <span className="flex items-center gap-1 text-xs font-semibold leading-none text-white/90">
-              <Users className="h-3.5 w-3.5" strokeWidth={2} />
-              {formatCount(viewerCount)}
-            </span>
+            <User className="h-3.5 w-3.5 text-white/80" strokeWidth={2.2} />
+            {formatCount(viewerCount)}
           </button>
-
-          {onOpenContributors && (
-            <button
-              type="button"
-              onClick={onOpenContributors}
-              aria-label="Top contributors"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-b from-[#FFE08A]/25 to-[#F2A81D]/15 text-[#FFC94A] ring-1 ring-inset ring-[#FFC94A]/40 backdrop-blur-sm transition hover:from-[#FFE08A]/35 active:scale-90"
-            >
-              <Trophy className="h-[18px] w-[18px]" strokeWidth={2.1} />
-            </button>
-          )}
-          {onMinimize && (
-            <button
-              type="button"
-              onClick={onMinimize}
-              aria-label="Minimize to mini player"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white/80 backdrop-blur-sm transition hover:bg-black/60 hover:text-white"
-            >
-              <ChevronDown className="h-5 w-5" strokeWidth={1.75} />
-            </button>
-          )}
-
           <button
             type="button"
             onClick={onLeave}
             aria-label="Close room"
-            className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-full",
-              "bg-black/45 text-white/80 backdrop-blur-sm transition hover:bg-black/60 hover:text-white",
-            )}
+            className="flex h-8 w-8 items-center justify-center text-white transition active:scale-90"
           >
-            <X className="h-5 w-5" strokeWidth={1.75} />
+            <X className="h-7 w-7" strokeWidth={2} />
           </button>
         </div>
       </div>
 
-      {/* Live task — sits right below the viewer row, transparent glass
-          so it reads as part of the header rather than a new block. */}
+      {/* Pill row: rank · (more) · status … explore */}
+      <div className="relative mt-2.5 flex items-center gap-2 px-3">
+        <TopRankPill rank={overview?.hostRank?.rank ?? null} />
+        {onOpenMore && <MoreDotsButton onClick={onOpenMore} />}
+        {statusChip}
+        {onExplore && (
+          <div className="ml-auto">
+            <ExplorePill onClick={onExplore} />
+          </div>
+        )}
+      </div>
+
+      {cards && <div className="relative mt-3 px-3">{cards}</div>}
+
       <HostTaskCard
         task={task ?? null}
         isHost={isHost}
@@ -316,6 +282,8 @@ export function RoomHeader({
         claiming={claimingTask}
         stats={taskStats}
       />
+
+      {footer && <div className="relative mt-2 px-3">{footer}</div>}
     </div>
   );
 }

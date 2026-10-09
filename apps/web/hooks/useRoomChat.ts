@@ -31,7 +31,18 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
   const pendingIdsRef = useRef<string[]>([]);
 
   const upsert = useCallback((incoming: RoomChatMessage[]) => {
-    for (const m of incoming) messagesRef.current.set(m.id, m);
+    for (const m of incoming) {
+      // A gift combo re-publishes the SAME row id with a growing quantity;
+      // history replays can arrive out of order, so never let an older,
+      // smaller count overwrite a newer one.
+      const prev = messagesRef.current.get(m.id);
+      if (prev?.kind === "gift" && m.kind === "gift" && prev.gift && m.gift && prev.gift.quantity > m.gift.quantity) {
+        continue;
+      }
+      // Keep a combo row where it first appeared in the feed.
+      const keepPos = prev?.kind === "gift" && m.kind === "gift";
+      messagesRef.current.set(m.id, keepPos ? { ...m, createdAt: prev.createdAt } : m);
+    }
     const sorted = [...messagesRef.current.values()].sort(
       (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
     );

@@ -34,7 +34,9 @@ import { ContributorsModal } from '@/components/ContributorsModal';
 
 import { RoomChat } from '@/components/RoomChat';
 
-import { RoomJoinFeed, type RoomJoinEvent } from '@/components/RoomJoinFeed';
+import { useRoomOverview } from '@/hooks/useRoomOverview';
+
+import type { MicMode } from '@/components/RoomChat';
 
 import { useRoomChat } from '@/hooks/useRoomChat';
 
@@ -63,9 +65,7 @@ import { GiftPickerSheet } from '@/components/GiftPickerSheet';
 
 import { GiftSendAnimation, type SentGift } from '@/components/GiftSendAnimation';
 
-import { HostGiftMeter } from '@/components/HostGiftMeter';
 
-import { WalletBalancePill } from '@/components/WalletBalancePill';
 
 import { financialApi, type GiftCatalogItem } from '@/lib/api/financial';
 
@@ -215,10 +215,6 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
 
   const [sentGift, setSentGift] = useState<SentGift | null>(null);
 
-  // Bumped every time this viewer sends a gift, so WalletBalancePill knows
-  // to re-fetch the authoritative balance from the server (never computed
-  // locally — see fin_send_gift() in the financial-system migration).
-  const [walletRefreshToken, setWalletRefreshToken] = useState(0);
 
   // Public gift catalog (id -> diamondValue), fetched once, used only to
   // render the live "gifts this stream" meter below — same data the gift
@@ -275,32 +271,10 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   // Opponent's stream for the dual-video PK view (client-side side-by-side).
   const { opponentStream, opponentConnected } = usePkMedia(room, userId, pk.state);
 
-  // "Someone joined" pulses for RoomJoinFeed. The realtime service doesn't
-  // currently emit a per-user join event with a username (only the polled
-  // aggregate viewerCount on the room record), so each detected increase in
-  // viewerCount fires one generic pulse. Swap this for a real presence/WS
-  // event (with username + avatar) as soon as the backend exposes one —
-  // RoomJoinFeed already accepts that richer shape via RoomJoinEvent.
-  const [joinEvents, setJoinEvents] = useState<RoomJoinEvent[]>([]);
-  const lastViewerCountRef = useRef<number | null>(null);
-  useEffect(() => {
-    const count = room?.viewerCount;
-    if (typeof count !== 'number') return;
-    const prev = lastViewerCountRef.current;
-    lastViewerCountRef.current = count;
-    if (prev === null || count <= prev) return;
-    const gained = Math.min(count - prev, 3); // cap so a big jump doesn't spam the feed
-    setJoinEvents((existing) => [
-      ...existing,
-      ...Array.from({ length: gained }).map((_, i) => ({
-        id: `join-${Date.now()}-${i}`,
-        username: 'New viewer',
-        subtitle: 'joined the room',
-      })),
-    ].slice(-20));
-  }, [room?.viewerCount]);
-
-
+  // Real header data (host public ID, today's top gifters, host rank).
+  // Refetched whenever a new gift lands in chat so the leaderboard avatars and
+  // the "Top N" pill move with the stream.
+  const overview = useRoomOverview(room?.id ?? '', !!room?.id && (isLive || isWaiting), sessionGiftTotals.giftCount);
 
   // ---- Viewer's own request status ----
 
@@ -432,6 +406,28 @@ useEffect(() => {
   // Only the host sees pending requests, so only the host gets the
   // notification dot on the audio-stage button.
   const pendingRequestCount = isHost ? requests.length : 0;
+
+  // Bottom-bar mic: mute toggle for anyone on stage; otherwise a viewer taps
+  // it to request (or cancel a request for) a speaking seat.
+  const micMode: MicMode | undefined = isAudioRoom || isHost || onStage
+    ? onStage
+      ? (isAudioRoom ? stageMicOn : micEnabled) ? 'on' : 'off'
+      : viewerRequestPending ? 'pending' : 'request'
+    : viewerRequestPending ? 'pending' : 'request';
+  const handleMicPress = () => {
+    if (onStage) {
+      if (isAudioRoom) handleStageToggleMute();
+      else if (isHost) setMicEnabled((v) => !v);
+      else setGuestMicEnabled((v) => !v);
+      return;
+    }
+    if (isAudioRoom) {
+      setSpeakerPanelOpen(true);
+      return;
+    }
+    if (viewerRequestPending) void roomsApi.cancelAudioRequest(room?.id ?? '').then(() => refetch()).catch(() => {});
+    else void requestAudio();
+  };
 
 
 
@@ -589,125 +585,41 @@ useEffect(() => {
 
         {/* Header (the pre-live setup screen has its own top bar) */}
         {!(isHost && isWaiting) && (
-
-        <RoomHeader
-
-          host={room.host}
-
-          viewerCount={room.viewerCount ?? mediaState?.viewerCount ?? 1200}
-
-          isLive={isLive}
-
-          onLeave={handleLeave}
-
-          onMinimize={handleMinimize}
-
-          currentUserId={userId}
-
-          onOpenProfile={setProfileUserId}
-
-          task={task}
-
-          isHost={isHost}
-
-          onClaimTask={isHost ? undefined : claim}
-
-          claimingTask={claiming}
-
-          taskStats={stats}
-
-          onOpenViewers={() => setViewersOpen(true)}
-          onOpenContributors={
-            room.host?.id ? () => setContributorsOpen(true) : undefined
-          }
-        />
-        )}
-
-        {/* Live "gifts this stream" meter — visible to everyone in the
-            room, host and viewers alike, tallied from the same gift rows
-            already shown in chat. */}
-        {!isAudioRoom && !(isHost && isWaiting) && (
-          <HostGiftMeter
-            totalDiamonds={sessionGiftTotals.totalDiamonds}
-            giftCount={sessionGiftTotals.giftCount}
+          <RoomHeader
+            host={room.host}
+            viewerCount={room.viewerCount ?? mediaState?.viewerCount ?? 0}
+            isLive={isLive}
+            onLeave={handleLeave}
+            onExplore={handleMinimize}
+            onOpenMore={() => {
+              setMoreView('menu');
+              setMoreOpen(true);
+            }}
+            currentUserId={userId}
+            overview={overview}
+            onOpenProfile={setProfileUserId}
+            task={task}
+            isHost={isHost}
+            onClaimTask={isHost ? undefined : claim}
+            claimingTask={claiming}
+            taskStats={stats}
+            onOpenViewers={() => setViewersOpen(true)}
+            onOpenContributors={room.host?.id ? () => setContributorsOpen(true) : undefined}
+            statusChip={
+              isHost && isLive ? (
+                <div className="flex items-center rounded-full border border-white/10 bg-black/45 px-2.5 py-1.5 text-[11px] font-semibold tracking-wide backdrop-blur-xl">
+                  <span
+                    className={`mr-1.5 inline-block h-2 w-2 rounded-full ${
+                      hostMediaReady ? 'bg-emerald-400' : 'animate-pulse bg-amber-300'
+                    }`}
+                  />
+                  {hostMediaReady ? 'LIVE' : 'CONNECTING'}
+                </div>
+              ) : null
+            }
+            footer={isLive && !pk.state ? <LastPKCard hostId={room.host_id} onView={() => setPkOpen(true)} /> : null}
           />
         )}
-
-        {/* Viewer's own coin balance — visible at a glance in the room,
-            not just inside the gift sheet. Hidden for the host, whose
-            header already shows task/earnings stats. */}
-        {!isHost && (
-          <WalletBalancePill
-            className="absolute right-4 top-[80px] z-30"
-            refreshToken={walletRefreshToken}
-          />
-        )}
-
-
-
-        {/* Live indicator for host */}
-
-        {isHost && isLive && (
-
-          <div className="absolute left-1/2 top-[46px] z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/40 px-2 py-1 text-[9px] font-semibold tracking-wide backdrop-blur-xl">
-
-            <span
-              className={`mr-2 inline-block h-2 w-2 rounded-full ${
-                hostMediaReady ? 'bg-emerald-400' : 'animate-pulse bg-amber-300'
-              }`}
-            />
-
-            {hostMediaReady ? 'LIVE' : 'CONNECTING'}
-
-          </div>
-
-        )}
-
-
-
-        {/* Audio stage button */}
-
-        {!isAudioRoom && !(isHost && isWaiting) && (
-<button
-
-          type="button"
-
-          onClick={() => setSpeakerPanelOpen(true)}
-
-          aria-label={`Open audio stage. ${occupiedSeats} of ${seatCount} occupied${
-            pendingRequestCount > 0 ? `, ${pendingRequestCount} pending requests` : ''
-          }`}
-
-          className="absolute right-[13px] top-1/2 z-40 flex h-[29px] w-[29px] -translate-y-1/2 items-center justify-center rounded-full border border-white/15 bg-black/45 backdrop-blur-xl transition hover:bg-black/60 active:scale-95"
-
-        >
-
-          <Mic className="h-[13px] w-[13px]" strokeWidth={1.6} />
-
-          {occupiedSeats > 0 && (
-
-            <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[9px] font-bold text-black">
-
-              {occupiedSeats}
-
-            </span>
-
-          )}
-
-          {pendingRequestCount > 0 && (
-
-            <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-[#FF3B5C] ring-2 ring-black">
-
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF3B5C] opacity-75" />
-
-            </span>
-
-          )}
-
-        </button>
-        )}
-
-
 
         {/* Always-visible speaker dock: shows connected speakers over the
             camera feed for video rooms. Audio rooms already render every
@@ -715,7 +627,7 @@ useEffect(() => {
             dock would just duplicate it there. */}
 
         {room.media_type !== "audio" && !(isHost && isWaiting) && (
-          <SpeakerDock speakers={dockSpeakers} topOffset={100} />
+          <SpeakerDock speakers={dockSpeakers} topOffset={330} />
         )}
 
 
@@ -778,17 +690,6 @@ useEffect(() => {
           hostAvatar={room.host?.avatar}
         />
 
-        {/* "Last PK" achievement card, only while live and no PK is running. */}
-        {isLive && !pk.state && (
-          <div className="absolute inset-x-0 top-[104px] z-30 mx-4">
-            <LastPKCard hostId={room.host_id} onView={() => setPkOpen(true)} />
-          </div>
-        )}
-
-        {/* "X joined" pulses, top-left, above the chat stream */}
-
-        {(isLive || (isWaiting && !isHost)) && <RoomJoinFeed events={joinEvents} />}
-
         {/* Live room chat (message stream + input) */}
 
         {(isLive || (isWaiting && !isHost)) && (
@@ -797,25 +698,14 @@ useEffect(() => {
             selfUserId={selfUserId}
             connected={chatState === 'connected'}
             isHost={isHost}
-
             onSend={sendChat}
             onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
-            onOpenMore={() => {
-              setMoreView('menu');
-              setMoreOpen(true);
-            }}
             onOpenPk={isHost ? () => setPkOpen(true) : undefined}
             onOpenGames={() => setGamesOpen(true)}
-            onToggleMic={
-              isAudioRoom
-                ? onStage
-                  ? handleStageToggleMute
-                  : undefined
-                : isHost
-                  ? () => setMicEnabled((v) => !v)
-                  : undefined
-            }
-            micEnabled={isAudioRoom ? stageMicOn : micEnabled}
+            onOpenGuests={() => setSpeakerPanelOpen(true)}
+            guestBadge={pendingRequestCount}
+            micMode={micMode}
+            onMicPress={handleMicPress}
             onOpenProfile={setProfileUserId}
           />
         )}
@@ -853,7 +743,6 @@ useEffect(() => {
 
             onSent={(gift, position) => {
               setSentGift({ code: gift.code, icon: gift.icon, name: gift.name, position });
-              setWalletRefreshToken((t) => t + 1);
             }}
 
           />
@@ -896,7 +785,7 @@ useEffect(() => {
 
         {speakerPublishing && !isHost && (
 
-          <div className="absolute left-[15px] bottom-[154px] z-40 flex items-center gap-2">
+          <div className="absolute right-[15px] bottom-[86px] z-40 flex items-center gap-2">
 
             <div className="flex items-center rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[8px] font-semibold backdrop-blur-xl">
 

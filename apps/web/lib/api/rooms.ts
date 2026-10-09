@@ -10,6 +10,8 @@ export interface RoomHost {
   id: string;
   name: string;
   handle: string;
+  /** Short numeric ID shown as "ID: 12543678" in the live header. */
+  public_id?: string | null;
   avatar: string | null;
   country_flag: string | null;
   /**

@@ -120,7 +120,7 @@ export const roomService = {
       .from("rooms")
       .select(
         `*, host:profiles!rooms_host_id_fkey (
-          id, name, handle, avatar, country_flag, role, is_admin, is_verified, level
+          id, name, handle, public_id, avatar, country_flag, role, is_admin, is_verified, level
         )`,
       )
       .neq("status", "ended")
@@ -213,7 +213,7 @@ export const roomService = {
       // directly.
       .select(
         `*, host:profiles!rooms_host_id_fkey (
-          id, name, handle, avatar, country_flag, role, is_admin, is_verified, level
+          id, name, handle, public_id, avatar, country_flag, role, is_admin, is_verified, level
         )`,
       )
       .eq("id", roomId)

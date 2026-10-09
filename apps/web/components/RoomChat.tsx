@@ -1,50 +1,45 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SendHorizonal, Gift, Menu, Swords, Mic, MicOff } from "lucide-react";
+import { Gamepad2, Gift, Mic, MicOff, Smile, Swords, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RoomChatMessage } from "@/lib/api/chat";
-import { GameIcon } from "@/components/icons";
 import { GiftImage } from "@/components/GiftImage";
+import { LevelGem } from "@/components/room/hud/LevelGem";
+
+export type MicMode = "on" | "off" | "request" | "pending";
 
 interface RoomChatProps {
   messages: RoomChatMessage[];
   selfUserId?: string | null;
   connected?: boolean;
-  /** Hosts have their own controls (HostControls) above the bottom bar, so the
-      chat input sits a little higher to avoid overlapping them. */
   isHost?: boolean;
-  /** True while the host's "Start Live" pill is still showing above the bar —
-      keeps the chat bar raised so it doesn't overlap. Once it goes away
-      (stream goes live), the bar animates down to the bottom. */
+  /** Keeps the bar raised (host pre-live pill). */
   raised?: boolean;
   onSend: (text: string) => boolean;
-  /** Opens the gift sheet. Omit to hide the gift button (e.g. for hosts). */
+  /** Viewer-only gift button. */
   onOpenGift?: () => void;
-  /** Opens the "more" sheet (camera, mic, filters, share, like, menu). */
-  onOpenMore?: () => void;
-  /** Opens the PK battle sheet. Hosts only. */
+  /** Host-only: PK battle. */
   onOpenPk?: () => void;
-  /** Opens games. */
   onOpenGames?: () => void;
-  /** Mic mute/unmute for anyone on stage (host, or a seated guest in a party room). Shown next to Games. */
-  onToggleMic?: () => void;
-  micEnabled?: boolean;
-  /** Opens a user's profile in the in-room popup instead of navigating away. */
+  /** Guest-seat / multi-guest panel. `guestBadge` shows pending requests (host). */
+  onOpenGuests?: () => void;
+  guestBadge?: number;
+  /** Mic button behaviour: toggle mute on stage, or request/cancel a seat as a viewer. */
+  micMode?: MicMode;
+  onMicPress?: () => void;
   onOpenProfile?: (userId: string) => void;
 }
 
-// YouTube-live-style username colors: bright, legible against video, no two
-// adjacent hues too close together.
-const NAME_COLORS = [
-  "#FF6B81", // rose
-  "#6FCF97", // mint
-  "#5CC8FF", // sky
-  "#FFC24B", // amber
-  "#C48BFF", // violet
-  "#FF9662", // coral
-  "#4FE0C6", // teal
+const EMOJIS = [
+  "😀", "😂", "🥰", "😍", "😘", "😎", "🤩", "😊",
+  "😉", "🥳", "😇", "🤗", "😋", "😜", "🤭", "😏",
+  "😢", "😭", "😡", "😱", "🤯", "🙄", "😴", "🤔",
+  "👍", "👏", "🙌", "🙏", "💪", "👋", "✌️", "🤞",
+  "❤️", "💖", "💜", "🔥", "✨", "🎉", "🌹", "💯",
 ];
+
+const NAME_COLORS = ["#ff9eb5", "#8be3b0", "#8fd6ff", "#ffd27a", "#d3a8ff", "#ffb48f", "#7fe8d4"];
 
 function colorFor(seed: string) {
   let hash = 0;
@@ -52,83 +47,42 @@ function colorFor(seed: string) {
   return NAME_COLORS[hash % NAME_COLORS.length];
 }
 
-function avatarGradient(seed: string) {
-  const c = colorFor(seed);
-  return `linear-gradient(135deg, ${c}, rgba(0,0,0,0.55))`;
-}
-
-function initials(name: string) {
-  return name.trim().slice(0, 1).toUpperCase() || "?";
-}
-
-// Small tag -> color mapping so badges are visually distinct at a glance.
-// Falls back to a neutral slate for any tag not listed here.
-const TAG_COLORS: Record<string, string> = {
-  Engineer: "#A86CFF",
-  "Agency Owner": "#F5B93F",
-  "Host Manager": "#57C2FF",
-  Host: "#5FD9C4",
-  SVIP: "#FF6CA8",
-  VIP: "#FFC24B",
-  Verified: "#5CC8FF",
-};
-
-function tagColor(tag: string) {
-  return TAG_COLORS[tag] ?? "#9AA3B2";
-}
-
-/** "[Lv 12]" pill shown in front of a chat name. */
-function LevelBadge({ level }: { level: number }) {
-  return (
+function Avatar36({ src, name }: { src: string | null; name: string }) {
+  return src ? (
+    // eslint-disable-next-line @next/next/no-img-element -- remote user avatar
+    <img src={src} alt={name} className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-white/20" />
+  ) : (
     <span
-      className="mr-1 inline-flex shrink-0 items-center rounded-[4px] bg-white/12 px-1 py-[1px] align-middle text-[9.5px] font-bold leading-none text-[#FFD24B] [text-shadow:none]"
-      style={{ boxShadow: "inset 0 0 0 1px rgba(255,210,75,0.35)" }}
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white ring-1 ring-white/20"
+      style={{ background: `linear-gradient(135deg, ${colorFor(name)}, rgba(0,0,0,0.6))` }}
     >
-      Lv.{level}
+      {name.trim().slice(0, 1).toUpperCase() || "?"}
     </span>
   );
 }
 
-/** One or more small colored badge chips, e.g. "SVIP", "Agency Owner". */
-function TagBadges({ tags }: { tags: string[] }) {
-  if (!tags.length) return null;
-  return (
-    <span className="mr-1 inline-flex shrink-0 items-center gap-0.5 align-middle">
-      {tags.map((tag) => (
-        <span
-          key={tag}
-          className="rounded-[4px] px-1 py-[1px] text-[9.5px] font-bold leading-none text-white [text-shadow:none]"
-          style={{ background: tagColor(tag), boxShadow: "0 0 6px rgba(0,0,0,0.35)" }}
-        >
-          {tag}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-
-type RoundButtonProps = {
+function BarButton({
+  label,
+  onClick,
+  className,
+  style,
+  children,
+}: {
   label: string;
   onClick?: () => void;
-  active?: boolean;
-  tone?: "neutral" | "rose" | "gold" | "violet";
+  className?: string;
+  style?: React.CSSProperties;
   children: React.ReactNode;
-};
-
-function RoundButton({ label, onClick, active, tone = "neutral", children }: RoundButtonProps) {
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
+      style={style}
       className={cn(
-        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-150 active:scale-90",
-        tone === "neutral" && "bg-white/[0.08] text-white/85 hover:bg-white/15 hover:text-white",
-        tone === "rose" && "bg-accent-hot text-white shadow-[0_2px_12px_hsl(var(--accent-hot)/0.5)] hover:brightness-110",
-        tone === "gold" && "bg-[#F5B93F]/15 text-[#F5B93F] ring-1 ring-inset ring-[#F5B93F]/30 hover:bg-[#F5B93F]/25",
-        tone === "violet" && "bg-[#A86CFF]/15 text-[#C9A3FF] ring-1 ring-inset ring-[#A86CFF]/30 hover:bg-[#A86CFF]/25",
-        active && "ring-2 ring-white/80",
+        "relative flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border backdrop-blur-xl transition active:scale-90",
+        className,
       )}
     >
       {children}
@@ -136,16 +90,6 @@ function RoundButton({ label, onClick, active, tone = "neutral", children }: Rou
   );
 }
 
-/**
- * Live room chat overlay, styled like a live-stream chat feed (YouTube /
- * TikTok live): a flat, borderless scroll of "avatar — colored name —
- * message" rows sitting directly over the video with a bottom scrim for
- * legibility. No message bubbles, no per-row background — the video stays
- * the star. New rows slide up from the bottom as they arrive.
- *
- * The bottom action row is a single frosted pill: burger menu (more) + chat
- * input + PK (host) + Games + Mic (on stage) + Gift.
- */
 export function RoomChat({
   messages,
   selfUserId,
@@ -154,232 +98,268 @@ export function RoomChat({
   raised,
   onSend,
   onOpenGift,
-  onOpenMore,
   onOpenPk,
   onOpenGames,
-  onToggleMic,
-  micEnabled = true,
+  onOpenGuests,
+  guestBadge = 0,
+  micMode,
+  onMicPress,
   onOpenProfile,
 }: RoomChatProps) {
   const [draft, setDraft] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll to the newest message (unless the user scrolled up to read).
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    if (nearBottom) el.scrollTop = el.scrollHeight;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
     if (!text) return;
-    if (onSend(text)) setDraft("");
+    if (onSend(text)) {
+      setDraft("");
+      setEmojiOpen(false);
+    }
+  }
+
+  function addEmoji(emoji: string) {
+    setDraft((d) => (d + emoji).slice(0, 500));
+    inputRef.current?.focus();
   }
 
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-0 z-30 flex flex-col justify-end transition-[bottom] duration-500 ease-out",
-        raised ? "bottom-[96px]" : "bottom-[10px]",
+        "pointer-events-none absolute inset-x-0 z-30 flex flex-col justify-end pb-[calc(env(safe-area-inset-bottom,0px)+12px)] transition-[bottom] duration-500 ease-out",
+        raised ? "bottom-[96px]" : "bottom-0",
       )}
     >
-      {/* Bottom scrim so text stays legible over any video content */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[230px] bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[46svh] bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
 
-      {/* Message stream: flat rows, no bubbles, YouTube-live style */}
+      {/* Message stream */}
       <div
         ref={listRef}
-        className="pointer-events-auto relative z-10 mb-2 flex max-h-[210px] flex-col gap-2.5 overflow-y-auto overscroll-contain px-4 pt-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        style={{ maskImage: "linear-gradient(to bottom, transparent, black 28px)" }}
+        className="pointer-events-auto relative z-10 mb-3 flex max-h-[34svh] flex-col items-start gap-2.5 overflow-y-auto overscroll-contain pl-3 pr-[88px] pt-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ maskImage: "linear-gradient(to bottom, transparent, black 36px)" }}
       >
         {messages.length === 0 ? (
-          <p className="text-[12px] font-medium text-white/50 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">
+          <p className="rounded-full bg-black/40 px-3 py-1.5 text-[13px] font-medium text-white/60 backdrop-blur-md">
             Say hi to the room 👋
           </p>
         ) : (
           messages.map((m) => {
             const kind = m.kind ?? "message";
+            const mine = !!selfUserId && m.userId === selfUserId;
 
-            // "User X joined the stream" system row — no avatar link, no
-            // input styling, just a quiet centered-left announcement.
             if (kind === "join") {
               return (
-                <div key={m.id} className="chat-row flex items-center gap-2 px-0.5">
-                  <span className="text-[12px] font-medium text-white/70 [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]">
-                    {m.level ? <LevelBadge level={m.level} /> : null}
-                    {m.tags?.length ? <TagBadges tags={m.tags} /> : null}
-                    <span className="font-bold text-white/85">{m.username}</span>
-                    <span className="text-white/55"> joined the stream</span>
+                <div
+                  key={m.id}
+                  className="chat-row flex items-center gap-2.5 rounded-full bg-black/55 py-1.5 pl-1.5 pr-4 backdrop-blur-md"
+                >
+                  <button type="button" onClick={() => onOpenProfile?.(m.userId)} className="shrink-0">
+                    <Avatar36 src={m.avatar} name={m.username} />
+                  </button>
+                  <span className="text-[15px] font-semibold text-white">
+                    {m.username} <span className="ml-1 font-medium text-white/90">Joined 👋</span>
                   </span>
                 </div>
               );
             }
 
-            // Gift row: sender's badges + name, the gift image, and the
-            // gift name/quantity — visually distinct (gold gradient strip)
-            // from a plain chat line.
             if (kind === "gift") {
               const gift = m.gift;
               return (
-                <div
-                  key={m.id}
-                  className="chat-row flex items-center gap-2 rounded-full px-2.5 py-1"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, rgba(245,185,63,0.28), rgba(245,185,63,0.08) 70%, transparent)",
-                    boxShadow: "inset 0 0 0 1px rgba(245,185,63,0.35)",
-                  }}
-                >
-                  {gift && (
-                    <GiftImage
-                      gift={{ code: gift.code, icon: gift.icon ?? undefined }}
-                      fallbackIcon={Gift}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center"
-                      imgClassName="h-7 w-7 object-contain drop-shadow-[0_0_6px_rgba(245,185,63,0.6)]"
-                    />
-                  )}
-                  <p className="min-w-0 flex-1 text-[12.5px] leading-snug [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]">
-                    {m.level ? <LevelBadge level={m.level} /> : null}
-                    {m.tags?.length ? <TagBadges tags={m.tags} /> : null}
-                    <button
-                      type="button"
-                      onClick={() => onOpenProfile?.(m.userId)}
-                      className="mr-1 font-bold text-[#FFD24B] hover:underline"
-                    >
-                      {m.username}
+                <div key={m.id} className="chat-row relative">
+                  <div
+                    className="relative flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3"
+                    style={{
+                      background: "linear-gradient(90deg, rgba(255,40,110,0.42), rgba(120,10,60,0.55) 75%, rgba(20,6,16,0.6))",
+                      boxShadow:
+                        "inset 0 0 0 1.5px rgba(255,90,150,0.85), 0 0 16px rgba(255,50,120,0.45)",
+                    }}
+                  >
+                    <button type="button" onClick={() => onOpenProfile?.(m.userId)} className="shrink-0">
+                      <Avatar36 src={m.avatar} name={m.username} />
                     </button>
-                    <span className="text-white/90">
-                      sent {gift ? gift.name : "a gift"}
-                      {gift && gift.quantity > 1 ? ` ×${gift.quantity}` : ""}
+                    <span className="flex items-center gap-1.5 text-[15px] font-semibold text-white">
+                      {m.username}
+                      {m.level ? <LevelGem level={m.level} /> : null}
+                      <span className="font-semibold text-[#ffd27a]">
+                        Sent {gift?.name ?? "a gift"}
+                      </span>
+                      {gift && (
+                        <GiftImage
+                          gift={{ code: gift.code, icon: gift.icon ?? undefined }}
+                          fallbackIcon={Gift}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center"
+                          imgClassName="h-6 w-6 object-contain"
+                        />
+                      )}
+                      {gift && gift.quantity > 1 && (
+                        <span key={gift.quantity} className="animate-pop-in font-bold text-white">
+                          x{gift.quantity}
+                        </span>
+                      )}
                     </span>
-                  </p>
+                    {gift && (
+                      <GiftImage
+                        gift={{ code: gift.code, icon: gift.icon ?? undefined }}
+                        fallbackIcon={Gift}
+                        className="pointer-events-none absolute -right-[62px] -top-6 flex h-[84px] w-[84px] items-center justify-center"
+                        imgClassName="h-[84px] w-[84px] object-contain drop-shadow-[0_6px_14px_rgba(255,40,100,0.55)]"
+                      />
+                    )}
+                  </div>
                 </div>
               );
             }
 
-            const mine = !!selfUserId && m.userId === selfUserId;
-            const nameColor = mine ? "hsl(var(--accent-cyan))" : colorFor(m.username);
-            const avatarEl = m.avatar ? (
-              <img
-                src={m.avatar}
-                alt={m.username}
-                className="mt-0.5 h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-white/25"
-              />
-            ) : (
-              <div
-                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ring-1 ring-white/25"
-                style={{ background: avatarGradient(m.username) }}
-              >
-                {initials(m.username)}
-              </div>
-            );
             return (
               <div
                 key={m.id}
                 className={cn(
-                  "chat-row flex items-start gap-2 transition-opacity duration-300",
+                  "chat-row flex items-center gap-2.5 rounded-[26px] bg-black/55 py-1.5 pl-1.5 pr-4 backdrop-blur-md transition-opacity",
                   m.pending && "opacity-50",
                 )}
               >
-                {mine ? (
-                  avatarEl
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onOpenProfile?.(m.userId)}
-                    className="shrink-0 active:opacity-70"
-                  >
-                    {avatarEl}
-                  </button>
-                )}
-                <p className="min-w-0 flex-1 text-[12.5px] leading-snug [text-shadow:0_1px_3px_rgba(0,0,0,0.75)]">
-                  {m.level ? <LevelBadge level={m.level} /> : null}
-                  {m.tags?.length ? <TagBadges tags={m.tags} /> : null}
-                  {mine ? (
-                    <span className="mr-1.5 font-bold" style={{ color: nameColor }}>
-                      You
+                <button
+                  type="button"
+                  disabled={mine}
+                  onClick={() => onOpenProfile?.(m.userId)}
+                  className="shrink-0 self-start disabled:cursor-default"
+                >
+                  <Avatar36 src={m.avatar} name={m.username} />
+                </button>
+                <div className="min-w-0 py-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-[14px] font-medium leading-tight text-white/65">
+                      {mine ? "You" : m.username}
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onOpenProfile?.(m.userId)}
-                      className="mr-1.5 font-bold hover:underline"
-                      style={{ color: nameColor }}
-                    >
-                      {m.username}
-                    </button>
-                  )}
-                  <span className="break-words text-white/95">{m.message}</span>
-                </p>
+                    {m.level ? <LevelGem level={m.level} /> : null}
+                  </div>
+                  <p className="break-words text-[15px] font-medium leading-snug text-white">{m.message}</p>
+                </div>
               </div>
             );
           })
         )}
       </div>
 
-      {/* Unified frosted action row: burger + input + PK + Games + Gift/Filters */}
-      <div className="pointer-events-auto relative z-10 mx-3 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/45 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
-        {onOpenMore && (
-          <RoundButton label="More actions" onClick={onOpenMore}>
-            <Menu className="h-5 w-5" strokeWidth={2.1} />
-          </RoundButton>
-        )}
+      {/* Emoji tray */}
+      {emojiOpen && (
+        <div className="pointer-events-auto relative z-10 mx-3 mb-2 grid grid-cols-8 gap-1 rounded-3xl border border-white/10 bg-black/70 p-2 backdrop-blur-2xl">
+          {EMOJIS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => addEmoji(e)}
+              className="flex h-9 items-center justify-center rounded-xl text-[22px] transition active:scale-90 active:bg-white/10"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
 
+      {/* Bottom bar */}
+      <div className="pointer-events-auto relative z-10 flex items-center gap-2 px-3">
         <form
           onSubmit={submit}
-          className="flex min-w-0 flex-1 items-center gap-1 rounded-full transition-shadow duration-200 focus-within:shadow-[0_0_0_3px_hsl(var(--accent-hot)/0.22)]"
+          className="flex h-[46px] min-w-0 flex-1 items-center rounded-full border border-white/25 bg-black/50 pl-4 pr-1.5 backdrop-blur-xl focus-within:border-white/50"
         >
           <input
+            ref={inputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder={!connected ? "Connecting…" : "Say something…"}
+            placeholder={!connected ? "Connecting…" : "Say something..."}
             disabled={!connected}
             maxLength={500}
-            className="min-w-0 flex-1 bg-transparent px-2 text-[13px] text-white placeholder:text-white/40 focus:outline-none disabled:opacity-60"
+            enterKeyHint="send"
+            className="min-w-0 flex-1 bg-transparent text-[15px] text-white placeholder:text-white/55 focus:outline-none disabled:opacity-60"
           />
           <button
-            type="submit"
-            disabled={!connected || !draft.trim()}
-            aria-label="Send message"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-hot text-white transition-all duration-150 hover:brightness-110 active:scale-90 disabled:opacity-40"
+            type="button"
+            onClick={() => setEmojiOpen((v) => !v)}
+            aria-label="Emoji"
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition active:scale-90",
+              emojiOpen && "bg-white/15",
+            )}
           >
-            <SendHorizonal className="h-4 w-4" strokeWidth={2} />
+            <Smile className="h-[26px] w-[26px]" strokeWidth={1.8} />
           </button>
         </form>
 
-        {onOpenPk && isHost && (
-          <RoundButton label="PK Battle" onClick={onOpenPk} tone="gold">
-            <Swords className="h-[18px] w-[18px]" strokeWidth={2} />
-          </RoundButton>
+        {isHost && onOpenPk && (
+          <BarButton label="PK Battle" onClick={onOpenPk} className="border-[#f5b93f]/40 bg-[#2a1d05]/60 text-[#f5b93f]">
+            <Swords className="h-5 w-5" strokeWidth={2} />
+          </BarButton>
+        )}
+
+        {onOpenGuests && (
+          <BarButton label="Guest seats" onClick={onOpenGuests} className="border-white/20 bg-black/45 text-white">
+            <UsersRound className="h-[22px] w-[22px]" strokeWidth={1.8} />
+            {guestBadge > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#ff2d6a] px-1 text-[10px] font-bold text-white ring-2 ring-black">
+                {guestBadge}
+              </span>
+            )}
+          </BarButton>
+        )}
+
+        {onOpenGift && (
+          <BarButton
+            label="Send a gift"
+            onClick={onOpenGift}
+            className="border-[#ff3d78]/70 bg-[#3a0c1d]/70 text-[#ff8fb3]"
+            style={{ boxShadow: "0 0 16px rgba(255,50,110,0.35)" }}
+          >
+            <Gift className="h-[24px] w-[24px]" strokeWidth={1.8} />
+          </BarButton>
         )}
 
         {onOpenGames && (
-          <RoundButton label="Games" onClick={onOpenGames} tone="violet">
-            <GameIcon className="h-[18px] w-[18px]" />
-          </RoundButton>
-        )}
-
-        {onToggleMic && (
-          <RoundButton
-            label={micEnabled ? "Mute microphone" : "Unmute microphone"}
-            onClick={onToggleMic}
-            tone={micEnabled ? "neutral" : "rose"}
+          <BarButton
+            label="Games"
+            onClick={onOpenGames}
+            className="border-[#6f7bff]/60 bg-[#10153a]/70 text-[#7fc4ff]"
+            style={{ boxShadow: "0 0 16px rgba(90,110,255,0.3)" }}
           >
-            {micEnabled ? (
-              <Mic className="h-[18px] w-[18px]" strokeWidth={2} />
-            ) : (
-              <MicOff className="h-[18px] w-[18px]" strokeWidth={2} />
-            )}
-
-        {onOpenGift && (
-          <RoundButton label="Send a gift" onClick={onOpenGift} tone="rose">
-            <Gift className="h-[18px] w-[18px]" strokeWidth={2} />
-          </RoundButton>
+            <Gamepad2 className="h-[26px] w-[26px]" strokeWidth={1.8} />
+          </BarButton>
         )}
-          </RoundButton>
+
+        {onMicPress && micMode && (
+          <BarButton
+            label={
+              micMode === "on"
+                ? "Mute microphone"
+                : micMode === "off"
+                  ? "Unmute microphone"
+                  : micMode === "pending"
+                    ? "Cancel mic request"
+                    : "Request to speak"
+            }
+            onClick={onMicPress}
+            className={cn(
+              micMode === "off"
+                ? "border-[#ff2d6a] bg-[#ff2d6a] text-white"
+                : "border-[#ff8fb3]/50 bg-black/55 text-[#ff9ec0]",
+              micMode === "pending" && "animate-pulse",
+            )}
+          >
+            {micMode === "off" ? (
+              <MicOff className="h-[22px] w-[22px]" strokeWidth={1.9} />
+            ) : (
+              <Mic className="h-[22px] w-[22px]" strokeWidth={1.9} />
+            )}
+          </BarButton>
         )}
       </div>
 
