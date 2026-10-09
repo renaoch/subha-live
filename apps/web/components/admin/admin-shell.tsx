@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Radio,
   Search,
+  Trophy,
 } from "lucide-react";
 
 import { roomsApi, type RoomRecord } from "@/lib/api/rooms";
@@ -34,6 +35,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin", label: "Rooms", icon: LayoutGrid },
       { href: "/admin/manage-tasks", label: "Manage tasks", icon: Target },
+      { href: "/admin/challenges", label: "Challenges", icon: Trophy },
     ],
   },
   {
@@ -51,6 +53,7 @@ const NAV_GROUPS: NavGroup[] = [
 const SECTION_TITLES: Record<string, { title: string; crumb: string }> = {
   "/admin": { title: "Rooms overview", crumb: "Rooms" },
   "/admin/manage-tasks": { title: "Manage tasks", crumb: "Manage tasks" },
+  "/admin/challenges": { title: "Regional challenges", crumb: "Challenges" },
   "/admin/bd-applications": {
     title: "BD applications",
     crumb: "BD applications",

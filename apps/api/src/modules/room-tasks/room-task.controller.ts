@@ -9,7 +9,7 @@ export async function getRoomTask(
   next: NextFunction,
 ) {
   try {
-    const task = await roomTaskService.getActiveTask(req.params.id);
+    const task = await roomTaskService.getActiveTask(req.params.id, req.user?.id);
 
     res.status(200).json({ success: true, data: task });
   } catch (error) {

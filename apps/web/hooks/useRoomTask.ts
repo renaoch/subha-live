@@ -5,8 +5,8 @@ import { toast } from 'sonner';
 /**
  * Tracks the room's live task/goal for both the host and viewers.
  *
- * Polls every 2s while the room is waiting/live (same cadence as
- * useSpeakerRequests) so the progress bar in the header feels
+ * Polls every 5s while the room is waiting/live (and the room page forces
+ * an immediate refetch whenever a new gift lands in chat) so the progress bar in the header feels
  * real-time without needing a Supabase realtime channel.
  */
 export function useRoomTask(roomId: string, roomStatus?: string | null) {
@@ -41,7 +41,7 @@ export function useRoomTask(roomId: string, roomStatus?: string | null) {
     }
 
     fetchTask();
-    intervalRef.current = setInterval(fetchTask, 2000);
+    intervalRef.current = setInterval(fetchTask, 5000);
 
     return () => {
       if (intervalRef.current) {

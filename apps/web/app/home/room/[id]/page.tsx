@@ -36,6 +36,12 @@ import { RoomChat } from '@/components/RoomChat';
 
 import { useRoomOverview } from '@/hooks/useRoomOverview';
 
+import { useRoomTask } from '@/hooks/useRoomTask';
+
+import { useRoomChallenge } from '@/hooks/useRoomChallenge';
+
+import { TopCards } from '@/components/room/hud/TopCards';
+
 import type { MicMode } from '@/components/RoomChat';
 
 import { useRoomChat } from '@/hooks/useRoomChat';
@@ -275,6 +281,22 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   // Refetched whenever a new gift lands in chat so the leaderboard avatars and
   // the "Top N" pill move with the stream.
   const overview = useRoomOverview(room?.id ?? '', !!room?.id && (isLive || isWaiting), sessionGiftTotals.giftCount);
+
+  // Star Target (room gift goal) + Regional Star Challenge (host ranking race).
+  const {
+    task: starTask,
+    saving: starSaving,
+    claiming: starClaiming,
+    setTask: setStarTask,
+    cancelTask: cancelStarTask,
+    claim: claimStarTask,
+    refetch: refetchStarTask,
+  } = useRoomTask(room?.id ?? '', room?.status);
+  const challenge = useRoomChallenge(room?.id ?? '', !!room?.id && isLive, sessionGiftTotals.giftCount);
+  useEffect(() => {
+    if (sessionGiftTotals.giftCount > 0) void refetchStarTask();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionGiftTotals.giftCount]);
 
   // ---- Viewer's own request status ----
 
@@ -615,6 +637,24 @@ useEffect(() => {
                   />
                   {hostMediaReady ? 'LIVE' : 'CONNECTING'}
                 </div>
+              ) : null
+            }
+            cards={
+              isLive || (isWaiting && !isHost) ? (
+                <TopCards
+                  task={starTask}
+                  isHost={isHost}
+                  saving={starSaving}
+                  claiming={starClaiming}
+                  onSetTask={setStarTask}
+                  onCancelTask={cancelStarTask}
+                  onClaimTask={async () => {
+                    await claimStarTask().catch(() => {});
+                  }}
+                  challenge={challenge.data}
+                  skewMs={challenge.skewMs}
+                  hostId={room.host_id}
+                />
               ) : null
             }
             footer={isLive && !pk.state ? <LastPKCard hostId={room.host_id} onView={() => setPkOpen(true)} /> : null}

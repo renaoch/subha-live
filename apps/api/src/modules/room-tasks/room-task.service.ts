@@ -9,25 +9,41 @@ import {
   type ClaimRoomTaskResultRow,
 } from "./room-task.types";
 
-async function assertIsAdmin(userId: string): Promise<void> {
-  const { data, error } = await supabase
+/**
+ * The room's own host may set/cancel the Star Target (a pure goal, no payout);
+ * platform admins may also attach a coin reward for viewers. Rewards that mint
+ * coins are admin-only so a host can never create coins for their own viewers.
+ */
+async function assertCanManage(
+  roomId: string,
+  userId: string,
+): Promise<{ hostId: string; isAdmin: boolean }> {
+  const { data: room, error: roomError } = await supabase
+    .from("rooms")
+    .select("id, host_id")
+    .eq("id", roomId)
+    .maybeSingle();
+  if (roomError) {
+    throw new AppError(500, "Failed to look up room", {
+      code: "ROOM_LOOKUP_FAILED",
+      details: roomError.message,
+    });
+  }
+  if (!room) throw new AppError(404, "Room not found", { code: "ROOM_NOT_FOUND" });
+
+  const { data: profile } = await supabase
     .from("profiles")
     .select("is_admin")
     .eq("id", userId)
     .maybeSingle();
+  const isAdmin = Boolean(profile?.is_admin);
 
-  if (error) {
-    throw new AppError(500, "Failed to verify admin permission", {
-      code: "ADMIN_CHECK_FAILED",
-      details: error.message,
+  if (room.host_id !== userId && !isAdmin) {
+    throw new AppError(403, "Only the room host or an admin can manage the Star Target", {
+      code: "ROOM_TASK_FORBIDDEN",
     });
   }
-
-  if (!data?.is_admin) {
-    throw new AppError(403, "Only an admin can manage this room's task", {
-      code: "ADMIN_REQUIRED",
-    });
-  }
+  return { hostId: room.host_id as string, isAdmin };
 }
 
 export const roomTaskService = {
@@ -87,27 +103,11 @@ export const roomTaskService = {
   /** Admin sets a new goal for the room. Replaces (cancels) any currently active task. */
   async setTask(
     roomId: string,
-    adminId: string,
+    actorId: string,
     input: SetRoomTaskInput,
   ): Promise<RoomTask> {
-    await assertIsAdmin(adminId);
-
-    const { data: room, error: roomError } = await supabase
-      .from("rooms")
-      .select("id, host_id")
-      .eq("id", roomId)
-      .maybeSingle();
-
-    if (roomError) {
-      throw new AppError(500, "Failed to look up room", {
-        code: "ROOM_LOOKUP_FAILED",
-        details: roomError.message,
-      });
-    }
-
-    if (!room) {
-      throw new AppError(404, "Room not found", { code: "ROOM_NOT_FOUND" });
-    }
+    const { hostId, isAdmin } = await assertCanManage(roomId, actorId);
+    const rewardCoins = isAdmin ? (input.rewardCoins ?? 0) : 0;
 
     const { error: cancelError } = await supabase
       .from("room_tasks")
@@ -126,10 +126,10 @@ export const roomTaskService = {
       .from("room_tasks")
       .insert({
         room_id: roomId,
-        host_id: room.host_id,
+        host_id: hostId,
         title: input.title,
         target_value: input.targetValue,
-        reward_coins: input.rewardCoins ?? 0,
+        reward_coins: rewardCoins,
         current_value: 0,
         status: "active",
       })
@@ -147,8 +147,8 @@ export const roomTaskService = {
   },
 
   /** Admin cancels the current goal early. */
-  async cancelTask(roomId: string, adminId: string): Promise<void> {
-    await assertIsAdmin(adminId);
+  async cancelTask(roomId: string, actorId: string): Promise<void> {
+    await assertCanManage(roomId, actorId);
 
     const { error } = await supabase
       .from("room_tasks")
@@ -171,45 +171,21 @@ export const roomTaskService = {
    * never let it fail the gift itself.
    */
   async bumpProgress(roomId: string, amount: number): Promise<RoomTask | null> {
-    const { data: current, error: fetchError } = await supabase
-      .from("room_tasks")
-      .select("*")
-      .eq("room_id", roomId)
-      .eq("status", "active")
-      .maybeSingle();
-
-    if (fetchError) {
-      throw new AppError(500, "Failed to load room task", {
-        code: "ROOM_TASK_LOAD_FAILED",
-        details: fetchError.message,
-      });
-    }
-
-    if (!current) return null;
-
-    const row = current as RoomTaskRow;
-    const nextValue = row.current_value + amount;
-    const completed = nextValue >= row.target_value;
-
-    const { data, error } = await supabase
-      .from("room_tasks")
-      .update({
-        current_value: nextValue,
-        status: completed ? "completed" : "active",
-        completed_at: completed ? new Date().toISOString() : null,
-      })
-      .eq("id", row.id)
-      .select("*")
-      .single();
-
+    if (!(amount > 0)) return null;
+    // One atomic UPDATE in Postgres (bump_room_task) — concurrent gifts can
+    // never overwrite each other's progress.
+    const { data, error } = await supabase.rpc("bump_room_task" as any, {
+      p_room_id: roomId,
+      p_amount: Math.floor(amount),
+    });
     if (error) {
       throw new AppError(500, "Failed to update room task progress", {
         code: "ROOM_TASK_PROGRESS_FAILED",
         details: error.message,
       });
     }
-
-    return toRoomTask(data as RoomTaskRow);
+    const row = (Array.isArray(data) ? data[0] : data) as RoomTaskRow | undefined;
+    return row ? toRoomTask(row) : null;
   },
 
   /**
