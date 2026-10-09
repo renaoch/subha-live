@@ -2,7 +2,32 @@ import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { pkService } from "../pk/pk.service";
 import { roomMediaService } from "./room-media.service";
+import { roomState } from "./room-state.service";
 import type { Tables, TablesInsert } from "../../types/database.types";
+
+/**
+ * Category chips shown on home-feed live cards. Anything else the client
+ * sends is normalised to DEFAULT_ROOM_CATEGORY so the feed never renders an
+ * arbitrary, unstyled label.
+ */
+export const ROOM_CATEGORIES = ["chat", "music", "party", "talent", "gaming"] as const;
+export type RoomCategory = (typeof ROOM_CATEGORIES)[number];
+const DEFAULT_ROOM_CATEGORY: RoomCategory = "chat";
+const MAX_TAGLINE_LENGTH = 60;
+
+function normalizeCategory(value: unknown): RoomCategory {
+  const v = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return (ROOM_CATEGORIES as readonly string[]).includes(v)
+    ? (v as RoomCategory)
+    : DEFAULT_ROOM_CATEGORY;
+}
+
+function normalizeTagline(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  // Collapse whitespace/newlines: the tagline is a single line on the card.
+  const v = value.replace(/\s+/g, " ").trim().slice(0, MAX_TAGLINE_LENGTH);
+  return v.length > 0 ? v : null;
+}
 
 type Room = Tables<"rooms">;
 type CreateRoomInput = Pick<
@@ -111,7 +136,26 @@ export const roomService = {
       );
     }
 
-    return (data ?? []) as unknown as Room[];
+    const rooms = (data ?? []) as unknown as Array<Room & { viewerCount?: number }>;
+
+    // Home-feed cards show a live viewer count. It lives in Redis (not in
+    // Postgres), so attach it here. Only live rooms have viewers, and a Redis
+    // hiccup must never take the whole feed down: fail open to 0 per room.
+    await Promise.all(
+      rooms.map(async (room) => {
+        if (room.status !== "live") {
+          room.viewerCount = 0;
+          return;
+        }
+        try {
+          room.viewerCount = await roomState.getViewerCount(room.id);
+        } catch {
+          room.viewerCount = 0;
+        }
+      }),
+    );
+
+    return rooms as unknown as Room[];
   },
 
   async createRoom(input: CreateRoomInput): Promise<Room> {
@@ -121,9 +165,9 @@ export const roomService = {
         title: input.title,
         host_id: input.host_id,
         livekit_room_name: input.livekit_room_name,
-        category: input.category ?? null,
+        category: normalizeCategory(input.category),
         cover: input.cover ?? null,
-        description: input.description ?? null,
+        description: normalizeTagline(input.description),
         max_guest_slots: input.max_guest_slots ?? 3,
         media_type: input.media_type ?? "video",
       })

@@ -13,6 +13,7 @@ import { BannerCarousel } from '@/components/BannerCarousel';
 import { getPromoBanners } from '@/lib/promo-banners';
 import { SubhaLogo } from '@/components/SubhaLogo'; 
 import { cn } from '@/lib/utils';
+import { MAX_TAGLINE_LENGTH, ROOM_CATEGORIES, getRoomCategory, type RoomCategoryId } from '@/lib/room-categories';
 
 const TABS = ['For You', 'Following', 'Nearby', 'PK', 'New'] as const;
 type Tab = (typeof TABS)[number];
@@ -25,6 +26,8 @@ export default function LiveFeedPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [streamTitle, setStreamTitle] = useState('');
+  const [streamTagline, setStreamTagline] = useState('');
+  const [streamCategory, setStreamCategory] = useState<RoomCategoryId>('chat');
   const promoBanners = useMemo(() => getPromoBanners(), []);
 
   const createRoomMutation = useCreateRoom();
@@ -75,6 +78,8 @@ export default function LiveFeedPage() {
     if (createRoomMutation.isPending) return;
     setShowCreateModal(false);
     setStreamTitle('');
+    setStreamTagline('');
+    setStreamCategory('chat');
     router.replace('/home');
   };
 
@@ -84,11 +89,14 @@ export default function LiveFeedPage() {
       const room = await createRoomMutation.mutateAsync({
         title: streamTitle.trim() || 'Live now',
         livekit_room_name: `subha-live-${crypto.randomUUID()}`,
-        category: 'explore',
+        category: streamCategory,
+        description: streamTagline.trim() || null,
         media_type: 'video',
       });
       setShowCreateModal(false);
       setStreamTitle('');
+      setStreamTagline('');
+      setStreamCategory('chat');
       router.push(`/home/room/${room.id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't start the stream");
@@ -124,6 +132,32 @@ export default function LiveFeedPage() {
               autoFocus
               className="mt-5 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white placeholder:text-white/30 outline-none focus:border-orange-500/50"
             />
+            <input
+              type="text"
+              value={streamTagline}
+              onChange={(e) => setStreamTagline(e.target.value)}
+              placeholder="Add a tagline (e.g. Let's talk 💕)"
+              maxLength={MAX_TAGLINE_LENGTH}
+              className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white placeholder:text-white/30 outline-none focus:border-orange-500/50"
+            />
+            <div className="mt-4 flex flex-wrap justify-center gap-2" role="radiogroup" aria-label="Category">
+              {ROOM_CATEGORIES.map(({ id, label, Icon, chip, icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={streamCategory === id}
+                  onClick={() => setStreamCategory(id)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+                    streamCategory === id ? chip : 'border-white/10 bg-white/5 text-white/50 hover:text-white/80',
+                  )}
+                >
+                  <Icon className={cn('h-3.5 w-3.5', streamCategory === id && icon)} />
+                  {label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={startStream}
               disabled={createRoomMutation.isPending}
@@ -319,76 +353,81 @@ function Section({
   );
 }
 
-function RoomCard({
-  room,
-  onClick,
-  tall,
-  compact,
-}: {
-  room: RoomRecord;
-  onClick: () => void;
-  tall?: boolean;
-  compact?: boolean;
-}) {
+function RoomCard({ room, onClick }: { room: RoomRecord; onClick: () => void }) {
   const name = room.host?.name ?? 'Host';
+  const category = getRoomCategory(room.category);
+  const CategoryIcon = category.Icon;
+  // Tagline is the host's one-liner; fall back to the room title for rooms
+  // created before taglines existed.
+  const subtitle = room.description?.trim() || room.title || 'Live now';
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        'group relative block w-full overflow-hidden rounded-2xl border border-white/5 bg-[#1a1a1a] text-left shadow-lg transition duration-200 active:scale-[0.97]',
-        compact ? 'aspect-[3/4]' : tall ? 'aspect-[4/5]' : 'aspect-[3/4]',
-      )}
+      aria-label={`${name} is live. ${subtitle}`}
+      className="group relative block aspect-[5/4] w-full overflow-hidden rounded-[20px] border border-orange-500/40 bg-[#1a1a1a] text-left shadow-[0_6px_20px_rgba(0,0,0,0.5),0_0_14px_rgba(249,115,22,0.12)] transition duration-200 active:scale-[0.97]"
     >
       {room.cover ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={room.cover}
-          alt={room.title}
-          className="absolute inset-0 h-full w-full object-cover transition duration-300 group-active:scale-105"
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover object-top transition duration-300 group-active:scale-105"
         />
       ) : room.host?.avatar ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={room.host.avatar}
-          alt={name}
-          className="absolute inset-0 h-full w-full scale-110 object-cover object-top blur-[2px] brightness-[0.65] transition duration-300 group-active:scale-115"
+          alt=""
+          className="absolute inset-0 h-full w-full scale-110 object-cover object-top blur-[2px] brightness-[0.75] transition duration-300 group-active:scale-115"
         />
       ) : (
-        <div
-          className={cn(
-            'absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900',
-          )}
-        >
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
           <Avatar name={name} size="lg" className="h-16 w-16 text-2xl opacity-90" />
         </div>
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-black/25 transition-opacity group-active:from-black/95" />
 
-      <div className="absolute left-2 top-2 flex items-center gap-1.5">
-        <span className="flex items-center gap-1 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-black shadow-[0_0_0_1px_rgba(255,255,255,0.15)]">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-black" />
+      {/* Legibility scrims: soft top for the pills, strong bottom for text */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+
+      {/* Top-left: LIVE + viewers */}
+      <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5">
+        <span className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 px-3 py-1 text-[12px] font-extrabold leading-none text-black shadow-[0_0_12px_rgba(249,115,22,0.45)]">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-black" />
           LIVE
         </span>
-        <span className="flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
-          <Eye className="h-2.5 w-2.5" />
+        <span className="flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-[12px] font-semibold leading-none text-white backdrop-blur-md">
+          <Eye className="h-3.5 w-3.5" />
           {formatCount(room.viewerCount ?? 0)}
         </span>
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 p-2.5">
-        {!compact && (
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <Avatar name={name} src={room.host?.avatar ?? undefined} size="sm" className="h-6 w-6 border border-white/30" />
-            <span className="truncate text-xs font-bold text-white">{name}</span>
-            {room.host?.is_verified && (
-              <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-blue-500 text-[8px] text-white">
-                ✓
-              </span>
-            )}
+      {/* Bottom: host avatar + name + tagline, category chip on the right */}
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <Avatar
+            name={name}
+            src={room.host?.avatar ?? undefined}
+            size="sm"
+            className="h-10 w-10 shrink-0 border-[1.5px] border-white/70"
+          />
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-bold leading-tight text-white drop-shadow">{name}</p>
+            <p className="truncate text-[12px] leading-tight text-white/80">{subtitle}</p>
           </div>
-        )}
-        <p className="truncate text-[11px] text-white/80">{room.title || 'Live now'}</p>
+        </div>
+
+        <span
+          className={cn(
+            'flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold leading-none backdrop-blur-md',
+            category.chip,
+          )}
+        >
+          <CategoryIcon className={cn('h-3.5 w-3.5', category.icon)} />
+          {category.label}
+        </span>
       </div>
     </button>
   );
@@ -401,8 +440,8 @@ function SkeletonGrid({ count, tall }: { count: number; tall?: boolean }) {
         <div
           key={i}
           className={cn(
-            'relative overflow-hidden rounded-2xl border border-white/5 bg-white/5',
-            tall ? 'aspect-[4/5]' : 'aspect-[3/4]',
+            'relative overflow-hidden rounded-[20px] border border-white/5 bg-white/5',
+            tall ? 'aspect-[4/5]' : 'aspect-[5/4]',
           )}
         >
           <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.6s_infinite] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
