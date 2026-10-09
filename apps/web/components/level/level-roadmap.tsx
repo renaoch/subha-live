@@ -74,6 +74,15 @@ export function LevelRoadmap({ progress, definitions, rewards }: Props) {
 
   return (
     <section className="space-y-4">
+      <style>{`
+        @keyframes lr-glint { 0%,55% { transform: translateX(-120%) skewX(-20deg) } 100% { transform: translateX(220%) skewX(-20deg) } }
+        @keyframes lr-lift { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+        @keyframes lr-next { 0%,100% { opacity: 1 } 50% { opacity: .55 } }
+        .lr-glint::after { content:""; position:absolute; inset:0; width:40%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent); animation: lr-glint 3s ease-in-out infinite }
+        .lr-lift { animation: lr-lift 3s ease-in-out infinite }
+        .lr-next-rule { animation: lr-next 1.6s ease-in-out infinite }
+        @media (prefers-reduced-motion: reduce) { .lr-glint::after, .lr-lift, .lr-next-rule { animation: none } }
+      `}</style>
       {/* Next level card */}
       {!isMax && next && (
         <div
@@ -85,7 +94,7 @@ export function LevelRoadmap({ progress, definitions, rewards }: Props) {
         >
           <div className="flex items-center gap-4">
             <div
-              className="flex h-[68px] w-[68px] shrink-0 flex-col items-center justify-center rounded-2xl"
+              className="lr-lift lr-glint relative flex h-[68px] w-[68px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-2xl"
               style={{
                 background: `linear-gradient(145deg, ${theme.primary}, ${theme.secondary})`,
                 boxShadow: `0 10px 30px -8px ${theme.primary}`,
