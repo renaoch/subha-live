@@ -9,6 +9,7 @@ import {
   type LevelProgress,
   type LevelReward,
   type LevelHistoryItem,
+  type LevelDefinitionItem,
 } from "@/lib/api/levels";
 
 import {
@@ -20,6 +21,7 @@ import {
 import { KEYS, fetchers, load as loadCached, peek } from "@/lib/page-cache";
 import { LevelHero } from "./level-hero";
 import { LevelRewards } from "./level-rewards";
+import { LevelRoadmap } from "./level-roadmap";
 import { LevelHistory } from "./level-history";
 import { LevelLoading } from "./level-loading";
 import { LevelError } from "./level-error";
@@ -58,6 +60,7 @@ export function LevelPage() {
   const [history, setHistory] = useState<LevelHistoryItem[]>(cached?.[2] ?? []);
   const [charisma, setCharisma] = useState<CharismaProgress | null>(cached?.[3].progress ?? null);
 
+  const [definitions, setDefinitions] = useState<LevelDefinitionItem[]>([]);
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,6 +124,10 @@ export function LevelPage() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    levelsApi.definitions().then(setDefinitions).catch((e) => console.error("LEVEL DEFS ERROR:", e));
   }, []);
 
   // Lazy-load gifts for a direction the first time its sub-tab is opened
@@ -249,6 +256,7 @@ export function LevelPage() {
         {activeTab === "level" ? (
           <div className="space-y-5">
             <LevelHero progress={progress} />
+            <LevelRoadmap progress={progress} definitions={definitions} rewards={rewards} />
             <LevelRewards rewards={rewards} currentLevel={progress.currentLevel} />
             <LevelHistory history={history} />
           </div>

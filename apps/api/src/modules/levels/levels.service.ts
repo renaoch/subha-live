@@ -532,3 +532,26 @@ export async function addXp(
     }
   }
 }
+
+/**
+ * All level thresholds (level, xp_required, title) so clients can render
+ * the full "XP needed per level" roadmap table.
+ */
+export async function getLevelDefinitions(): Promise<{
+  definitions: { level: number; xpRequired: number; title: string | null }[];
+}> {
+  const { data, error } = await supabase
+    .from("level_definitions")
+    .select("level, xp_required, title")
+    .order("level", { ascending: true });
+
+  if (error) throw error;
+
+  return {
+    definitions: (data ?? []).map((d) => ({
+      level: d.level,
+      xpRequired: d.xp_required,
+      title: d.title ?? null,
+    })),
+  };
+}

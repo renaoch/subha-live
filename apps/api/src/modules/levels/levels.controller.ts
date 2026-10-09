@@ -10,6 +10,7 @@ import {
   getMyLevel,
   getLevelRewards,
   getMyLevelHistory,
+  getLevelDefinitions,
 } from "./levels.service";
 
 import {
@@ -107,6 +108,19 @@ export async function getMyLevelHistoryController(
       status: "ok",
       history: history.history,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getLevelDefinitionsController(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const result = await getLevelDefinitions();
+    return res.status(200).json({ status: "ok", ...result });
   } catch (error) {
     next(error);
   }

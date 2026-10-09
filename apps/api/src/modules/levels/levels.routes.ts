@@ -6,6 +6,7 @@ import {
   getMyLevelController,
   getLevelRewardsController,
   getMyLevelHistoryController,
+  getLevelDefinitionsController,
 } from "./levels.controller";
 
 const router = Router();
@@ -26,6 +27,12 @@ router.get(
   "/history",
   authMiddleware,
   getMyLevelHistoryController,
+);
+
+router.get(
+  "/definitions",
+  authMiddleware,
+  getLevelDefinitionsController,
 );
 
 export default router;

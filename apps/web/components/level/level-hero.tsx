@@ -191,6 +191,10 @@ export function LevelHero({
           progress.currentLevelXp,
       );
 
+  const xpToNext = isMaxLevel
+    ? 0
+    : Math.max(0, (progress.nextLevelXp ?? 0) - progress.totalXp);
+
   const barProgress = isMaxLevel
     ? 100
     : Math.min(
@@ -377,58 +381,60 @@ export function LevelHero({
 
         {/* XP */}
         <div className="mt-8">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs text-white/40">
-              Experience
-            </span>
+          {!isMaxLevel && (
+            <div className="mb-4 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">Next up</p>
+              <p className="mt-1 text-3xl font-black tabular-nums text-white">
+                {xpToNext.toLocaleString()}
+                <span className="ml-1.5 text-sm font-bold text-white/40">XP to</span>
+                <span className="ml-1.5 text-sm font-black" style={{ color: theme.accent }}>
+                  LV.{progress.nextLevel}
+                </span>
+              </p>
+              {progress.nextTitle && (
+                <p className="mt-1 text-[11px] font-bold uppercase tracking-widest" style={{ color: theme.secondary }}>
+                  Unlocks {progress.nextTitle}
+                </p>
+              )}
+            </div>
+          )}
 
-            <span
-              className="text-xs font-bold"
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs text-white/40">Progress</span>
+            <span className="text-xs font-black tabular-nums" style={{ color: theme.secondary }}>
+              {isMaxLevel ? "MAX" : `${barProgress.toFixed(1)}%`}
+            </span>
+          </div>
+
+          <div className="relative h-4 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
+            <div
+              className="relative h-full rounded-full transition-all duration-1000"
               style={{
-                color:
-                  theme.secondary,
+                width: `${Math.max(3, barProgress)}%`,
+                background: `linear-gradient(90deg, ${theme.primary}, ${theme.secondary}, ${theme.accent})`,
+                boxShadow: `0 0 18px ${theme.glow}`,
               }}
             >
-              {isMaxLevel
-                ? "MAX"
-                : `${Math.round(barProgress)}%`}
-            </span>
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: "linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.45) 50%, transparent 70%)",
+                  backgroundSize: "200% 100%",
+                  animation: "lh-sweep 2.4s linear infinite",
+                }}
+              />
+            </div>
+            {/* 25 / 50 / 75 ticks */}
+            {[25, 50, 75].map((t) => (
+              <div key={t} className="absolute top-0 h-full w-px bg-black/50" style={{ left: `${t}%` }} />
+            ))}
           </div>
 
-          <div className="h-3 overflow-hidden rounded-full bg-black/40">
-            <div
-              className="h-full rounded-full transition-all duration-1000"
-              style={{
-                width: `${Math.max(
-                  2,
-                  barProgress,
-                )}%`,
-                background: `
-                  linear-gradient(
-                    90deg,
-                    ${theme.primary},
-                    ${theme.secondary},
-                    ${theme.accent}
-                  )
-                `,
-                boxShadow: `
-                  0 0 15px ${theme.glow}
-                `,
-              }}
-            />
+          <div className="mt-2 flex justify-between text-[10px] tabular-nums text-white/35">
+            <span>{progress.totalXp.toLocaleString()} XP</span>
+            <span>{isMaxLevel ? "MAX LEVEL" : `${progress.nextLevelXp?.toLocaleString()} XP`}</span>
           </div>
-
-          <div className="mt-2 flex justify-between text-[10px] text-white/25">
-            <span>
-              {progress.totalXp.toLocaleString()} XP
-            </span>
-
-            <span>
-              {isMaxLevel
-                ? "MAX LEVEL"
-                : `${progress.nextLevelXp?.toLocaleString()} XP`}
-            </span>
-          </div>
+          <style>{`@keyframes lh-sweep{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
         </div>
       </div>
     </section>

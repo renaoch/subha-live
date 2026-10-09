@@ -72,7 +72,21 @@ interface LevelHistoryResponse {
   history: LevelHistoryItem[];
 }
 
+export interface LevelDefinitionItem {
+  level: number;
+  xpRequired: number;
+  title: string | null;
+}
+
 export const levelsApi = {
+  async definitions(): Promise<LevelDefinitionItem[]> {
+    const response = await apiFetch<{
+      status: string;
+      definitions: LevelDefinitionItem[];
+    }>("/api/v1/levels/definitions");
+    return response.definitions;
+  },
+
   async me(): Promise<{
     progress: LevelProgress;
   }> {
