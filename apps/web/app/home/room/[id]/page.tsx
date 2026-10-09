@@ -1042,7 +1042,7 @@ useEffect(() => {
           <SubhaLuckyRingGame roomId={room.id} onClose={() => setLuckyOpen(false)} />
         )}
 
-        {/* User profile popup — opened from chat, header, viewer list,
+        {/* User profile popu p — opened from chat, header, viewer list,
             contributors, or PK; slides up from the bottom over the live
             stream instead of navigating to a full profile page. */}
         {profileUserId && (
