@@ -3,14 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Eye, Flame, Loader2, Search, Crown, X } from 'lucide-react';
+import { Bell, Eye, Flame, Gift, Loader2, Search, Crown, Sparkles, X } from 'lucide-react';
 
 import { roomsApi, type RoomRecord } from '@/lib/api/rooms';
 import { useCreateRoom } from '@/hooks/queries/use-rooms';
 import { useRoomEntryGuard } from '@/lib/room-session-context';
 import { Avatar } from '@/components/ui/avatar';
-import { BannerCarousel } from '@/components/BannerCarousel';
-import { getPromoBanners } from '@/lib/promo-banners';
+import { HeroBannerCarousel, type HeroSlide } from '@/components/HeroBannerCarousel';
+import { rewardsApi, type DailyRewardOverview } from '@/lib/api/rewards';
+import { referralsApi } from '@/lib/api/referrals';
 import { SubhaLogo } from '@/components/SubhaLogo'; 
 import { cn } from '@/lib/utils';
 import { MAX_TAGLINE_LENGTH, ROOM_CATEGORIES, getRoomCategory, type RoomCategoryId } from '@/lib/room-categories';
@@ -28,7 +29,8 @@ export default function LiveFeedPage() {
   const [streamTitle, setStreamTitle] = useState('');
   const [streamTagline, setStreamTagline] = useState('');
   const [streamCategory, setStreamCategory] = useState<RoomCategoryId>('chat');
-  const promoBanners = useMemo(() => getPromoBanners(), []);
+  const [dailyReward, setDailyReward] = useState<DailyRewardOverview | null>(null);
+  const [referralCoins, setReferralCoins] = useState<number | null>(null);
 
   const createRoomMutation = useCreateRoom();
   const { enterRoom, guardCreate } = useRoomEntryGuard();
@@ -64,6 +66,64 @@ export default function LiveFeedPage() {
       cancelled = true;
     };
   }, []);
+
+  // Real values for the secondary banner slides. Best-effort: if either call
+  // fails the slide simply falls back to generic copy.
+  useEffect(() => {
+    let cancelled = false;
+    rewardsApi
+      .overview()
+      .then((d) => !cancelled && setDailyReward(d))
+      .catch(() => {});
+    referralsApi
+      .overview()
+      .then((d) => !cancelled && setReferralCoins(d.rewardPerReferral))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Not memoized on purpose: `openCreateModal` calls guardCreate(), which
+  // depends on live auth state, so the handler must be rebuilt every render.
+  const heroSlides: HeroSlide[] = (() => {
+    const todayCoins = dailyReward?.schedule.find(
+      (d) => d.dayIndex === dailyReward.todayDayIndex,
+    )?.rewardCoins;
+    const claimed = dailyReward?.alreadyClaimedToday ?? false;
+
+    return [
+      {
+        id: 'go-live',
+        title: 'Go Live',
+        highlight: 'Be Yourself',
+        subtitle: 'Share your world with Subha',
+        cta: 'Go Live',
+        onClick: openCreateModal,
+        image:
+          'https://images.unsplash.com/photo-1591853725932-79227eb926b5?auto=format&fit=crop&w=1400&q=80',
+        imagePosition: '60% 22%',
+      },
+      {
+        id: 'daily-checkin',
+        title: 'Daily Check-in',
+        highlight: claimed ? 'Come Back Tomorrow' : 'Claim Your Coins',
+        subtitle: todayCoins ? `Today's reward: ${todayCoins.toLocaleString()} coins` : 'Log in every day for bonus coins',
+        cta: claimed ? 'View Rewards' : 'Claim Now',
+        onClick: () => router.push('/rewards'),
+        Icon: Sparkles,
+      },
+      {
+        id: 'refer-earn',
+        title: 'Refer & Earn',
+        highlight: 'Invite Friends',
+        subtitle: referralCoins ? `Earn ${referralCoins.toLocaleString()} coins per friend` : 'Earn coins when friends join',
+        cta: 'Invite Now',
+        onClick: () => router.push('/referrals'),
+        Icon: Gift,
+      },
+    ];
+  })();
 
   const byViewers = useMemo(
     () => [...rooms].sort((a, b) => (b.viewerCount ?? 0) - (a.viewerCount ?? 0)),
@@ -263,44 +323,8 @@ export default function LiveFeedPage() {
       </header>
 
       <div className="space-y-8 px-4 pt-4">
-        {/* Go Live hero */}
-        <button
-          type="button"
-          onClick={() => openCreateModal()}
-          className="group relative block w-full overflow-hidden rounded-[28px] bg-[#1a1a1a] text-left transition active:scale-[0.98] border border-orange-500/20"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="https://images.unsplash.com/photo-1591853725932-79227eb926b5?auto=format&fit=crop&w=1200&q=80"
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover object-[75%_20%] transition duration-300 group-active:scale-105"
-          />
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black via-black/80 to-black/10" />
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/20" />
-
-          <div className="relative flex min-h-[220px] items-center justify-between gap-3 p-5">
-            <div>
-              <p className="font-display text-[26px] font-extrabold leading-tight text-white drop-shadow-sm">
-                Go Live
-              </p>
-              <p className="font-display text-[26px] font-extrabold italic leading-tight text-orange-400 drop-shadow-sm">
-                Be Yourself
-              </p>
-              <p className="mt-1.5 text-xs text-white/70">Share your world with Subha</p>
-              <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 px-5 py-2.5 text-sm font-bold text-black shadow-lg shadow-orange-500/20 transition group-active:scale-95">
-                Go Live <span aria-hidden>→</span>
-              </span>
-            </div>
-            <span className="relative hidden shrink-0 self-start pt-1 font-display text-lg italic leading-tight text-orange-400/90 drop-shadow-sm sm:block">
-              More
-              <br />
-              Than Live
-            </span>
-          </div>
-        </button>
-
-        {/* Promo carousel */}
-        <BannerCarousel items={promoBanners} />
+        {/* Hero banner carousel */}
+        <HeroBannerCarousel slides={heroSlides} />
 
         {/* Popular Live */}
         <Section icon={<Flame className="h-4 w-4 text-orange-500" />} title="Popular Live">
