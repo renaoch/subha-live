@@ -20,7 +20,7 @@ import {
 
 import { KEYS, fetchers, load as loadCached, peek } from "@/lib/page-cache";
 import { LevelHero } from "./level-hero";
-import { LevelRewards } from "./level-rewards";
+import { getLevelTheme } from "./level-theme";
 import { LevelRoadmap } from "./level-roadmap";
 import { LevelHistory } from "./level-history";
 import { LevelLoading } from "./level-loading";
@@ -168,88 +168,58 @@ export function LevelPage() {
   }
 
   const totalCharisma = charisma.totalCharisma;
+  const pageTheme = getLevelTheme(progress.currentLevel);
   const incomingCount = gifts.incoming.length;
   const outgoingCount = gifts.outgoing.length;
 
   return (
-    <main className="min-h-dvh bg-[#120E19] text-[#F8F1E6] antialiased">
-      <div className="mx-auto flex max-w-md flex-col gap-5 px-4 pb-12 pt-5">
-        {/* Page heading */}
-        <header className="px-1">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#D9A94A]/70">Profile</p>
-              <h1 className="mt-1 text-3xl font-black tracking-tight">My Level</h1>
-            </div>
-            <button
-              type="button"
-              onClick={handleClose}
-              aria-label="Close"
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] text-white/50 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.08] hover:text-white/80 active:scale-95"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <p className="mt-2 text-sm text-white/35">Track your progression and charisma.</p>
+    <main
+      className="min-h-dvh text-[#F8F1E6] antialiased"
+      style={{ background: `radial-gradient(90% 36% at 50% 0%, ${pageTheme.primary}24, transparent 70%), #0C0A12` }}
+    >
+      <div className="mx-auto flex max-w-md flex-col gap-4 px-4 pb-12 pt-5">
+        {/* Header */}
+        <header className="flex items-center justify-between px-1">
+          <h1 className="text-[28px] font-black tracking-tight">My level</h1>
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.07] text-white/70 transition active:scale-95 hover:bg-white/[0.12]"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </header>
 
-        {/* ─── MAIN TABS ─── */}
-        <div className="relative rounded-2xl border border-white/5 bg-white/[0.03] p-1">
-          <div className="grid grid-cols-2 gap-1">
+        {/* Segmented control */}
+        <div role="tablist" className="relative grid grid-cols-2 rounded-full bg-white/[0.06] p-1">
+          <span
+            aria-hidden
+            className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full transition-transform duration-300 ease-out"
+            style={{
+              transform: activeTab === "level" ? "translateX(0)" : "translateX(100%)",
+              background: `linear-gradient(135deg, ${pageTheme.primary}, ${pageTheme.secondary})`,
+              boxShadow: `0 6px 20px -6px ${pageTheme.primary}`,
+            }}
+          />
+          {([
+            { key: "level", label: "Level", Icon: Crown, value: `Lv ${progress.currentLevel}` },
+            { key: "charisma", label: "Charisma", Icon: Gift, value: Intl.NumberFormat("en", { notation: "compact" }).format(totalCharisma) },
+          ] as const).map(({ key, label, Icon, value }) => (
             <button
-              onClick={() => setActiveTab("level")}
-              className={`
-                relative flex items-center justify-center gap-2.5 rounded-xl px-4 py-3.5
-                text-sm font-bold transition-all duration-300
-                ${activeTab === "level"
-                  ? "bg-gradient-to-r from-violet-500/20 to-amber-500/10 text-white shadow-[0_0_30px_rgba(168,108,255,0.15)]"
-                  : "text-white/30 hover:bg-white/5 hover:text-white/60"
-                }
-              `}
+              key={key}
+              role="tab"
+              aria-selected={activeTab === key}
+              onClick={() => setActiveTab(key)}
+              className={`relative z-10 flex items-center justify-center gap-2 rounded-full py-3 text-sm font-bold transition-colors duration-300 ${
+                activeTab === key ? "text-[#120E19]" : "text-white/55"
+              }`}
             >
-              <Crown className="h-4 w-4" />
-              <span>Level</span>
-              <span className={`
-                rounded-full px-2 py-0.5 text-[9px] font-black
-                ${activeTab === "level"
-                  ? "bg-violet-400/20 text-violet-300"
-                  : "bg-white/5 text-white/30"
-                }
-              `}>
-                {progress.currentLevel}
-              </span>
-              {activeTab === "level" && (
-                <div className="absolute bottom-0 left-1/2 h-0.5 w-12 -translate-x-1/2 rounded-full bg-gradient-to-r from-violet-400 to-amber-300" />
-              )}
+              <Icon className="h-4 w-4" />
+              {label}
+              <span className={`text-xs font-semibold ${activeTab === key ? "opacity-70" : "text-white/35"}`}>{value}</span>
             </button>
-
-            <button
-              onClick={() => setActiveTab("charisma")}
-              className={`
-                relative flex items-center justify-center gap-2.5 rounded-xl px-4 py-3.5
-                text-sm font-bold transition-all duration-300
-                ${activeTab === "charisma"
-                  ? "bg-gradient-to-r from-rose-500/20 to-amber-500/10 text-white shadow-[0_0_30px_rgba(255,108,168,0.15)]"
-                  : "text-white/30 hover:bg-white/5 hover:text-white/60"
-                }
-              `}
-            >
-              <Gift className="h-4 w-4" />
-              <span>Charisma</span>
-              <span className={`
-                rounded-full px-2 py-0.5 text-[9px] font-black
-                ${activeTab === "charisma"
-                  ? "bg-emerald-400/20 text-emerald-300"
-                  : "bg-white/5 text-white/30"
-                }
-              `}>
-                {totalCharisma.toLocaleString()}
-              </span>
-              {activeTab === "charisma" && (
-                <div className="absolute bottom-0 left-1/2 h-0.5 w-12 -translate-x-1/2 rounded-full bg-gradient-to-r from-rose-400 to-amber-300" />
-              )}
-            </button>
-          </div>
+          ))}
         </div>
 
         {/* ─── CONTENT ─── */}
@@ -257,7 +227,6 @@ export function LevelPage() {
           <div className="space-y-5">
             <LevelHero progress={progress} />
             <LevelRoadmap progress={progress} definitions={definitions} rewards={rewards} />
-            <LevelRewards rewards={rewards} currentLevel={progress.currentLevel} />
             <LevelHistory history={history} />
           </div>
         ) : (

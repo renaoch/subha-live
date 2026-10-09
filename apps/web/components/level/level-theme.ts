@@ -155,70 +155,37 @@ function getTier(level: number) {
   );
 }
 
-export function getLevelTheme(
-  level: number,
-): LevelTheme {
-  const safeLevel = Math.max(
-    1,
-    level,
-  );
+/** One cohesive palette per 10-level tier (no per-level random hues). */
+const PALETTES = [
+  { primary: "#D98F4E", secondary: "#F2B27A", accent: "#FFD9B3" }, // 1-10   bronze
+  { primary: "#9FB0C4", secondary: "#C9D6E4", accent: "#EEF3F8" }, // 11-20  silver
+  { primary: "#F2B134", secondary: "#FFD066", accent: "#FFEDB8" }, // 21-30  gold
+  { primary: "#3DD6A0", secondary: "#7CF0C8", accent: "#C6FBE8" }, // 31-40  emerald
+  { primary: "#4C9BFF", secondary: "#86BEFF", accent: "#CFE5FF" }, // 41-50  sapphire
+  { primary: "#9B6CFF", secondary: "#BD9CFF", accent: "#E3D6FF" }, // 51-60  amethyst
+  { primary: "#FF5C93", secondary: "#FF8FB5", accent: "#FFCCDD" }, // 61-70  rose
+  { primary: "#FF7A45", secondary: "#FFA277", accent: "#FFD3BC" }, // 71-80  ember
+  { primary: "#35D6E8", secondary: "#7AF0FF", accent: "#C4F9FF" }, // 81-90  aurora
+  { primary: "#FFC857", secondary: "#FF7AA8", accent: "#FFF1C9" }, // 91+    mythic
+] as const;
 
+export function getLevelTheme(level: number): LevelTheme {
+  const safeLevel = Math.max(1, level);
   const tier = getTier(safeLevel);
-
-  /*
-   * Every level gets its own hue.
-   *
-   * This means Lv141 and Lv149 are both
-   * Cosmic, but they do NOT look identical.
-   */
-  const hue =
-    (safeLevel * 23) % 360;
-
-  const saturation =
-    safeLevel >= 100
-      ? 85
-      : 75;
-
-  const lightness =
-    safeLevel >= 120
-      ? 65
-      : 60;
-
-  const primary = `hsl(${hue} ${saturation}% ${lightness}%)`;
-
-  const secondary = `hsl(${(hue + 35) % 360} 90% 70%)`;
-
-  const accent = `hsl(${(hue + 70) % 360} 95% 78%)`;
-
-  const glow = `hsla(${hue}, 95%, 65%, 0.55)`;
-
-  const background = `linear-gradient(
-    135deg,
-    hsl(${hue} 45% 15%),
-    hsl(${(hue + 35) % 360} 35% 11%),
-    #120E19
-  )`;
+  const p = PALETTES[Math.min(PALETTES.length - 1, Math.floor((safeLevel - 1) / 10))];
 
   return {
-    primary,
-    secondary,
-    accent,
-    glow,
-    background,
+    primary: p.primary,
+    secondary: p.secondary,
+    accent: p.accent,
+    glow: `${p.primary}8C`,
+    background: `radial-gradient(120% 80% at 50% 0%, ${p.primary}33, transparent 60%), #14111C`,
 
     tierName: tier.tierName,
     frameName: tier.frameName,
-
     crown: tier.crown,
     frame: tier.frame,
 
-    intensity:
-      safeLevel >= 150
-        ? 1
-        : Math.min(
-            1,
-            0.35 +
-              safeLevel / 200,
-          ),
+    intensity: safeLevel >= 100 ? 1 : Math.min(1, 0.35 + safeLevel / 200),
   };
 }

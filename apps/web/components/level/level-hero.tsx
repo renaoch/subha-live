@@ -1,442 +1,213 @@
 "use client";
 
-import type { LevelProgress } from "@/lib/api/levels";
+import { useEffect, useId, useState } from "react";
 
+import type { LevelProgress } from "@/lib/api/levels";
 import { getLevelTheme } from "./level-theme";
+
+const SIZE = 240;
+const CENTER = SIZE / 2;
+const RADIUS = 100;
+const STROKE = 10;
+const CIRC = 2 * Math.PI * RADIUS;
+const TICKS = 60;
+const EASE = "cubic-bezier(0.22, 0.8, 0.2, 1)";
 
 interface LevelHeroProps {
   progress: LevelProgress;
 }
 
-function Crown({
-  type,
-}: {
-  type:
-    | "none"
-    | "small"
-    | "royal"
-    | "winged"
-    | "celestial";
-}) {
-  if (type === "none") {
-    return null;
-  }
+const clamp = (n: number) => Math.min(100, Math.max(0, n));
 
-  const scale =
-    type === "small"
-      ? 0.65
-      : type === "royal"
-        ? 0.8
-        : 1;
+export function LevelHero({ progress }: LevelHeroProps) {
+  const theme = getLevelTheme(progress.currentLevel);
+  const gid = useId().replace(/:/g, "");
 
-  return (
-    <div
-      className="absolute -top-8 left-1/2 z-30 -translate-x-1/2"
-      style={{
-        transform: `translateX(-50%) scale(${scale})`,
-      }}
-    >
-      <svg
-        width="100"
-        height="60"
-        viewBox="0 0 100 60"
-        fill="none"
-      >
-        <path
-          d="M10 15L25 38L50 8L75 38L90 15L82 50H18L10 15Z"
-          fill="currentColor"
-          stroke="currentColor"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
+  const isMax = progress.nextLevel === null;
+  const range = isMax ? 1 : Math.max(1, (progress.nextLevelXp ?? 0) - progress.currentLevelXp);
+  const pct = isMax ? 100 : clamp(((progress.totalXp - progress.currentLevelXp) / range) * 100);
+  const xpToNext = isMax ? 0 : Math.max(0, (progress.nextLevelXp ?? 0) - progress.totalXp);
 
-        <circle
-          cx="25"
-          cy="38"
-          r="4"
-          fill="white"
-          fillOpacity="0.8"
-        />
+  // Start empty, then fill once on mount: the one orchestrated moment.
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(pct));
+    return () => cancelAnimationFrame(id);
+  }, [pct]);
 
-        <circle
-          cx="50"
-          cy="8"
-          r="5"
-          fill="white"
-          fillOpacity="0.9"
-        />
-
-        <circle
-          cx="75"
-          cy="38"
-          r="4"
-          fill="white"
-          fillOpacity="0.8"
-        />
-
-        {type === "winged" ||
-        type === "celestial" ? (
-          <>
-            <path
-              d="M18 28C5 17 2 8 5 2C17 7 26 15 30 25"
-              stroke="currentColor"
-              strokeWidth="4"
-              strokeLinecap="round"
-            />
-
-            <path
-              d="M82 28C95 17 98 8 95 2C83 7 74 15 70 25"
-              stroke="currentColor"
-              strokeWidth="4"
-              strokeLinecap="round"
-            />
-          </>
-        ) : null}
-      </svg>
-    </div>
-  );
-}
-
-function Frame({
-  frame,
-  primary,
-  secondary,
-  glow,
-}: {
-  frame: string;
-  primary: string;
-  secondary: string;
-  glow: string;
-}) {
-  return (
-    <>
-      <div
-        className="absolute inset-0 rounded-full"
-        style={{
-          border: `3px solid ${primary}`,
-          boxShadow: `
-            0 0 12px ${glow},
-            0 0 30px ${glow},
-            inset 0 0 20px ${glow}
-          `,
-        }}
-      />
-
-      <div
-        className="absolute inset-[-7px] rounded-full opacity-80"
-        style={{
-          border:
-            frame === "basic"
-              ? `1px solid ${secondary}`
-              : `2px solid ${secondary}`,
-
-          boxShadow:
-            frame === "mythic"
-              ? `
-                0 0 12px ${secondary},
-                0 0 35px ${glow},
-                0 0 70px ${glow}
-              `
-              : `0 0 18px ${glow}`,
-        }}
-      />
-
-      {frame !== "basic" && (
-        <div
-          className="absolute inset-[-13px] rounded-full border border-dashed opacity-40"
-          style={{
-            borderColor: primary,
-          }}
-        />
-      )}
-
-      {frame === "mythic" && (
-        <>
-          <div
-            className="absolute inset-[-20px] rounded-full opacity-30 blur-sm"
-            style={{
-              border: `5px solid ${secondary}`,
-            }}
-          />
-
-          <div
-            className="absolute inset-[-27px] rounded-full"
-            style={{
-              borderTop: `3px solid ${primary}`,
-              borderBottom: `3px solid ${secondary}`,
-              opacity: 0.5,
-            }}
-          />
-        </>
-      )}
-    </>
-  );
-}
-
-export function LevelHero({
-  progress,
-}: LevelHeroProps) {
-  const theme = getLevelTheme(
-    progress.currentLevel,
-  );
-
-  const isMaxLevel =
-    progress.nextLevel === null;
-
-  const xpRange = isMaxLevel
-    ? 1
-    : Math.max(
-        1,
-        (progress.nextLevelXp ?? 0) -
-          progress.currentLevelXp,
-      );
-
-  const xpToNext = isMaxLevel
-    ? 0
-    : Math.max(0, (progress.nextLevelXp ?? 0) - progress.totalXp);
-
-  const barProgress = isMaxLevel
-    ? 100
-    : Math.min(
-        100,
-        Math.max(
-          0,
-          ((progress.totalXp -
-            progress.currentLevelXp) /
-            xpRange) *
-            100,
-        ),
-      );
+  const digits = String(progress.currentLevel).length;
+  const numeralSize = digits <= 2 ? 92 : digits === 3 ? 72 : 56;
+  const almostThere = !isMax && pct >= 80;
 
   return (
     <section
-      className="relative overflow-hidden rounded-[32px] border border-white/10 p-6"
+      className="relative overflow-hidden rounded-[28px] border border-white/[0.08] px-5 pb-6 pt-5"
       style={{
-        background: theme.background,
-        boxShadow: `
-          0 20px 80px rgba(0,0,0,0.45),
-          0 0 60px ${theme.glow}
-        `,
+        background: `radial-gradient(110% 70% at 50% 0%, ${theme.primary}2E, transparent 62%), #14111C`,
+        boxShadow: `0 24px 60px -20px ${theme.primary}40`,
       }}
     >
-      {/* Background aura */}
-      <div
-        className="pointer-events-none absolute left-1/2 top-[-140px] h-[320px] w-[320px] -translate-x-1/2 rounded-full blur-[100px]"
-        style={{
-          background:
-            theme.glow,
-          opacity:
-            0.28 *
-            theme.intensity,
-        }}
-      />
+      <style>{`
+        @keyframes lh-spark { 0%,100% { opacity:.55; transform:scale(1) } 50% { opacity:1; transform:scale(1.5) } }
+        .lh-spark { transform-box: fill-box; transform-origin: center; animation: lh-spark 2.2s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .lh-spark { animation: none } .lh-anim { transition: none !important } }
+      `}</style>
 
-      {/* Tiny particles */}
-      <div
-        className="pointer-events-none absolute right-8 top-10 h-1 w-1 rounded-full"
-        style={{
-          background:
-            theme.accent,
-          boxShadow: `
-            0 0 10px ${theme.accent},
-            40px 25px 0 ${theme.primary},
-            -35px 55px 0 ${theme.secondary}
-          `,
-        }}
-      />
-
-      <div className="relative z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <p
-              className="text-[10px] font-bold uppercase tracking-[0.3em]"
-              style={{
-                color: theme.secondary,
-              }}
-            >
-              Prestige
-            </p>
-
-            <h2 className="mt-1 text-xl font-black text-white">
-              {theme.tierName}
-            </h2>
-          </div>
-
-          <div
-            className="rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-wider"
-            style={{
-              color: theme.accent,
-              borderColor:
-                `${theme.primary}40`,
-              background:
-                `${theme.primary}12`,
-            }}
-          >
-            {theme.frameName}
-          </div>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[13px] font-medium text-white/45">Your rank</p>
+          <h2 className="text-xl font-extrabold tracking-tight text-white">{theme.tierName}</h2>
         </div>
+        <span
+          className="rounded-full border px-3 py-1.5 text-xs font-semibold"
+          style={{ color: theme.accent, borderColor: `${theme.primary}55`, background: `${theme.primary}14` }}
+        >
+          {progress.currentTitle ?? theme.frameName}
+        </span>
+      </div>
 
-        {/* Crown + level */}
-        <div className="relative mx-auto mt-12 h-52 w-52">
-          <div
-            className="absolute inset-[-45px] rounded-full blur-3xl"
-            style={{
-              background:
-                theme.glow,
-              opacity:
-                0.25 *
-                theme.intensity,
-            }}
-          />
+      {/* Progress ring */}
+      <div className="relative mx-auto mt-5" style={{ width: SIZE, height: SIZE, maxWidth: "100%" }}>
+        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="h-full w-full" role="img" aria-label={`Level ${progress.currentLevel}, ${Math.round(pct)} percent to the next level`}>
+          <defs>
+            <linearGradient id={`${gid}-arc`} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor={theme.primary} />
+              <stop offset="100%" stopColor={theme.accent} />
+            </linearGradient>
+            <radialGradient id={`${gid}-disc`} cx="50%" cy="38%" r="70%">
+              <stop offset="0%" stopColor={theme.primary} stopOpacity="0.22" />
+              <stop offset="100%" stopColor="#100D17" stopOpacity="1" />
+            </radialGradient>
+            <filter id={`${gid}-glow`} x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="5" />
+            </filter>
+          </defs>
 
-          <Crown
-            type={theme.crown}
-          />
+          {/* Tick marks light up as you climb */}
+          {Array.from({ length: TICKS }, (_, i) => {
+            const angle = (i * 360) / TICKS;
+            const major = i % 5 === 0;
+            const lit = angle <= (shown / 100) * 360 && shown > 0;
+            const r1 = RADIUS + 11;
+            const r2 = RADIUS + (major ? 19 : 15);
+            const rad = ((angle - 90) * Math.PI) / 180;
+            return (
+              <line
+                key={i}
+                x1={CENTER + r1 * Math.cos(rad)}
+                y1={CENTER + r1 * Math.sin(rad)}
+                x2={CENTER + r2 * Math.cos(rad)}
+                y2={CENTER + r2 * Math.sin(rad)}
+                stroke={lit ? theme.secondary : "rgba(255,255,255,0.14)"}
+                strokeWidth={major ? 2 : 1.25}
+                strokeLinecap="round"
+                className="lh-anim"
+                style={{ transition: `stroke 0.4s ${EASE} ${(i / TICKS) * 1.2}s` }}
+              />
+            );
+          })}
 
-          <Frame
-            frame={theme.frame}
-            primary={theme.primary}
-            secondary={theme.secondary}
-            glow={theme.glow}
-          />
+          <circle cx={CENTER} cy={CENTER} r={RADIUS - STROKE / 2 - 4} fill={`url(#${gid}-disc)`} />
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={STROKE} />
 
-          {/* Avatar placeholder */}
-          <div className="absolute inset-3 overflow-hidden rounded-full bg-[#15111D]">
-            <div
-              className="absolute inset-0"
+          {/* Glow underlay + arc */}
+          {[true, false].map((blur) => (
+            <circle
+              key={String(blur)}
+              cx={CENTER}
+              cy={CENTER}
+              r={RADIUS}
+              fill="none"
+              stroke={blur ? theme.primary : `url(#${gid}-arc)`}
+              strokeOpacity={blur ? 0.7 : 1}
+              strokeWidth={STROKE}
+              strokeLinecap="round"
+              strokeDasharray={CIRC}
+              filter={blur ? `url(#${gid}-glow)` : undefined}
+              transform={`rotate(-90 ${CENTER} ${CENTER})`}
+              className="lh-anim"
               style={{
-                background: `
-                  radial-gradient(
-                    circle at 50% 35%,
-                    ${theme.secondary}25,
-                    transparent 45%
-                  ),
-                  linear-gradient(
-                    145deg,
-                    ${theme.primary}30,
-                    #15111D 70%
-                  )
-                `,
+                strokeDashoffset: CIRC * (1 - Math.max(shown, isMax ? 0 : 0.8) / 100),
+                transition: `stroke-dashoffset 1.6s ${EASE}`,
               }}
             />
+          ))}
 
-            <div className="relative flex h-full flex-col items-center justify-center">
-              <div
-                className="text-6xl font-black"
-                style={{
-                  color:
-                    theme.primary,
-                  textShadow: `
-                    0 0 20px ${theme.glow}
-                  `,
-                }}
-              >
-                {progress.currentLevel}
-              </div>
-
-              <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.35em] text-white/35">
-                Level
-              </span>
-            </div>
-          </div>
-
-          {/* Level badge */}
-          <div
-            className="absolute -bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border px-5 py-2 shadow-xl"
-            style={{
-              borderColor:
-                `${theme.secondary}80`,
-              background:
-                `linear-gradient(
-                  135deg,
-                  ${theme.primary},
-                  ${theme.secondary}
-                )`,
-              color: "#100C16",
-              boxShadow: `
-                0 0 20px ${theme.glow}
-              `,
-            }}
-          >
-            <span className="text-xs font-black uppercase tracking-wider">
-              LV.{progress.currentLevel}
-            </span>
-          </div>
-        </div>
-
-        {/* Title */}
-        <div className="mt-10 text-center">
-          <p className="text-xs font-medium uppercase tracking-[0.25em] text-white/35">
-            {progress.currentTitle ??
-              theme.tierName}
-          </p>
-
-          <h3 className="mt-2 text-2xl font-black text-white">
-            {isMaxLevel
-              ? "MYTHIC SOVEREIGN"
-              : `Level ${progress.currentLevel}`}
-          </h3>
-        </div>
-
-        {/* XP */}
-        <div className="mt-8">
-          {!isMaxLevel && (
-            <div className="mb-4 text-center">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/35">Next up</p>
-              <p className="mt-1 text-3xl font-black tabular-nums text-white">
-                {xpToNext.toLocaleString()}
-                <span className="ml-1.5 text-sm font-bold text-white/40">XP to</span>
-                <span className="ml-1.5 text-sm font-black" style={{ color: theme.accent }}>
-                  LV.{progress.nextLevel}
-                </span>
-              </p>
-              {progress.nextTitle && (
-                <p className="mt-1 text-[11px] font-bold uppercase tracking-widest" style={{ color: theme.secondary }}>
-                  Unlocks {progress.nextTitle}
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs text-white/40">Progress</span>
-            <span className="text-xs font-black tabular-nums" style={{ color: theme.secondary }}>
-              {isMaxLevel ? "MAX" : `${barProgress.toFixed(1)}%`}
-            </span>
-          </div>
-
-          <div className="relative h-4 overflow-hidden rounded-full bg-black/50 ring-1 ring-white/10">
-            <div
-              className="relative h-full rounded-full transition-all duration-1000"
+          {/* Spark at the tip of the arc */}
+          {!isMax && (
+            <g
+              className="lh-anim"
               style={{
-                width: `${Math.max(3, barProgress)}%`,
-                background: `linear-gradient(90deg, ${theme.primary}, ${theme.secondary}, ${theme.accent})`,
-                boxShadow: `0 0 18px ${theme.glow}`,
+                transform: `rotate(${(Math.max(shown, 0.8) / 100) * 360}deg)`,
+                transformOrigin: `${CENTER}px ${CENTER}px`,
+                transition: `transform 1.6s ${EASE}`,
               }}
             >
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{
-                  background: "linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.45) 50%, transparent 70%)",
-                  backgroundSize: "200% 100%",
-                  animation: "lh-sweep 2.4s linear infinite",
-                }}
-              />
-            </div>
-            {/* 25 / 50 / 75 ticks */}
-            {[25, 50, 75].map((t) => (
-              <div key={t} className="absolute top-0 h-full w-px bg-black/50" style={{ left: `${t}%` }} />
-            ))}
-          </div>
+              <circle cx={CENTER} cy={CENTER - RADIUS} r={7} fill={theme.accent} className="lh-spark" opacity="0.5" />
+              <circle cx={CENTER} cy={CENTER - RADIUS} r={4} fill="#fff" />
+            </g>
+          )}
+        </svg>
 
-          <div className="mt-2 flex justify-between text-[10px] tabular-nums text-white/35">
-            <span>{progress.totalXp.toLocaleString()} XP</span>
-            <span>{isMaxLevel ? "MAX LEVEL" : `${progress.nextLevelXp?.toLocaleString()} XP`}</span>
-          </div>
-          <style>{`@keyframes lh-sweep{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+        {/* Level numeral */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[13px] font-medium text-white/45">Level</span>
+          <span
+            className="font-black leading-none tabular-nums text-white"
+            style={{ fontSize: numeralSize, letterSpacing: "-0.05em", textShadow: `0 0 32px ${theme.primary}80` }}
+          >
+            {progress.currentLevel}
+          </span>
+          {!isMax && (
+            <span className="mt-1 text-sm font-bold tabular-nums" style={{ color: theme.secondary }}>
+              {Math.floor(pct)}%
+            </span>
+          )}
         </div>
       </div>
+
+      {/* The number that pulls people forward */}
+      <div className="mt-5 text-center">
+        {isMax ? (
+          <>
+            <p className="text-2xl font-extrabold text-white">You're at the top</p>
+            <p className="mt-1 text-sm text-white/45">Nobody ranks higher than you.</p>
+          </>
+        ) : (
+          <>
+            <p className="text-[38px] font-black leading-none tracking-tight tabular-nums text-white">
+              {xpToNext.toLocaleString()} <span className="text-lg font-bold text-white/45">XP to go</span>
+            </p>
+            <p className="mt-2 text-sm text-white/55">
+              until <span className="font-bold text-white">Level {progress.nextLevel}</span>
+              {progress.nextTitle ? <>, and you become {progress.nextTitle}</> : null}
+            </p>
+            {almostThere && (
+              <p
+                className="mx-auto mt-3 inline-flex rounded-full px-3 py-1 text-xs font-bold"
+                style={{ background: `${theme.primary}22`, color: theme.accent }}
+              >
+                Almost there, only {Math.max(1, Math.round(100 - pct))}% left
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Stats */}
+      <dl className="mt-5 grid grid-cols-2 divide-x divide-white/[0.08] rounded-2xl border border-white/[0.07] bg-black/20 py-3">
+        <div className="px-4">
+          <dt className="text-xs text-white/40">Total XP</dt>
+          <dd className="mt-0.5 text-base font-bold tabular-nums text-white">{progress.totalXp.toLocaleString()}</dd>
+        </div>
+        <div className="px-4">
+          <dt className="text-xs text-white/40">{isMax ? "Status" : "This level"}</dt>
+          <dd className="mt-0.5 text-base font-bold tabular-nums text-white">
+            {isMax ? "Maxed" : `${Math.max(0, progress.totalXp - progress.currentLevelXp).toLocaleString()} / ${range.toLocaleString()}`}
+          </dd>
+        </div>
+      </dl>
     </section>
   );
 }
