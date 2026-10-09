@@ -353,6 +353,11 @@ function Section({
   );
 }
 
+/*
+ * Every dimension below is in `cqw` (1% of the card's own width), measured
+ * from the design reference (290px-wide card). That makes the card scale
+ * identically on any phone width instead of overflowing on narrow ones.
+ */
 function RoomCard({ room, onClick }: { room: RoomRecord; onClick: () => void }) {
   const name = room.host?.name ?? 'Host';
   const category = getRoomCategory(room.category);
@@ -360,27 +365,21 @@ function RoomCard({ room, onClick }: { room: RoomRecord; onClick: () => void }) 
   // Tagline is the host's one-liner; fall back to the room title for rooms
   // created before taglines existed.
   const subtitle = room.description?.trim() || room.title || 'Live now';
+  const photo = room.cover || room.host?.avatar || null;
 
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={`${name} is live. ${subtitle}`}
-      className="group relative block aspect-[5/4] w-full overflow-hidden rounded-[20px] border border-orange-500/40 bg-[#1a1a1a] text-left shadow-[0_6px_20px_rgba(0,0,0,0.5),0_0_14px_rgba(249,115,22,0.12)] transition duration-200 active:scale-[0.97]"
+      className="@container group relative block aspect-[5/4] w-full overflow-hidden rounded-[14px] border border-orange-500/45 bg-[#1a1a1a] text-left shadow-[0_6px_20px_rgba(0,0,0,0.5),0_0_14px_rgba(249,115,22,0.12)] transition duration-200 active:scale-[0.97]"
     >
-      {room.cover ? (
+      {photo ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={room.cover}
+          src={photo}
           alt=""
           className="absolute inset-0 h-full w-full object-cover object-top transition duration-300 group-active:scale-105"
-        />
-      ) : room.host?.avatar ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={room.host.avatar}
-          alt=""
-          className="absolute inset-0 h-full w-full scale-110 object-cover object-top blur-[2px] brightness-[0.75] transition duration-300 group-active:scale-115"
         />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
@@ -388,44 +387,44 @@ function RoomCard({ room, onClick }: { room: RoomRecord; onClick: () => void }) 
         </div>
       )}
 
-      {/* Legibility scrims: soft top for the pills, strong bottom for text */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+      {/* Light top scrim for the pills, bottom scrim for the text */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-black/75 via-black/30 to-transparent" />
 
       {/* Top-left: LIVE + viewers */}
-      <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5">
-        <span className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 px-3 py-1 text-[12px] font-extrabold leading-none text-black shadow-[0_0_12px_rgba(249,115,22,0.45)]">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-black" />
+      <div className="absolute left-[3.8cqw] top-[3.8cqw] flex items-center gap-[2cqw]">
+        <span className="flex h-[9.7cqw] items-center gap-[2.2cqw] rounded-full bg-gradient-to-r from-orange-400 to-orange-500 px-[3.4cqw] text-[4.6cqw] font-extrabold leading-none text-black shadow-[0_0_12px_rgba(249,115,22,0.45)]">
+          <span className="h-[3.2cqw] w-[3.2cqw] animate-pulse rounded-full bg-black" />
           LIVE
         </span>
-        <span className="flex items-center gap-1.5 rounded-full bg-black/55 px-2.5 py-1 text-[12px] font-semibold leading-none text-white backdrop-blur-md">
-          <Eye className="h-3.5 w-3.5" />
+        <span className="flex h-[9.7cqw] items-center gap-[1.8cqw] rounded-full bg-black/55 px-[3cqw] text-[4.6cqw] font-semibold leading-none text-white backdrop-blur-md">
+          <Eye className="h-[4.8cqw] w-[4.8cqw]" />
           {formatCount(room.viewerCount ?? 0)}
         </span>
       </div>
 
       {/* Bottom: host avatar + name + tagline, category chip on the right */}
-      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2.5">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="absolute inset-x-[4cqw] bottom-[3.8cqw] flex items-end justify-between gap-[2cqw]">
+        <div className="flex min-w-0 items-center gap-[2.8cqw]">
           <Avatar
             name={name}
             src={room.host?.avatar ?? undefined}
             size="sm"
-            className="h-10 w-10 shrink-0 border-[1.5px] border-white/70"
+            className="h-[13.8cqw] w-[13.8cqw] shrink-0 border-[1.5px] border-white/70 text-[4cqw]"
           />
           <div className="min-w-0">
-            <p className="truncate text-[14px] font-bold leading-tight text-white drop-shadow">{name}</p>
-            <p className="truncate text-[12px] leading-tight text-white/80">{subtitle}</p>
+            <p className="truncate text-[5cqw] font-bold leading-[1.25] text-white drop-shadow">{name}</p>
+            <p className="truncate text-[4.4cqw] leading-[1.25] text-white/80">{subtitle}</p>
           </div>
         </div>
 
         <span
           className={cn(
-            'flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold leading-none backdrop-blur-md',
+            'mb-[0.8cqw] flex h-[10.3cqw] shrink-0 items-center gap-[1.6cqw] rounded-full border px-[3.2cqw] text-[4.6cqw] font-semibold leading-none backdrop-blur-md',
             category.chip,
           )}
         >
-          <CategoryIcon className={cn('h-3.5 w-3.5', category.icon)} />
+          <CategoryIcon className={cn('h-[4.8cqw] w-[4.8cqw]', category.icon)} />
           {category.label}
         </span>
       </div>
@@ -458,7 +457,7 @@ function EmptyState() {
         📡
       </span>
       <p className="text-sm font-medium text-white/60">No one's live right now</p>
-      <p className="text-xs text-white/40">Be the first — tap Go Live above. </p>
+      <p className="text-xs text-white/40">Be the first — tap Go Live above.</p>
     </div>
   );
 }

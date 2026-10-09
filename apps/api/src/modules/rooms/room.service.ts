@@ -3,6 +3,7 @@ import { AppError } from "../../errors/app-error";
 import { pkService } from "../pk/pk.service";
 import { roomMediaService } from "./room-media.service";
 import { roomState } from "./room-state.service";
+import { mediaService } from "../media";
 import type { Tables, TablesInsert } from "../../types/database.types";
 
 /**
@@ -139,8 +140,10 @@ export const roomService = {
     const rooms = (data ?? []) as unknown as Array<Room & { viewerCount?: number }>;
 
     // Home-feed cards show a live viewer count. It lives in Redis (not in
-    // Postgres), so attach it here. Only live rooms have viewers, and a Redis
-    // hiccup must never take the whole feed down: fail open to 0 per room.
+    // Postgres), so attach it here. Use the SAME source as the in-room header
+    // (media session state: heartbeat-cleaned, excludes feed previews) so the
+    // card and the room never disagree. Fall back to the join-set count, and
+    // finally to 0: a Redis hiccup must never take the whole feed down.
     await Promise.all(
       rooms.map(async (room) => {
         if (room.status !== "live") {
@@ -148,9 +151,13 @@ export const roomService = {
           return;
         }
         try {
-          room.viewerCount = await roomState.getViewerCount(room.id);
+          room.viewerCount = (await mediaService.getRoomState(room.id)).viewerCount;
         } catch {
-          room.viewerCount = 0;
+          try {
+            room.viewerCount = await roomState.getViewerCount(room.id);
+          } catch {
+            room.viewerCount = 0;
+          }
         }
       }),
     );
