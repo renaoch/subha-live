@@ -23,11 +23,11 @@ interface RoomChatProps {
   onOpenGift?: () => void;
   /** Opens the "more" sheet (camera, mic, filters, share, like, menu). */
   onOpenMore?: () => void;
-  /** Opens the PK battle sheet. */
+  /** Opens the PK battle sheet. Hosts only. */
   onOpenPk?: () => void;
   /** Opens games. */
   onOpenGames?: () => void;
-  /** Host-only mic mute/unmute, shown in the main action row. */
+  /** Mic mute/unmute for anyone on stage (host, or a seated guest in a party room). Shown next to Games. */
   onToggleMic?: () => void;
   micEnabled?: boolean;
   /** Opens a user's profile in the in-room popup instead of navigating away. */
@@ -144,7 +144,7 @@ function RoundButton({ label, onClick, active, tone = "neutral", children }: Rou
  * the star. New rows slide up from the bottom as they arrive.
  *
  * The bottom action row is a single frosted pill: burger menu (more) + chat
- * input + PK + Games + Gift/Mic.
+ * input + PK (host) + Games + Mic (on stage) + Gift.
  */
 export function RoomChat({
   messages,
@@ -350,7 +350,7 @@ export function RoomChat({
           </button>
         </form>
 
-        {onOpenPk && (
+        {onOpenPk && isHost && (
           <RoundButton label="PK Battle" onClick={onOpenPk} tone="gold">
             <Swords className="h-[18px] w-[18px]" strokeWidth={2} />
           </RoundButton>
@@ -362,15 +362,9 @@ export function RoomChat({
           </RoundButton>
         )}
 
-        {onOpenGift && (
-          <RoundButton label="Send a gift" onClick={onOpenGift} tone="rose">
-            <Gift className="h-[18px] w-[18px]" strokeWidth={2} />
-          </RoundButton>
-        )}
-
         {onToggleMic && (
           <RoundButton
-            label={micEnabled ? "Mute mic" : "Unmute mic"}
+            label={micEnabled ? "Mute microphone" : "Unmute microphone"}
             onClick={onToggleMic}
             tone={micEnabled ? "neutral" : "rose"}
           >
@@ -379,6 +373,12 @@ export function RoomChat({
             ) : (
               <MicOff className="h-[18px] w-[18px]" strokeWidth={2} />
             )}
+
+        {onOpenGift && (
+          <RoundButton label="Send a gift" onClick={onOpenGift} tone="rose">
+            <Gift className="h-[18px] w-[18px]" strokeWidth={2} />
+          </RoundButton>
+        )}
           </RoundButton>
         )}
       </div>

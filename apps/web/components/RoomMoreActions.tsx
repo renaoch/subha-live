@@ -8,7 +8,6 @@ import {
   Link2,
   Loader2,
   Mic,
-  MicOff,
   PhoneOff,
   Users,
   X,
@@ -28,17 +27,15 @@ export interface RoomAction {
   keepOpen?: boolean; // don't close the sheet after tapping
 }
 
-/** Party-room (audio stage) controls shown at the top of the sheet. */
+/** Party-room (audio stage) controls shown at the top of the sheet. Mute lives in the chat bar, next to Games. */
 export interface StageMenuProps {
   onStage: boolean;
   isHost: boolean;
-  muted: boolean;
   requestPending: boolean;
   loading: boolean;
   pendingCount: number;
   roomCoins: number;
   seatCount: number;
-  onToggleMute: () => void;
   onLeaveSeat: () => void;
   onRequest: () => void;
   onCancelRequest: () => void;
@@ -83,16 +80,6 @@ export function RoomMoreActions({
   const actions: RoomAction[] = [];
 
   if (stage) {
-    if (stage.onStage) {
-      actions.push({
-        key: "mute",
-        label: stage.muted ? "Unmute" : "Mute",
-        icon: stage.muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />,
-        onClick: stage.onToggleMute,
-        active: stage.muted,
-        keepOpen: true,
-      });
-    }
     if (stage.isHost) {
       actions.push({
         key: "manage",

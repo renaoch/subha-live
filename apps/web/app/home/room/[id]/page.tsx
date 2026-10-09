@@ -335,15 +335,14 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
   const [guestMicEnabled, setGuestMicEnabled] = useState(true);
 
   // Audio room stage controls: mute (host or seated guest) + leave seat.
-  const stageMuted = isHost ? micEnabled : guestMicEnabled;
+  // `micEnabled` / `guestMicEnabled` are "mic is ON"; the server wants "muted".
+  const stageMicOn = isHost ? micEnabled : guestMicEnabled;
+  const onStage = isHost || (stageSnapshot?.me.seat ?? null) !== null;
   const handleStageToggleMute = () => {
-    if (isHost) {
-      setMicEnabled((v) => !v);
-      void reportStage({ muted: !micEnabled });
-    } else {
-      setGuestMicEnabled((v) => !v);
-      void reportStage({ muted: !guestMicEnabled });
-    }
+    // Currently on -> the toggle mutes, so report muted: true (and vice versa).
+    if (isHost) setMicEnabled((v) => !v);
+    else setGuestMicEnabled((v) => !v);
+    void reportStage({ muted: stageMicOn });
   };
   const handleStageLeaveSeat = async () => {
     await leaveStageSeat();
@@ -733,15 +732,13 @@ useEffect(() => {
           stage={
             isAudioRoom && isLive
               ? {
-                  onStage: isHost || (stageSnapshot?.me.seat ?? null) !== null,
+                  onStage,
                   isHost,
-                  muted: stageMuted,
                   requestPending: stageSnapshot?.me.requestPending ?? false,
                   loading: actionLoading,
                   pendingCount: pendingRequestCount,
                   roomCoins: sessionGiftTotals.totalDiamonds,
                   seatCount,
-                  onToggleMute: handleStageToggleMute,
                   onLeaveSeat: handleStageLeaveSeat,
                   onRequest: () => setSpeakerPanelOpen(true),
                   onCancelRequest: handleStageCancelRequest,
@@ -807,10 +804,18 @@ useEffect(() => {
               setMoreView('menu');
               setMoreOpen(true);
             }}
-            onOpenPk={() => setPkOpen(true)}
+            onOpenPk={isHost ? () => setPkOpen(true) : undefined}
             onOpenGames={() => setGamesOpen(true)}
-            onToggleMic={isHost && room.media_type !== 'audio' ? () => setMicEnabled((v) => !v) : undefined}
-            micEnabled={micEnabled}
+            onToggleMic={
+              isAudioRoom
+                ? onStage
+                  ? handleStageToggleMute
+                  : undefined
+                : isHost
+                  ? () => setMicEnabled((v) => !v)
+                  : undefined
+            }
+            micEnabled={isAudioRoom ? stageMicOn : micEnabled}
             onOpenProfile={setProfileUserId}
           />
         )}
