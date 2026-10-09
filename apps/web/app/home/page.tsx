@@ -3,7 +3,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Eye, Flame, Gift, Loader2, Search, Crown, Sparkles, X } from 'lucide-react';
+import {
+  Bell,
+  Crown,
+  Eye,
+  Flame,
+  Gift,
+  LayoutGrid,
+  Loader2,
+  MapPin,
+  Search,
+  Sparkles,
+  Swords,
+  Users,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { roomsApi, type RoomRecord } from '@/lib/api/rooms';
 import { useCreateRoom } from '@/hooks/queries/use-rooms';
@@ -18,6 +33,14 @@ import { MAX_TAGLINE_LENGTH, ROOM_CATEGORIES, getRoomCategory, type RoomCategory
 
 const TABS = ['For You', 'Following', 'Nearby', 'PK', 'New'] as const;
 type Tab = (typeof TABS)[number];
+
+const TAB_ICONS: Record<Tab, LucideIcon> = {
+  'For You': LayoutGrid,
+  Following: Users,
+  Nearby: MapPin,
+  PK: Swords,
+  New: Sparkles,
+};
 
 export default function LiveFeedPage() {
   const router = useRouter();
@@ -302,23 +325,34 @@ export default function LiveFeedPage() {
         </div>
 
         {/* Category tabs */}
-        <nav className="mt-4 -mx-4 flex gap-6 overflow-x-auto px-4 text-sm font-semibold text-white/40 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                'relative shrink-0 pb-2 transition-colors',
-                activeTab === tab ? 'text-orange-400' : 'hover:text-white/70',
-              )}
-            >
-              {tab}
-              {activeTab === tab && (
-                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
-              )}
-            </button>
-          ))}
+        <nav
+          aria-label="Feed filters"
+          className="mt-4 -mx-4 flex gap-2.5 overflow-x-auto px-4 pb-2 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {TABS.map((tab) => {
+            const Icon = TAB_ICONS[tab];
+            const active = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  'flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-[14px] font-semibold transition-all duration-200 active:scale-95',
+                  active
+                    ? 'border-orange-400 bg-orange-500/10 text-white shadow-[0_0_14px_rgba(249,115,22,0.55),inset_0_0_10px_rgba(249,115,22,0.12)]'
+                    : 'border-white/20 bg-white/[0.03] text-white/70 hover:border-white/35 hover:text-white',
+                )}
+              >
+                <Icon
+                  className={cn('h-[18px] w-[18px]', active ? 'text-orange-400' : 'text-white/60')}
+                  strokeWidth={2}
+                />
+                {tab}
+              </button>
+            );
+          })}
         </nav>
       </header>
 
