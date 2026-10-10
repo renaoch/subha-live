@@ -1,47 +1,51 @@
 // components/FilterPicker.tsx
 "use client";
 
-import { Check } from "lucide-react";
-import { CAMERA_FILTERS, cameraFilterCss } from "@/lib/camera-filters";
+import { CAMERA_FILTERS } from "@/lib/camera-filters";
 import { cn } from "@/lib/utils";
 
 interface FilterPickerProps {
   value: string;
   onChange: (name: string) => void;
-  /** Optional image (e.g. the host's avatar) used as the sample in each
-   * thumbnail so the effect reads clearly. Falls back to a colour scene. */
+  /** Kept for backwards compatibility. Swatches are colour-coded now, so
+   * every filter is visibly different instead of repeating one photo. */
   sampleSrc?: string | null;
   size?: "md" | "sm";
   className?: string;
 }
 
-// Neutral "portrait-ish" scene so the thumbnails show a filter's colour
-// character even when the host has no avatar.
-const SAMPLE_SCENE =
-  "radial-gradient(circle at 50% 38%, #f6c9a8 0 22%, transparent 23%), " +
-  "linear-gradient(160deg, #7cc4ff 0%, #ffd27a 55%, #ff7a9a 100%)";
+// One distinct, readable colour per filter. These only *represent* the look
+// in the picker; the real effect is shown on the live camera preview.
+const SWATCH: Record<string, string> = {
+  Natural: "linear-gradient(135deg,#f5f5f4 0%,#a8a29e 100%)",
+  Glow: "linear-gradient(135deg,#fff3b0 0%,#ffb86b 100%)",
+  Warm: "linear-gradient(135deg,#ffb347 0%,#ff6a3d 100%)",
+  Cool: "linear-gradient(135deg,#7dd3fc 0%,#4f6bff 100%)",
+  Fresh: "linear-gradient(135deg,#a7f3a0 0%,#14b8a6 100%)",
+  Rose: "linear-gradient(135deg,#ffb3c7 0%,#ec4899 100%)",
+  Vintage: "linear-gradient(135deg,#d8b98a 0%,#8a6a45 100%)",
+  Noir: "linear-gradient(135deg,#6b7280 0%,#0a0a0a 100%)",
+};
+const FALLBACK = "linear-gradient(135deg,#a78bfa 0%,#6366f1 100%)";
 
 /**
- * Horizontal, scrollable strip of filter cards. Each card is
- * rendered with the exact CSS equivalent of the filter that gets baked
- * into the outgoing video (see lib/camera-filters.ts), so what you tap is
- * what viewers get.
+ * Horizontal strip of colour-coded filter swatches. Tap one and the live
+ * camera preview behind the sheet changes immediately.
  */
 export function FilterPicker({
   value,
   onChange,
-  sampleSrc,
   size = "md",
   className,
 }: FilterPickerProps) {
-  const dim = size === "md" ? "h-[104px] w-[78px]" : "h-[76px] w-[58px]";
+  const dim = size === "md" ? "h-14 w-14" : "h-10 w-10";
 
   return (
     <div
       role="radiogroup"
       aria-label="Camera filter"
       className={cn(
-        "-mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "-mx-5 flex gap-4 overflow-x-auto px-5 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,
       )}
     >
@@ -54,57 +58,22 @@ export function FilterPicker({
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(filter.name)}
-            className={cn(
-              "group relative shrink-0 snap-start overflow-hidden rounded-[18px] transition-all duration-200 active:scale-95",
-              dim,
-              selected
-                ? "scale-[1.03] shadow-[0_8px_22px_-6px_hsl(var(--accent-hot)/0.7)] ring-2 ring-accent-gold"
-                : "ring-1 ring-inset ring-white/12 hover:ring-white/30",
-            )}
+            className="flex shrink-0 flex-col items-center gap-2 active:scale-95"
           >
-            {sampleSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={sampleSrc}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-                style={{ filter: cameraFilterCss(filter.name) }}
-              />
-            ) : (
-              <span
-                className="absolute inset-0 block"
-                style={{
-                  backgroundImage: SAMPLE_SCENE,
-                  filter: cameraFilterCss(filter.name),
-                }}
-              />
-            )}
-
-            {/* Bottom fade so the label always reads */}
             <span
-              aria-hidden
               className={cn(
-                "absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t to-transparent transition-opacity",
-                selected ? "from-black/80" : "from-black/70 opacity-90",
+                "block rounded-full transition-all duration-200",
+                dim,
+                selected
+                  ? "scale-110 ring-[3px] ring-white ring-offset-2 ring-offset-black/60"
+                  : "opacity-80 ring-1 ring-white/20",
               )}
+              style={{ backgroundImage: SWATCH[filter.name] ?? FALLBACK }}
             />
-            {!selected && (
-              <span
-                aria-hidden
-                className="absolute inset-0 bg-black/20 transition-opacity group-hover:opacity-0"
-              />
-            )}
-
-            {selected && (
-              <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-accent-gold to-accent-hot shadow-md">
-                <Check className="h-3 w-3 text-white" strokeWidth={3.5} />
-              </span>
-            )}
-
             <span
               className={cn(
-                "absolute inset-x-0 bottom-2 text-center text-[11px] leading-none tracking-tight",
-                selected ? "font-extrabold text-white" : "font-semibold text-white/75",
+                "text-[12px] leading-none transition-colors",
+                selected ? "font-bold text-white" : "font-medium text-white/50",
               )}
             >
               {filter.name}
