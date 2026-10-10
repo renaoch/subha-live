@@ -27,8 +27,13 @@ export interface CharismaGiftItem {
 
   giftName: string;
   giftIcon: string;
+  /** Coin value of ONE gift. */
   value: number;
   createdAt: string;
+  /** Present on send responses: how many were actually delivered. */
+  quantity?: number;
+  requestedQuantity?: number;
+  totalValue?: number;
 }
 
 /**
@@ -119,6 +124,8 @@ export const charismaApi = {
     streamId?: string;
     roomId?: string;
     clientRequestId: string;
+    /** 1–100 of the same gift in one go. Defaults to 1. */
+    quantity?: number;
   }): Promise<CharismaGiftItem> {
     const response = await apiFetch<SendGiftResponse>(
       "/api/v1/charisma/send",

@@ -85,6 +85,7 @@ if (redisUrl) {
  * unchanged.
  */
 const commandAliases: Record<string, string> = {
+  incrby: "incrBy",
   hgetall: "hGetAll", hset: "hSet", hget: "hGet", hdel: "hDel", hkeys: "hKeys", hincrby: "hIncrBy",
   sadd: "sAdd", srem: "sRem", smembers: "sMembers", scard: "sCard", sismember: "sIsMember",
   zadd: "zAdd", zrem: "zRem", zrange: "zRange", zscore: "zScore",

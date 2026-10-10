@@ -292,44 +292,59 @@ export async function sendGift(
     throw new AppError(404, "Gift not found", { code: "GIFT_NOT_FOUND" });
   }
 
-  // Atomic financial transaction: deducts sender coins, credits recipient
-  // diamonds (net of platform/agency share), records the ledger. Throws
-  // AppError (e.g. INSUFFICIENT_BALANCE) if it can't be completed — in
-  // which case nothing below runs and no gift/charisma record is created.
-  const transaction = await sendGiftTransaction({
-    senderId,
-    recipientId: input.recipientId,
-    giftId: input.giftId,
-    roomId: input.roomId ?? null,
-    clientRequestId: input.clientRequestId,
-  });
+  // Atomic financial transaction(s): each deducts sender coins, credits the
+  // recipient diamonds (net of platform/agency share) and records the ledger.
+  // A multi-send is N independent single transactions, each with a derived
+  // idempotency key (`<id>#<n>`), so a retried request can never double-charge
+  // and every unit is priced/validated by the same trusted SQL as a single
+  // send. If the sender runs out of coins part-way, we stop and report how
+  // many were delivered instead of failing the ones that already went through.
+  const quantity = input.quantity ?? 1;
+  let delivered = 0; // transactions that succeeded (new or already processed)
+  let newlyCharged = 0; // transactions that moved money in THIS request
+  let firstTransactionId: string | null = null;
+  for (let i = 0; i < quantity; i++) {
+    try {
+      const tx = await sendGiftTransaction({
+        senderId,
+        recipientId: input.recipientId,
+        giftId: input.giftId,
+        roomId: input.roomId ?? null,
+        clientRequestId: i === 0 ? input.clientRequestId : `${input.clientRequestId}#${i}`,
+      });
+      delivered++;
+      if (!tx.alreadyProcessed) newlyCharged++;
+      if (!firstTransactionId) firstTransactionId = tx.giftTransactionId;
+    } catch (error) {
+      // Nothing went through: surface the real error (e.g. INSUFFICIENT_BALANCE).
+      if (delivered === 0) throw error;
+      // Some went through: keep them, stop here, report the partial count.
+      break;
+    }
+  }
+  const chargedValue = catalogItem.coinPrice * newlyCharged;
 
   // This is the ONLY entry point the client actually calls to send a gift
-  // (see apps/web/lib/api/charisma.ts / GiftPickerSheet.tsx — the room UI
-  // calls POST /api/v1/charisma/send, never /api/v1/financial/gifts/send).
-  // financial.controller.ts's own sendGiftController also publishes to
-  // room chat, but that route is never hit from the live room, so without
-  // this call here a gift's coin/diamond transfer completed successfully
-  // while nothing was ever broadcast to the room: no chat row, no gift
-  // animation for other viewers, and HostGiftMeter (which derives its
-  // running total purely from gift rows seen in chat) never moved.
-  // Fire-and-forget and idempotency-guarded exactly like the other
-  // controller, so a retried/duplicate request never double-posts.
-  if (!transaction.alreadyProcessed && input.roomId) {
+  // (the room UI calls POST /api/v1/charisma/send, never
+  // /api/v1/financial/gifts/send), so this is where the room hears about it.
+  // ONE chat row is published for the whole batch: the combo counter is bumped
+  // by `newlyCharged`, so "x66" is exact. Fire-and-forget and idempotency
+  // guarded — a retried/duplicate request (newlyCharged = 0) never re-posts.
+  if (newlyCharged > 0 && input.roomId && firstTransactionId) {
     void publishGiftToRoomChat({
       roomId: input.roomId,
       senderId,
       giftId: input.giftId,
-      giftTransactionId: transaction.giftTransactionId,
+      giftTransactionId: firstTransactionId,
+      count: newlyCharged,
     });
   }
 
-  const {
-    data: gift,
-    error: giftError,
-  } = await supabase
-    .from("gifts")
-    .insert({
+  // Display/history rows: one per gift actually charged, in a single insert.
+  let gift: any = null;
+  let giftError: { message?: string } | null = null;
+  if (newlyCharged > 0) {
+    const insertRows = Array.from({ length: newlyCharged }, () => ({
       sender_id: senderId,
       recipient_id: input.recipientId,
       gift_name: catalogItem.name,
@@ -337,12 +352,14 @@ export async function sendGift(
       value: catalogItem.coinPrice,
       stream_id: input.streamId ?? null,
       // TODO: remove this cast once database.types.ts is regenerated
-      // after running 20260829_room_tasks.sql (adds gifts.room_id) —
-      // the generated Insert type doesn't know about the column yet.
+      // after running 20260829_room_tasks.sql (adds gifts.room_id).
       room_id: input.roomId ?? null,
-    } as never)
-    .select(
-      `
+    }));
+    const result = await supabase
+      .from("gifts")
+      .insert(insertRows as never)
+      .select(
+        `
         id,
         value,
         gift_name,
@@ -351,8 +368,10 @@ export async function sendGift(
         sender:profiles!gifts_sender_id_fkey(id, name, avatar, level),
         recipient:profiles!gifts_recipient_id_fkey(id, name, avatar, level)
       `,
-    )
-    .single();
+      );
+    giftError = result.error;
+    gift = (result.data as any[] | null)?.[0] ?? null;
+  }
 
   if (giftError) {
     // The money has already moved (fin_send_gift committed). This insert
@@ -387,7 +406,7 @@ export async function sendGift(
   }
 
   const newTotalCharisma =
-    (progressRow?.total_charisma ?? 0) + catalogItem.coinPrice;
+    (progressRow?.total_charisma ?? 0) + chargedValue;
 
   const { error: upsertError } = await supabase
     .from("user_charisma_progress")
@@ -455,17 +474,21 @@ export async function sendGift(
   // task/goal running, count its value toward that goal. Never let a
   // task-progress hiccup fail the gift itself.
   if (input.roomId) {
-    roomTaskService.bumpProgress(input.roomId, catalogItem.coinPrice).catch((err) => {
+    roomTaskService.bumpProgress(input.roomId, chargedValue).catch((err) => {
       console.error("[sendGift] failed to bump room task progress:", err);
     });
 
     // Wish Box: a gift the host wished for moves that wish toward its target.
-    void wishService.applyGift(input.roomId, input.giftId);
+    // (the SQL applies one gift at a time, so replay it once per unit, in order)
+    const wishRoomId = input.roomId;
+    void (async () => {
+      for (let i = 0; i < newlyCharged; i++) await wishService.applyGift(wishRoomId, input.giftId);
+    })();
 
     // Per-user "coins earned from this room" progress: the gift's recipient
     // (typically the host) earns coin-progress toward any active eligible
     // host task in the room.
-    hostTaskService.recordCoinProgress(input.roomId, input.recipientId, catalogItem.coinPrice).catch((err) => {
+    hostTaskService.recordCoinProgress(input.roomId, input.recipientId, chargedValue).catch((err) => {
       console.error("[sendGift] failed to record host-task coin progress:", err);
     });
   }
@@ -473,9 +496,11 @@ export async function sendGift(
   // PK battle scoring: only AFTER the gift transaction committed durably.
   // Tied to giftRow.id for idempotency — never score before the gift succeeded,
   // and never score the same gift twice.
-  pkService.recordGiftScore(input.recipientId, catalogItem.coinPrice, giftRow.id).catch((err) => {
-    console.error("[sendGift] failed to record PK score:", err);
-  });
+  if (chargedValue > 0) {
+    pkService.recordGiftScore(input.recipientId, chargedValue, giftRow.id).catch((err) => {
+      console.error("[sendGift] failed to record PK score:", err);
+    });
+  }
 
   return {
     id: giftRow.id,
@@ -494,5 +519,8 @@ export async function sendGift(
     giftIcon: giftRow.gift_icon,
     value: toNumber(giftRow.value),
     createdAt: giftRow.created_at,
+    quantity: delivered,
+    requestedQuantity: quantity,
+    totalValue: catalogItem.coinPrice * delivered,
   };
 }

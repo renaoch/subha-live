@@ -185,7 +185,7 @@ export function RoomChat({
                     avatar={m.avatar}
                     level={m.level}
                     tags={m.tags}
-                    gift={m.gift ? { name: m.gift.name, icon: m.gift.icon, code: m.gift.code, quantity: m.gift.quantity } : undefined}
+                    gift={m.gift ? { name: m.gift.name, icon: m.gift.icon, code: m.gift.code, quantity: m.gift.quantity, coinPrice: m.gift.coinPrice } : undefined}
                     onOpenProfile={() => onOpenProfile?.(m.userId)}
                   />
                 </div>

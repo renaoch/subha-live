@@ -38,8 +38,14 @@ export interface GiftItem {
 
   giftName: string;
   giftIcon: string;
+  /** Coin value of ONE gift. */
   value: number;
   createdAt: string;
+  /** How many were actually delivered (may be less than requested). */
+  quantity?: number;
+  requestedQuantity?: number;
+  /** value × quantity actually charged. */
+  totalValue?: number;
 }
 
 export interface CharismaOverview {

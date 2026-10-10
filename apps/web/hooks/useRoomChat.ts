@@ -6,6 +6,8 @@ import { chatWsUrl, getAccessToken } from "@/lib/api/realtime";
 
 const RECONNECT_DELAY_MS = 3000;
 const HISTORY_LIMIT = 50;
+// A person re-joining within this window reuses their existing "joined" row.
+const JOIN_DEDUPE_MS = 10 * 60 * 1000;
 
 type ConnectionState = "idle" | "connecting" | "connected" | "disconnected";
 
@@ -37,6 +39,11 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
       // smaller count overwrite a newer one.
       const prev = messagesRef.current.get(m.id);
       if (prev?.kind === "gift" && m.kind === "gift" && prev.gift && m.gift && prev.gift.quantity > m.gift.quantity) {
+        continue;
+      }
+      // One "joined" row per person: a reconnect / second tab / remount must
+      // not stack another row. Only a genuine re-join much later is shown again.
+      if (prev?.kind === "join" && m.kind === "join" && m.createdAt - prev.createdAt < JOIN_DEDUPE_MS) {
         continue;
       }
       // Keep a combo row where it first appeared in the feed.
@@ -84,7 +91,8 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
         if (msg && msg.type === "join" && typeof msg.id === "string") {
           upsert([
             {
-              id: msg.id,
+              // Stable id per (room, user) so repeats collapse into one row.
+              id: `join-${msg.roomId}-${msg.userId}`,
               roomId: msg.roomId,
               userId: msg.userId,
               username: msg.username,
@@ -120,6 +128,8 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
                 icon: typeof msg.giftIcon === "string" ? msg.giftIcon : null,
                 code: msg.giftCode,
                 quantity: typeof msg.quantity === "number" ? msg.quantity : 1,
+                coinPrice: typeof msg.giftCoinPrice === "number" ? msg.giftCoinPrice : undefined,
+                added: typeof msg.added === "number" ? msg.added : undefined,
               },
             },
           ]);

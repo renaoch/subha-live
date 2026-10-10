@@ -74,17 +74,26 @@ async function nextComboState(
   senderId: string,
   giftId: string,
   giftTransactionId: string,
+  by: number,
 ): Promise<{ quantity: number; rowId: string }> {
   const base = `gift:combo:${roomId}:${senderId}:${giftId}`;
+  const ttl = GIFT_COMBO_WINDOW_SECONDS + 2;
   try {
-    const quantity = Number(await redis.incr(`${base}:n`));
-    await redis.expire(`${base}:n`, GIFT_COMBO_WINDOW_SECONDS + 2);
-    let firstId = quantity === 1 ? null : await cacheGet<string>(`${base}:id`);
-    if (!firstId) firstId = giftTransactionId;
-    await cacheSet(`${base}:id`, firstId, GIFT_COMBO_WINDOW_SECONDS + 2);
+    // Atomic add of `by` (1 for a tap, N for a multi-send).
+    const quantity = Number(await redis.incrby(`${base}:n`, by));
+    await redis.expire(`${base}:n`, ttl);
+
+    // The row id must be decided exactly once per combo, even when taps race:
+    // SET NX lets only the first writer win, and everyone then reads the
+    // winner. (The old "read, then write" let a fast second tap miss the id
+    // and start a second, separate row.) Both option spellings are passed
+    // because node-redis wants NX/EX and Upstash wants nx/ex.
+    await redis.set(`${base}:id`, JSON.stringify(giftTransactionId), { NX: true, EX: ttl, nx: true, ex: ttl });
+    await redis.expire(`${base}:id`, ttl);
+    const firstId = (await cacheGet<string>(`${base}:id`)) ?? giftTransactionId;
     return { quantity, rowId: `gift-${firstId}` };
   } catch {
-    return { quantity: 1, rowId: `gift-${giftTransactionId}` };
+    return { quantity: by, rowId: `gift-${giftTransactionId}` };
   }
 }
 
@@ -93,7 +102,10 @@ export async function publishGiftToRoomChat(input: {
   senderId: string;
   giftId: string;
   giftTransactionId: string;
+  /** Explicit running total (rare). Normally omitted — the combo counter owns it. */
   quantity?: number;
+  /** How many gifts this publish adds to the combo (default 1). */
+  count?: number;
 }): Promise<void> {
   try {
     const [sender, gift] = await Promise.all([
@@ -103,7 +115,8 @@ export async function publishGiftToRoomChat(input: {
 
     if (!gift) return; // Shouldn't happen (fin_send_gift already validated it), but never throw from here.
 
-    const combo = await nextComboState(input.roomId, input.senderId, input.giftId, input.giftTransactionId);
+    const added = Math.max(1, Math.floor(input.count ?? 1));
+    const combo = await nextComboState(input.roomId, input.senderId, input.giftId, input.giftTransactionId, added);
     const quantity = input.quantity ?? combo.quantity;
     const payload = {
       // `type` drives the LIVE websocket envelope (useRoomChat.ts checks
@@ -126,6 +139,10 @@ export async function publishGiftToRoomChat(input: {
       giftIcon: gift.icon,
       giftCode: gift.code,
       quantity,
+      // Lets clients pick an animation tier by price, and know how many were
+      // added by THIS send (e.g. +66) versus the running combo total.
+      giftCoinPrice: gift.coinPrice,
+      added,
       createdAt: Date.now(),
       gift: {
         giftId: gift.id,
@@ -133,6 +150,8 @@ export async function publishGiftToRoomChat(input: {
         icon: gift.icon,
         code: gift.code,
         quantity,
+        coinPrice: gift.coinPrice,
+        added,
       },
     };
 

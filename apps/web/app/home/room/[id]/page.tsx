@@ -813,8 +813,16 @@ useEffect(() => {
 
             onClose={() => setGiftSheetOpen(false)}
 
-            onSent={(gift, position) => {
-              setSentGift({ code: gift.code, icon: gift.icon, name: gift.name, position });
+            onSent={(gift, position, quantity) => {
+              setSentGift({
+                code: gift.code,
+                icon: gift.icon,
+                name: gift.name,
+                position,
+                quantity,
+                coinPrice: gift.coinPrice,
+                nonce: Date.now(),
+              });
             }}
 
           />
@@ -827,7 +835,7 @@ useEffect(() => {
 
         {sentGift && (
 
-          <GiftSendAnimation gift={sentGift} onDone={() => setSentGift(null)} />
+          <GiftSendAnimation key={sentGift.nonce} gift={sentGift} onDone={() => setSentGift(null)} />
 
         )}
 

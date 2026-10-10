@@ -31,7 +31,12 @@ export const sendGiftSchema = z.object({
   // Required: generate once per user tap and resend the SAME value on
   // retry. This is what makes double-taps/duplicate requests safe — see
   // fin_send_gift()'s unique(sender_id, client_request_id) guarantee.
-  clientRequestId: z.string().min(8).max(128),
+  clientRequestId: z.string().min(8).max(120),
+  // How many of this gift to send in one go. Charged one-by-one on the server
+  // (each its own atomic fin_send_gift with a derived idempotency key) so the
+  // price, balance check and ledger are exactly as trustworthy as a single
+  // send. Capped so one request can't run away.
+  quantity: z.coerce.number().int().min(1).max(100).default(1),
 });
 
 export type SendGiftInput = z.infer<typeof sendGiftSchema>;

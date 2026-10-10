@@ -24,7 +24,12 @@ export interface RoomChatMessage {
     name: string;
     icon: string | null;
     code?: string;
+    /** Running total in the current combo, e.g. 66 for "x66". */
     quantity: number;
+    /** Coin price of ONE gift (drives animation tier). */
+    coinPrice?: number;
+    /** How many this latest send added (a multi-send of 66 → 66). */
+    added?: number;
   };
 }
 
