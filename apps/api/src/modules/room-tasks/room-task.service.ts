@@ -10,14 +10,16 @@ import {
 } from "./room-task.types";
 
 /**
- * The room's own host may set/cancel the Star Target (a pure goal, no payout);
- * platform admins may also attach a coin reward for viewers. Rewards that mint
- * coins are admin-only so a host can never create coins for their own viewers.
+ * The Star Target is controlled by the app owners (platform admins) only.
+ * Neither the room's host nor an agency owner can create, replace or cancel
+ * one — they just see its progress. Because a target can carry a coin reward
+ * for viewers, keeping it admin-only also means a host can never mint coins
+ * for their own room.
  */
 async function assertCanManage(
   roomId: string,
   userId: string,
-): Promise<{ hostId: string; isAdmin: boolean }> {
+): Promise<{ hostId: string }> {
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select("id, host_id")
@@ -38,12 +40,12 @@ async function assertCanManage(
     .maybeSingle();
   const isAdmin = Boolean(profile?.is_admin);
 
-  if (room.host_id !== userId && !isAdmin) {
-    throw new AppError(403, "Only the room host or an admin can manage the Star Target", {
+  if (!isAdmin) {
+    throw new AppError(403, "Only the app owners can manage the Star Target", {
       code: "ROOM_TASK_FORBIDDEN",
     });
   }
-  return { hostId: room.host_id as string, isAdmin };
+  return { hostId: room.host_id as string };
 }
 
 export const roomTaskService = {
@@ -100,14 +102,14 @@ export const roomTaskService = {
     return toRoomTask(row, claim ?? null);
   },
 
-  /** Admin sets a new goal for the room. Replaces (cancels) any currently active task. */
+  /** App owner (admin) sets a new goal for the room. Replaces (cancels) any currently active task. */
   async setTask(
     roomId: string,
     actorId: string,
     input: SetRoomTaskInput,
   ): Promise<RoomTask> {
-    const { hostId, isAdmin } = await assertCanManage(roomId, actorId);
-    const rewardCoins = isAdmin ? (input.rewardCoins ?? 0) : 0;
+    const { hostId } = await assertCanManage(roomId, actorId);
+    const rewardCoins = input.rewardCoins ?? 0;
 
     const { error: cancelError } = await supabase
       .from("room_tasks")

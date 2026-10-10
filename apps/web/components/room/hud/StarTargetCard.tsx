@@ -7,7 +7,8 @@ import type { RoomTask, SetRoomTaskInput } from "@/lib/api/room-tasks";
 
 interface StarTargetCardProps {
   task: RoomTask | null;
-  isHost: boolean;
+  /** App owner (platform admin). Hosts and agency owners only watch progress. */
+  canManage: boolean;
   saving: boolean;
   claiming: boolean;
   onSet: (input: SetRoomTaskInput) => Promise<unknown>;
@@ -20,14 +21,15 @@ interface StarTargetCardProps {
  * the server: every gift sent in the room adds its coin value to the active
  * goal in one atomic SQL update (see bump_room_task).
  *
- * Host with no goal: sees a "Set Star Target" card. Viewers see nothing until
- * a goal exists. Tapping the card opens details (claim reward / edit / cancel).
+ * Set / replace / end is for app owners only. Everyone else (host, agency
+ * owner, viewers) sees nothing until an owner starts a goal, then watches it.
+ * Tapping the card opens details (claim reward; owners also get edit / end).
  */
-export function StarTargetCard({ task, isHost, saving, claiming, onSet, onCancel, onClaim }: StarTargetCardProps) {
+export function StarTargetCard({ task, canManage, saving, claiming, onSet, onCancel, onClaim }: StarTargetCardProps) {
   const [open, setOpen] = useState(false);
   const live = task && (task.status === "active" || task.status === "completed") ? task : null;
 
-  if (!live && !isHost) return null;
+  if (!live && !canManage) return null;
 
   return (
     <>
@@ -68,7 +70,7 @@ export function StarTargetCard({ task, isHost, saving, claiming, onSet, onCancel
       {open && (
         <StarTargetSheet
           task={live}
-          isHost={isHost}
+          canManage={canManage}
           saving={saving}
           claiming={claiming}
           onClose={() => setOpen(false)}
@@ -83,7 +85,7 @@ export function StarTargetCard({ task, isHost, saving, claiming, onSet, onCancel
 
 function StarTargetSheet({
   task,
-  isHost,
+  canManage,
   saving,
   claiming,
   onClose,
@@ -93,6 +95,7 @@ function StarTargetSheet({
 }: Omit<StarTargetCardProps, "task"> & { task: RoomTask | null; onClose: () => void }) {
   const [title, setTitle] = useState(task?.title ?? "Star Target");
   const [target, setTarget] = useState(task ? String(task.targetValue) : "");
+  const [reward, setReward] = useState(task && task.rewardCoins > 0 ? String(task.rewardCoins) : "");
   const targetNum = Number(target);
   const valid = title.trim().length > 0 && Number.isInteger(targetNum) && targetNum > 0;
   const completed = task?.status === "completed";
@@ -149,9 +152,9 @@ function StarTargetSheet({
           <p className="mb-3 text-center text-[13px] font-semibold text-white/50">Reward claimed</p>
         )}
 
-        {isHost && (
+        {canManage && (
           <div className="space-y-3">
-            <p className="text-[13px] font-semibold text-white/70">{task ? "Start a new target" : "Set a coin target for this stream"}</p>
+            <p className="text-[13px] font-semibold text-white/70">{task ? "Start a new target" : "Set a coin target for this room"}</p>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -166,12 +169,19 @@ function StarTargetSheet({
               placeholder="Target in coins (e.g. 20000)"
               className="h-11 w-full rounded-xl border border-white/15 bg-black/40 px-3.5 text-[14px] text-white placeholder:text-white/40 focus:border-[#f5b93f]/60 focus:outline-none"
             />
+            <input
+              value={reward}
+              onChange={(e) => setReward(e.target.value.replace(/[^0-9]/g, ""))}
+              inputMode="numeric"
+              placeholder="Reward per viewer in coins (optional)"
+              className="h-11 w-full rounded-xl border border-white/15 bg-black/40 px-3.5 text-[14px] text-white placeholder:text-white/40 focus:border-[#f5b93f]/60 focus:outline-none"
+            />
             <div className="flex gap-2">
               <button
                 type="button"
                 disabled={!valid || saving}
                 onClick={async () => {
-                  await onSet({ title: title.trim(), targetValue: targetNum });
+                  await onSet({ title: title.trim(), targetValue: targetNum, rewardCoins: Number(reward) || 0 });
                   onClose();
                 }}
                 className={cn(

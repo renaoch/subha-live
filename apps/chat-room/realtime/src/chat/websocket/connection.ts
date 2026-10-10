@@ -122,6 +122,28 @@ export async function handleConnection(socket: WebSocket, roomId: string, reques
   })
 }
 
+// Announce a person once per room per window. Every WebSocket (re)connect —
+// auto-reconnects, a second tab, a remount — goes through authorization, and
+// each used to broadcast a fresh "joined" row, so one person appeared N times.
+// In-memory is enough for one realtime instance; move to Redis (SET NX EX) if
+// the service is scaled horizontally.
+const JOIN_ANNOUNCE_WINDOW_MS = 10 * 60 * 1000
+const recentJoins = new Map<string, number>()
+
+function shouldAnnounceJoin(roomId: string, userId: string): boolean {
+  const now = Date.now()
+  if (recentJoins.size > 5000) {
+    for (const [key, at] of recentJoins) {
+      if (now - at > JOIN_ANNOUNCE_WINDOW_MS) recentJoins.delete(key)
+    }
+  }
+  const key = `${roomId}:${userId}`
+  const last = recentJoins.get(key)
+  if (last !== undefined && now - last < JOIN_ANNOUNCE_WINDOW_MS) return false
+  recentJoins.set(key, now)
+  return true
+}
+
 function broadcastJoin(
   rooms: RoomRegistry,
   roomId: string,
@@ -133,6 +155,7 @@ function broadcastJoin(
 ): void {
   const set = rooms.get(roomId)
   if (!set || !set.size) return
+  if (!shouldAnnounceJoin(roomId, userId)) return
 
   // Rendered by the client as a system row inside the main chat stream
   // ("User X joined the stream"), not just the floating join-feed overlay.

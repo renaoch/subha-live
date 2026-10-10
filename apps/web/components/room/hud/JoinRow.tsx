@@ -24,13 +24,13 @@ export function JoinRow({
   onOpenProfile?: () => void;
 }) {
   return (
-    <div className="join-row relative flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4 backdrop-blur-md">
+    <div className="join-row relative flex min-w-[210px] items-center gap-2 rounded-full py-1 pl-1 pr-3.5 backdrop-blur-md">
       <button type="button" onClick={onOpenProfile} className="join-avatar relative shrink-0">
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element -- remote user avatar
-          <img src={avatar} alt={name} className="relative z-10 h-9 w-9 rounded-full object-cover ring-2 ring-[#ffd27a]" />
+          <img src={avatar} alt={name} className="relative z-10 h-8 w-8 rounded-full object-cover ring-2 ring-[#ffd27a]" />
         ) : (
-          <span className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full bg-[#3b2a55] text-[13px] font-bold text-white ring-2 ring-[#ffd27a]">
+          <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[#3b2a55] text-[12px] font-bold text-white ring-2 ring-[#ffd27a]">
             {name.trim().slice(0, 1).toUpperCase() || "?"}
           </span>
         )}
@@ -42,13 +42,13 @@ export function JoinRow({
         ))}
       </button>
 
-      <div className="min-w-0 py-0.5">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-[15px] font-bold leading-tight text-white">{name}</span>
-          {level ? <LevelGem level={level} /> : null}
-          <UserTags tags={tags} />
+      <div className="min-w-0">
+        <div className="flex items-center gap-1">
+          <span className="truncate text-[13px] font-bold leading-[1.15] text-white">{name}</span>
+          {level ? <LevelGem level={level} className="px-1 py-px text-[9.5px] [&>svg]:h-[9px] [&>svg]:w-[9px]" /> : null}
+          <UserTags tags={tags} className="px-1 py-px text-[9px]" />
         </div>
-        <p className="flex items-center gap-1 text-[13.5px] font-semibold leading-tight text-[#ffd27a]">
+        <p className="flex items-center gap-1 text-[11.5px] font-semibold leading-[1.15] text-[#ffd27a]">
           Joined the room <span className="join-wave inline-block origin-[70%_70%]">👋</span>
         </p>
       </div>

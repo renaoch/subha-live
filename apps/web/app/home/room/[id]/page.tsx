@@ -293,6 +293,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   // Star Target (room gift goal) + Regional Star Challenge (host ranking race).
   const {
     task: starTask,
+    canManage: canManageStarTarget,
     saving: starSaving,
     claiming: starClaiming,
     setTask: setStarTask,
@@ -656,7 +657,7 @@ useEffect(() => {
               isLive || (isWaiting && !isHost) ? (
                 <TopCards
                   task={starTask}
-                  isHost={isHost}
+                  canManage={canManageStarTarget}
                   saving={starSaving}
                   claiming={starClaiming}
                   onSetTask={setStarTask}

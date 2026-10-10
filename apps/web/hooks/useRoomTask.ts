@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { roomTasksApi, type RoomTask, type SetRoomTaskInput } from '@/lib/api/room-tasks';
+import { usersApi } from '@/lib/api/users';
 import { toast } from 'sonner';
 
 /**
@@ -13,12 +14,30 @@ export function useRoomTask(roomId: string, roomStatus?: string | null) {
   const [task, setTaskState] = useState<RoomTask | null>(null);
   const [saving, setSaving] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  // Only app owners (platform admins) may set/cancel a Star Target. This just
+  // decides whether to show the controls; the API independently enforces it.
+  const [canManage, setCanManage] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevStatusRef = useRef<RoomTask['status'] | null>(null);
   // Ref (not state) so a second click fired before React re-renders is
   // still blocked synchronously — belt-and-suspenders on top of the
   // server-side idempotent claim, which is the real guarantee.
   const claimInFlightRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    usersApi
+      .me()
+      .then((profile) => {
+        if (!cancelled) setCanManage(Boolean(profile.is_admin));
+      })
+      .catch(() => {
+        if (!cancelled) setCanManage(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const fetchTask = useCallback(async () => {
     if (!roomId) return;
@@ -121,5 +140,5 @@ export function useRoomTask(roomId: string, roomStatus?: string | null) {
     }
   }, [roomId, fetchTask]);
 
-  return { task, saving, claiming, setTask, cancelTask, claim, refetch: fetchTask };
+  return { task, canManage, saving, claiming, setTask, cancelTask, claim, refetch: fetchTask };
 }

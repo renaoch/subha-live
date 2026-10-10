@@ -8,7 +8,8 @@ import type { RoomTask, SetRoomTaskInput } from "@/lib/api/room-tasks";
 /** The two cards under the pill row: Star Target (left) · Regional Star Challenge (right). */
 export function TopCards(props: {
   task: RoomTask | null;
-  isHost: boolean;
+  /** App owner (platform admin) — the only role that can set a Star Target. */
+  canManage: boolean;
   saving: boolean;
   claiming: boolean;
   onSetTask: (input: SetRoomTaskInput) => Promise<unknown>;
@@ -22,7 +23,7 @@ export function TopCards(props: {
     <div className="flex items-start justify-between">
       <StarTargetCard
         task={props.task}
-        isHost={props.isHost}
+        canManage={props.canManage}
         saving={props.saving}
         claiming={props.claiming}
         onSet={props.onSetTask}
