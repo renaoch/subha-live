@@ -41,7 +41,56 @@ export interface AdminStarTarget extends RoomTask {
   hostName: string | null;
 }
 
+/** An admin-defined Star Target: all lives, or one host's rooms. */
+export interface StarTargetTemplate {
+  id: string;
+  title: string;
+  targetValue: number;
+  rewardCoins: number;
+  hostId: string | null;
+  hostName: string | null;
+  scope: "all" | "host";
+  isActive: boolean;
+  createdAt: string;
+  /** Rooms currently running this target / rooms that reached it. */
+  runningRooms: number;
+  completedRooms: number;
+}
+
+export interface CreateStarTargetInput {
+  title: string;
+  targetValue: number;
+  rewardCoins?: number;
+  /** Omit for every live; a profile id for one host only. */
+  hostId?: string | null;
+}
+
+export interface HostSearchResult {
+  id: string;
+  name: string;
+  handle: string;
+  publicId: string | null;
+  avatar: string | null;
+}
+
 export const roomTasksApi = {
+  adminTemplates() {
+    return apiFetch<RoomTaskEnvelope<StarTargetTemplate[]>>(`/api/v1/admin/star-targets/templates`).then((r) => r.data);
+  },
+  adminCreateTemplate(input: CreateStarTargetInput) {
+    return apiFetch<RoomTaskEnvelope<{ id: string }>>(`/api/v1/admin/star-targets/templates`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.data);
+  },
+  adminEndTemplate(id: string) {
+    return apiFetch<RoomTaskEnvelope<null>>(`/api/v1/admin/star-targets/templates/${id}`, { method: "DELETE" });
+  },
+  adminSearchHosts(q: string) {
+    return apiFetch<RoomTaskEnvelope<HostSearchResult[]>>(
+      `/api/v1/admin/star-targets/hosts?q=${encodeURIComponent(q)}`,
+    ).then((r) => r.data);
+  },
   /** Admin console: newest Star Targets across all rooms. */
   adminList() {
     return apiFetch<RoomTaskEnvelope<AdminStarTarget[]>>(

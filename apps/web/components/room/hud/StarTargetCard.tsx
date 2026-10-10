@@ -4,25 +4,26 @@ import { useState } from "react";
 import { ChevronRight, Loader2, Star, X } from "lucide-react";
 import type { RoomTask } from "@/lib/api/room-tasks";
 
-/** Glossy gold star (vector, no data). */
+/** Puffy, glossy 3D gold star (vector, no data) — matches the reference art. */
 function GoldStar({ className }: { className?: string }) {
+  const star = "M24 4 L29.6 16.6 L43.4 18 L33 27.2 L36.2 40.8 L24 33.6 L11.8 40.8 L15 27.2 L4.6 18 L18.4 16.6 Z";
   return (
-    <svg viewBox="0 0 48 48" className={className} aria-hidden>
+    <svg viewBox="0 0 48 48" className={className} aria-hidden style={{ filter: "drop-shadow(0 2px 3px rgba(190,110,0,0.55))" }}>
       <defs>
-        <linearGradient id="stc-gold" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fff0a8" />
-          <stop offset="0.55" stopColor="#ffc72e" />
-          <stop offset="1" stopColor="#e08a0a" />
+        <linearGradient id="stc-body" x1="0.2" y1="0" x2="0.8" y2="1">
+          <stop offset="0" stopColor="#fff6b0" />
+          <stop offset="0.45" stopColor="#ffd534" />
+          <stop offset="1" stopColor="#f0970a" />
         </linearGradient>
+        <radialGradient id="stc-shine" cx="0.35" cy="0.25" r="0.55">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.85" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
       </defs>
-      <path
-        d="M24 3.5 L30.2 16.8 L44.6 18.6 L34 28.6 L36.8 43 L24 36 L11.2 43 L14 28.6 L3.4 18.6 L17.8 16.8 Z"
-        fill="url(#stc-gold)"
-        stroke="#ffe9a0"
-        strokeWidth="2.2"
-        strokeLinejoin="round"
-      />
-      <path d="M24 9 L28 18 L24 20 L20 18 Z" fill="#fff8d0" opacity="0.65" />
+      {/* thick same-colour stroke with round joins = soft, puffy points */}
+      <path d={star} fill="url(#stc-body)" stroke="url(#stc-body)" strokeWidth="5" strokeLinejoin="round" />
+      <path d={star} fill="url(#stc-shine)" />
+      <path d="M24 12 L26.4 17.6 L24 19 L21.6 17.6 Z" fill="#fffbe0" opacity="0.7" />
     </svg>
   );
 }
@@ -49,6 +50,7 @@ export function StarTargetCard({ task, claiming, onClaim }: StarTargetCardProps)
   const live = task && (task.status === "active" || task.status === "completed") ? task : null;
 
   if (!live) return null;
+  const countLen = `${live.currentValue}/${live.targetValue}`.length;
 
   return (
     <>
@@ -56,29 +58,31 @@ export function StarTargetCard({ task, claiming, onClaim }: StarTargetCardProps)
         type="button"
         onClick={() => setOpen(true)}
         aria-label={`Star Target ${live.currentValue} of ${live.targetValue}`}
-        className="star-card relative flex h-[80px] w-full flex-col justify-center gap-2 rounded-[20px] px-3 text-left backdrop-blur-xl transition active:scale-[0.97]"
+        className="star-card relative flex h-[64px] w-full flex-col justify-center gap-[6px] rounded-[18px] px-2.5 text-left transition active:scale-[0.97]"
       >
-        <span className="flex items-center gap-2.5">
-          <GoldStar className="h-[40px] w-[40px] shrink-0" />
+        <span className="flex items-center gap-1.5">
+          <GoldStar className="h-[30px] w-[30px] shrink-0" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13.5px] font-semibold leading-tight text-white">Star Target</span>
+            <span className="flex items-center justify-between gap-1">
+              <span className="truncate text-[11px] font-medium leading-tight text-white">Star Target</span>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-white/85" />
+            </span>
             <span
               className={`block truncate font-bold leading-tight tabular-nums text-white ${
-                `${live.currentValue}/${live.targetValue}`.length > 11 ? "text-[13px]" : "text-[16px]"
+                countLen > 11 ? "text-[11px]" : countLen > 9 ? "text-[12px]" : "text-[13px]"
               }`}
             >
               {live.currentValue}/{live.targetValue}
             </span>
           </span>
-          <ChevronRight className="h-5 w-5 shrink-0 text-white/85" />
         </span>
-        <span className="block h-[7px] w-full overflow-hidden rounded-full bg-white/12">
+        <span className="star-track block h-[6px] w-full overflow-hidden rounded-full">
           <span
             className="block h-full rounded-full transition-[width] duration-700"
             style={{
               width: `${Math.min(100, Math.max(live.progress, 4))}%`,
-              background: "linear-gradient(90deg,#ff3d8b,#ff9a3d 55%,#ffe36a)",
-              boxShadow: "0 0 8px rgba(255,170,60,0.65)",
+              background: "linear-gradient(90deg,#ff3d8b 0%,#ff8a3d 55%,#ffe36a 100%)",
+              boxShadow: "0 0 7px rgba(255,160,60,0.7)",
             }}
           />
         </span>
@@ -86,9 +90,19 @@ export function StarTargetCard({ task, claiming, onClaim }: StarTargetCardProps)
           .star-card {
             border: 1.5px solid transparent;
             background:
-              linear-gradient(rgba(16, 11, 6, 0.8), rgba(16, 11, 6, 0.8)) padding-box,
-              linear-gradient(135deg, #ffe9a0, #f5b93f 38%, rgba(255, 255, 255, 0.4) 70%, #f5b93f) border-box;
-            box-shadow: 0 0 18px rgba(245, 185, 63, 0.3), inset 0 0 24px rgba(245, 185, 63, 0.08);
+              linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 55%, rgba(0, 0, 0, 0.18)),
+              linear-gradient(rgba(18, 13, 8, 0.86), rgba(18, 13, 8, 0.86)),
+              linear-gradient(135deg, #fff1b8, #f5b93f 35%, rgba(255, 255, 255, 0.28) 62%, #f5b93f 85%, #ffe39a) border-box;
+            background-clip: padding-box, padding-box, border-box;
+            box-shadow:
+              0 0 16px rgba(245, 185, 63, 0.34),
+              inset 0 1px 0 rgba(255, 255, 255, 0.18),
+              inset 0 0 20px rgba(245, 185, 63, 0.07);
+            backdrop-filter: blur(14px);
+          }
+          .star-track {
+            background: rgba(255, 255, 255, 0.13);
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
           }
         `}</style>
       </button>

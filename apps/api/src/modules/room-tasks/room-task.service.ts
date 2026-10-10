@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
-import type { SetRoomTaskInput } from "./room-task.schema";
+import { cacheGet, cacheSet } from "../../lib/redis";
+import type { CreateStarTargetTemplateInput, SetRoomTaskInput } from "./room-task.schema";
 import {
   toRoomTask,
   type RoomTask,
@@ -46,6 +47,50 @@ async function assertCanManage(
     });
   }
   return { hostId: room.host_id as string };
+}
+
+async function assertAdmin(actorId: string): Promise<void> {
+  const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", actorId).maybeSingle();
+  if (!profile?.is_admin) {
+    throw new AppError(403, "Admin access required", { code: "ADMIN_REQUIRED" });
+  }
+}
+
+function firstRow<T>(data: T[] | T | null | undefined): T | null {
+  return Array.isArray(data) ? (data[0] ?? null) : (data ?? null);
+}
+
+/** Cache "this room has no star target" briefly — viewers poll the task every few seconds. */
+const NO_TARGET_TTL_SECONDS = 8;
+const noTargetKey = (roomId: string) => `room:star:none:${roomId}`;
+
+/**
+ * Creates this room's Star Target from the applicable admin-defined template
+ * (host-specific beats all-lives) if it doesn't have one yet. Idempotent.
+ */
+async function ensureForRoom(roomId: string): Promise<RoomTaskRow | null> {
+  const { data, error } = await supabase.rpc("ensure_room_star_target" as any, { p_room_id: roomId });
+  if (error) {
+    throw new AppError(500, "Failed to prepare room star target", {
+      code: "ROOM_TASK_ENSURE_FAILED",
+      details: error.message,
+    });
+  }
+  return firstRow<RoomTaskRow>(data as RoomTaskRow[] | RoomTaskRow | null);
+}
+
+export interface StarTargetTemplate {
+  id: string;
+  title: string;
+  targetValue: number;
+  rewardCoins: number;
+  hostId: string | null;
+  hostName: string | null;
+  scope: "all" | "host";
+  isActive: boolean;
+  createdAt: string;
+  runningRooms: number;
+  completedRooms: number;
 }
 
 export const roomTaskService = {
@@ -118,9 +163,19 @@ export const roomTaskService = {
       });
     }
 
-    if (!data) return null;
+    let row = data as RoomTaskRow | null;
+    if (!row) {
+      // No run yet in this room: start one from the admin's global / per-host
+      // target if there is one. A short negative cache keeps the 5s viewer
+      // polling from hitting the database when nothing applies.
+      if (await cacheGet<number>(noTargetKey(roomId))) return null;
+      row = await ensureForRoom(roomId);
+      if (!row) {
+        await cacheSet(noTargetKey(roomId), 1, NO_TARGET_TTL_SECONDS);
+        return null;
+      }
+    }
 
-    const row = data as RoomTaskRow;
 
     if (!userId || row.reward_coins <= 0) {
       return toRoomTask(row);
@@ -215,19 +270,28 @@ export const roomTaskService = {
    */
   async bumpProgress(roomId: string, amount: number): Promise<RoomTask | null> {
     if (!(amount > 0)) return null;
-    // One atomic UPDATE in Postgres (bump_room_task) — concurrent gifts can
-    // never overwrite each other's progress.
-    const { data, error } = await supabase.rpc("bump_room_task" as any, {
-      p_room_id: roomId,
-      p_amount: Math.floor(amount),
-    });
-    if (error) {
-      throw new AppError(500, "Failed to update room task progress", {
-        code: "ROOM_TASK_PROGRESS_FAILED",
-        details: error.message,
+
+    const bump = async (): Promise<RoomTaskRow | null> => {
+      // One atomic UPDATE in Postgres (bump_room_task) — concurrent gifts can
+      // never overwrite each other's progress.
+      const { data, error } = await supabase.rpc("bump_room_task" as any, {
+        p_room_id: roomId,
+        p_amount: Math.floor(amount),
       });
+      if (error) {
+        throw new AppError(500, "Failed to update room task progress", {
+          code: "ROOM_TASK_PROGRESS_FAILED",
+          details: error.message,
+        });
+      }
+      return firstRow<RoomTaskRow>(data as RoomTaskRow[] | RoomTaskRow | null);
+    };
+
+    let row = await bump();
+    if (!row) {
+      // The first gift can land before anyone polled the room's target.
+      if (await ensureForRoom(roomId)) row = await bump();
     }
-    const row = (Array.isArray(data) ? data[0] : data) as RoomTaskRow | undefined;
     return row ? toRoomTask(row) : null;
   },
 
@@ -296,5 +360,100 @@ export const roomTaskService = {
       newCoins: row.new_coins,
       claimedAt: row.claimed_at,
     };
+  },
+  // ---------------- Admin: global / per-host Star Targets ----------------
+
+  async adminListTemplates(actorId: string): Promise<StarTargetTemplate[]> {
+    await assertAdmin(actorId);
+    const { data, error } = await (supabase.from("star_target_templates" as any) as any)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (error) {
+      throw new AppError(500, "Failed to list star targets", { code: "STAR_TARGET_LIST_FAILED", details: error.message });
+    }
+    const rows = (data ?? []) as any[];
+    const ids = rows.map((r) => r.id);
+    const hostIds = [...new Set(rows.map((r) => r.host_id).filter(Boolean))] as string[];
+
+    const [runs, hosts] = await Promise.all([
+      ids.length
+        ? supabase.from("room_tasks").select("template_id, status").in("template_id" as any, ids)
+        : Promise.resolve({ data: [] as any[] }),
+      hostIds.length
+        ? supabase.from("profiles").select("id, name").in("id", hostIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string | null }> }),
+    ]);
+    const hostName = new Map((hosts.data ?? []).map((h: any) => [h.id, h.name as string | null]));
+    const counts = new Map<string, { running: number; completed: number }>();
+    for (const r of (runs.data ?? []) as any[]) {
+      const c = counts.get(r.template_id) ?? { running: 0, completed: 0 };
+      if (r.status === "active") c.running++;
+      if (r.status === "completed") c.completed++;
+      counts.set(r.template_id, c);
+    }
+
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      targetValue: r.target_value,
+      rewardCoins: r.reward_coins,
+      hostId: r.host_id ?? null,
+      hostName: r.host_id ? (hostName.get(r.host_id) ?? null) : null,
+      scope: r.host_id ? ("host" as const) : ("all" as const),
+      isActive: Boolean(r.is_active),
+      createdAt: r.created_at,
+      runningRooms: counts.get(r.id)?.running ?? 0,
+      completedRooms: counts.get(r.id)?.completed ?? 0,
+    }));
+  },
+
+  async adminCreateTemplate(actorId: string, input: CreateStarTargetTemplateInput): Promise<string> {
+    await assertAdmin(actorId);
+    if (input.hostId) {
+      const { data: host } = await supabase.from("profiles").select("id").eq("id", input.hostId).maybeSingle();
+      if (!host) throw new AppError(404, "Host not found", { code: "HOST_NOT_FOUND" });
+    }
+    const { data, error } = await supabase.rpc("publish_star_target" as any, {
+      p_title: input.title,
+      p_target_value: input.targetValue,
+      p_reward_coins: input.rewardCoins ?? 0,
+      p_host_id: input.hostId ?? null,
+      p_created_by: actorId,
+    });
+    if (error) {
+      throw new AppError(500, "Failed to create star target", { code: "STAR_TARGET_CREATE_FAILED", details: error.message });
+    }
+    return data as string;
+  },
+
+  async adminEndTemplate(actorId: string, templateId: string): Promise<void> {
+    await assertAdmin(actorId);
+    const { error } = await supabase.rpc("end_star_target" as any, { p_template_id: templateId });
+    if (error) {
+      throw new AppError(500, "Failed to end star target", { code: "STAR_TARGET_END_FAILED", details: error.message });
+    }
+  },
+
+  /** Host picker for the admin form: match by name, handle or public ID. */
+  async adminSearchHosts(actorId: string, query: string) {
+    await assertAdmin(actorId);
+    const q = query.replace(/[%,()*\\]/g, " ").trim().slice(0, 40);
+    if (q.length < 2) return [];
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, name, handle, public_id, avatar")
+      .or(`name.ilike.%${q}%,handle.ilike.%${q}%,public_id.eq.${q}`)
+      .limit(15);
+    if (error) {
+      throw new AppError(500, "Host search failed", { code: "HOST_SEARCH_FAILED", details: error.message });
+    }
+    return (data ?? []).map((p: any) => ({
+      id: p.id as string,
+      name: (p.name as string | null) ?? "",
+      handle: (p.handle as string | null) ?? "",
+      publicId: (p.public_id as string | null) ?? null,
+      avatar: (p.avatar as string | null) ?? null,
+    }));
   },
 };

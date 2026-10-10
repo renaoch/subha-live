@@ -19,10 +19,10 @@ export function TopCards(props: {
   // exists while an admin has an active target running).
   return (
     <div className="flex items-start gap-2">
-      <div className="w-[calc(50%-4px)] max-w-[188px]">
+      <div className="w-[calc(40%-3px)] max-w-[150px]">
         <StarTargetCard task={props.task} claiming={props.claiming} onClaim={props.onClaimTask} />
       </div>
-      <div className="ml-auto w-[calc(50%-4px)] max-w-[188px]">
+      <div className="ml-auto w-[calc(40%-3px)] max-w-[150px]">
         <RegionalChallengeCard data={props.challenge} skewMs={props.skewMs} myHostId={props.hostId} />
       </div>
     </div>

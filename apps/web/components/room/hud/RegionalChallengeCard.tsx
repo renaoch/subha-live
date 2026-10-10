@@ -54,22 +54,22 @@ export function RegionalChallengeCard({
         type="button"
         onClick={() => setOpen(true)}
         aria-label={`${c.title} ${c.subtitle}, ends in ${label}`}
-        className="relative flex h-[80px] w-full items-center gap-2 overflow-hidden rounded-[20px] border border-[#b56bff]/70 px-3 text-left transition active:scale-[0.97]"
+        className="relative flex h-[64px] w-full items-center gap-1.5 overflow-hidden rounded-[18px] border border-[#b56bff]/70 px-2.5 text-left transition active:scale-[0.97]"
         style={{
           background: "linear-gradient(135deg, rgba(92,30,178,0.9), rgba(40,14,92,0.85))",
-          boxShadow: "0 0 18px rgba(160,80,255,0.38), inset 0 0 22px rgba(190,120,255,0.12)",
+          boxShadow: "0 0 16px rgba(160,80,255,0.36), inset 0 0 18px rgba(190,120,255,0.12)",
         }}
       >
-        <span className="flex min-w-0 flex-1 flex-col justify-center gap-[3px]">
-          <span className="block truncate text-[13px] font-bold leading-[1.2] text-white">{c.title}</span>
-          <span className="block truncate text-[11.5px] font-medium leading-[1.2] text-[#d9b8ff]">{c.subtitle}</span>
-          <span className="mt-1 inline-flex w-fit items-center rounded-md bg-black/30 px-1.5 py-[3px] text-[11.5px] font-semibold leading-none tabular-nums text-white">
+        <span className="flex min-w-0 flex-1 flex-col justify-center gap-[2px]">
+          <span className="block truncate text-[11px] font-bold leading-[1.2] text-white">{c.title}</span>
+          <span className="block truncate text-[10px] font-medium leading-[1.2] text-[#d9b8ff]">{c.subtitle}</span>
+          <span className="mt-[3px] inline-flex w-fit items-center rounded-[5px] bg-black/30 px-1.5 py-[3px] text-[10.5px] font-semibold leading-none tabular-nums text-white">
             {label}
           </span>
         </span>
-        <span className="flex h-full shrink-0 flex-col items-center justify-between py-2.5">
-          <WingedStar className="h-[36px] w-[40px] drop-shadow-[0_0_8px_rgba(255,120,220,0.6)]" />
-          <ChevronRight className="h-4 w-4 text-white/80" />
+        <span className="flex h-full shrink-0 flex-col items-center justify-between py-2">
+          <WingedStar className="h-[28px] w-[32px] drop-shadow-[0_0_6px_rgba(255,120,220,0.6)]" />
+          <ChevronRight className="h-3.5 w-3.5 text-white/80" />
         </span>
       </button>
 

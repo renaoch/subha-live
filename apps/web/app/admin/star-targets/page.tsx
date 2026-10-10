@@ -1,21 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Star, StopCircle } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Globe2, Loader2, Search, Star, StopCircle, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { roomsApi, type RoomRecord } from "@/lib/api/rooms";
-import { roomTasksApi, type AdminStarTarget } from "@/lib/api/room-tasks";
+import { roomTasksApi, type HostSearchResult, type StarTargetTemplate } from "@/lib/api/room-tasks";
 
 const inputClass =
   "w-full rounded-xl border border-[#2A2238] bg-[#17131F] px-3.5 py-2.5 text-[14px] text-[#F3ECE0] placeholder:text-[#5E5570] focus:border-[#CBA35C]/50 focus:outline-none";
 const labelClass = "mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-[#9088A0]";
-
-const STATUS_STYLES: Record<string, string> = {
-  active: "bg-emerald-400/15 text-emerald-300",
-  completed: "bg-[#CBA35C]/15 text-[#CBA35C]",
-  cancelled: "bg-white/10 text-white/40",
-};
 
 function digits(v: string) {
   return v.replace(/[^0-9]/g, "");
@@ -23,27 +16,30 @@ function digits(v: string) {
 
 /**
  * Admin → Star targets. The ONLY place a Star Target can be created or ended.
- * The in-room "Star Target" card is read-only for everyone. The API enforces
- * the same rule (profiles.is_admin) on every write, so this page being hidden
- * or bypassed does not matter for security.
+ *
+ * A target applies to EVERY live automatically (each live tracks its own
+ * progress), or — optionally — to one host's lives only. Hosts and viewers
+ * just see progress; the API enforces admin-only on every write.
  */
 export default function AdminStarTargetsPage() {
-  const [rooms, setRooms] = useState<RoomRecord[]>([]);
-  const [targets, setTargets] = useState<AdminStarTarget[]>([]);
+  const [targets, setTargets] = useState<StarTargetTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [endingId, setEndingId] = useState<string | null>(null);
 
-  const [roomId, setRoomId] = useState("");
+  const [scope, setScope] = useState<"all" | "host">("all");
+  const [host, setHost] = useState<HostSearchResult | null>(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<HostSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+
   const [title, setTitle] = useState("Star Target");
   const [target, setTarget] = useState("");
   const [reward, setReward] = useState("");
 
   const load = useCallback(async () => {
     try {
-      const [roomList, list] = await Promise.all([roomsApi.list(), roomTasksApi.adminList()]);
-      setRooms(roomList.filter((r) => r.status === "live" || r.status === "created"));
-      setTargets(list);
+      setTargets(await roomTasksApi.adminTemplates());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load star targets");
     } finally {
@@ -57,23 +53,47 @@ export default function AdminStarTargetsPage() {
     return () => window.clearInterval(id);
   }, [load]);
 
+  // Debounced host search.
+  useEffect(() => {
+    if (scope !== "host" || host || query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const t = window.setTimeout(() => {
+      roomTasksApi
+        .adminSearchHosts(query.trim())
+        .then((r) => !cancelled && setResults(r))
+        .catch(() => !cancelled && setResults([]))
+        .finally(() => !cancelled && setSearching(false));
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [query, scope, host]);
+
   const targetNum = Number(target);
   const rewardNum = Number(reward) || 0;
-  const valid = !!roomId && title.trim().length > 0 && Number.isInteger(targetNum) && targetNum > 0;
+  const valid =
+    title.trim().length > 0 && Number.isInteger(targetNum) && targetNum > 0 && (scope === "all" || !!host);
 
-  const activeByRoom = useMemo(() => {
-    const m = new Map<string, AdminStarTarget>();
-    for (const t of targets) if (t.status === "active" && !m.has(t.roomId)) m.set(t.roomId, t);
-    return m;
-  }, [targets]);
-  const replacing = roomId ? activeByRoom.get(roomId) : undefined;
+  const replacing = targets.find(
+    (t) => t.isActive && (scope === "all" ? t.scope === "all" : t.scope === "host" && t.hostId === host?.id),
+  );
 
   async function start() {
     if (!valid) return;
     setSaving(true);
     try {
-      await roomTasksApi.setTask(roomId, { title: title.trim(), targetValue: targetNum, rewardCoins: rewardNum });
-      toast.success("Star Target is live in that room");
+      await roomTasksApi.adminCreateTemplate({
+        title: title.trim(),
+        targetValue: targetNum,
+        rewardCoins: rewardNum,
+        hostId: scope === "host" ? host!.id : null,
+      });
+      toast.success(scope === "all" ? "Star Target is now live in every room" : `Star Target set for ${host!.name}`);
       setTarget("");
       setReward("");
       await load();
@@ -84,10 +104,10 @@ export default function AdminStarTargetsPage() {
     }
   }
 
-  async function end(t: AdminStarTarget) {
+  async function end(t: StarTargetTemplate) {
     setEndingId(t.id);
     try {
-      await roomTasksApi.cancelTask(t.roomId);
+      await roomTasksApi.adminEndTemplate(t.id);
       toast.success("Star Target ended");
       await load();
     } catch (e) {
@@ -107,24 +127,112 @@ export default function AdminStarTargetsPage() {
           <div>
             <h2 className="text-[14px] font-semibold text-[#F3ECE0]">Set a Star Target</h2>
             <p className="text-[11px] text-[#9088A0]">
-              A coin goal viewers watch fill up as gifts land. Only admins can set it — hosts and viewers just see progress.
+              A coin goal viewers watch fill up as gifts land. It applies to every live automatically — each live fills its
+              own bar. Only admins can set it.
             </p>
           </div>
         </div>
 
         <div className="space-y-3">
           <div>
-            <label className={labelClass}>Room</label>
-            <select value={roomId} onChange={(e) => setRoomId(e.target.value)} className={inputClass}>
-              <option value="">Select a live / waiting room…</option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.title} — {r.host?.name ?? r.host?.handle ?? r.host_id}
-                  {r.status === "live" ? " · LIVE" : ""}
-                </option>
+            <label className={labelClass}>Applies to</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { id: "all", label: "Every live", icon: Globe2 },
+                  { id: "host", label: "One host", icon: UserRound },
+                ] as const
+              ).map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setScope(id);
+                    if (id === "all") {
+                      setHost(null);
+                      setQuery("");
+                    }
+                  }}
+                  className={`flex h-11 items-center justify-center gap-2 rounded-xl border text-[13px] font-semibold transition ${
+                    scope === id
+                      ? "border-[#CBA35C] bg-[#CBA35C]/15 text-[#CBA35C]"
+                      : "border-[#2A2238] bg-[#17131F] text-[#9088A0] hover:text-[#F3ECE0]"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </button>
               ))}
-            </select>
+            </div>
           </div>
+
+          {scope === "host" && (
+            <div>
+              <label className={labelClass}>Host</label>
+              {host ? (
+                <div className="flex items-center gap-3 rounded-xl border border-[#CBA35C]/40 bg-[#CBA35C]/10 px-3 py-2.5">
+                  {host.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- remote avatar
+                    <img src={host.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+                  ) : (
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-[12px] font-bold text-white">
+                      {host.name.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-semibold text-[#F3ECE0]">{host.name}</p>
+                    <p className="truncate text-[11px] text-[#9088A0]">
+                      @{host.handle}
+                      {host.publicId ? ` · ID ${host.publicId}` : ""}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setHost(null)} aria-label="Change host" className="text-[#9088A0] hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5E5570]" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search by name, @handle or ID"
+                    className={`${inputClass} pl-10`}
+                  />
+                  {(searching || results.length > 0 || query.trim().length >= 2) && (
+                    <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-[#2A2238] bg-[#17131F] shadow-xl">
+                      {searching && (
+                        <p className="flex items-center gap-2 px-3.5 py-3 text-[12px] text-[#9088A0]">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Searching…
+                        </p>
+                      )}
+                      {!searching && results.length === 0 && (
+                        <p className="px-3.5 py-3 text-[12px] text-[#9088A0]">No matching users</p>
+                      )}
+                      {results.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => {
+                            setHost(r);
+                            setResults([]);
+                          }}
+                          className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left hover:bg-white/5"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-semibold text-[#F3ECE0]">{r.name}</span>
+                            <span className="block truncate text-[11px] text-[#9088A0]">
+                              @{r.handle}
+                              {r.publicId ? ` · ID ${r.publicId}` : ""}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <label className={labelClass}>Title</label>
@@ -133,7 +241,7 @@ export default function AdminStarTargetsPage() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Target (coins)</label>
+              <label className={labelClass}>Target (coins per live)</label>
               <input
                 value={target}
                 onChange={(e) => setTarget(digits(e.target.value))}
@@ -156,8 +264,13 @@ export default function AdminStarTargetsPage() {
 
           {replacing && (
             <p className="rounded-xl bg-amber-400/10 px-3 py-2 text-[12px] text-amber-300">
-              This room already has an active target ({replacing.currentValue}/{replacing.targetValue}). Starting a new one
-              replaces it.
+              {scope === "all" ? "An every-live target" : `${host?.name ?? "This host"} already has a target`} is active
+              ({replacing.title}). Starting a new one replaces it and resets the bar in lives where it&apos;s running.
+            </p>
+          )}
+          {scope === "all" && (
+            <p className="text-[11.5px] text-[#9088A0]">
+              A target set for one host always wins over the every-live target in that host&apos;s rooms.
             </p>
           )}
 
@@ -174,7 +287,7 @@ export default function AdminStarTargetsPage() {
 
       <section className="rounded-2xl border border-[#2A2238] bg-[#1D1829]/60">
         <div className="flex items-center justify-between border-b border-[#2A2238] px-4 py-3.5">
-          <h2 className="text-[13px] font-semibold text-[#F3ECE0]">Recent star targets</h2>
+          <h2 className="text-[13px] font-semibold text-[#F3ECE0]">Star targets</h2>
           <span className="text-[11px] text-[#5E5570]">Updates every 10s</span>
         </div>
 
@@ -187,37 +300,34 @@ export default function AdminStarTargetsPage() {
         ) : (
           <div className="divide-y divide-[#2A2238]">
             {targets.map((t) => (
-              <div key={t.id} className="px-4 py-3.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13.5px] font-semibold text-[#F3ECE0]">{t.title}</p>
-                    <p className="truncate text-[11px] text-[#9088A0]">
-                      {t.roomTitle ?? "Room"} · {t.hostName ?? "Host"} · reward {t.rewardCoins > 0 ? `+${t.rewardCoins}` : "none"}
-                    </p>
-                  </div>
+              <div key={t.id} className="flex items-start justify-between gap-3 px-4 py-3.5">
+                <div className="min-w-0">
+                  <p className="truncate text-[13.5px] font-semibold text-[#F3ECE0]">
+                    {t.title} · {t.targetValue.toLocaleString()} coins
+                  </p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#9088A0]">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                        t.scope === "all" ? "bg-sky-400/15 text-sky-300" : "bg-fuchsia-400/15 text-fuchsia-300"
+                      }`}
+                    >
+                      {t.scope === "all" ? "Every live" : (t.hostName ?? "One host")}
+                    </span>
+                    <span>reward {t.rewardCoins > 0 ? `+${t.rewardCoins}` : "none"}</span>
+                    <span>
+                      {t.runningRooms} running · {t.completedRooms} completed
+                    </span>
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
                   <span
-                    className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                      STATUS_STYLES[t.status] ?? "bg-white/10 text-white/50"
+                    className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                      t.isActive ? "bg-emerald-400/15 text-emerald-300" : "bg-white/10 text-white/40"
                     }`}
                   >
-                    {t.status}
+                    {t.isActive ? "Active" : "Ended"}
                   </span>
-                </div>
-
-                <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.max(t.progress, 2)}%`,
-                      background: "linear-gradient(90deg,#ff4d8d,#ffb347 60%,#ffe08a)",
-                    }}
-                  />
-                </div>
-                <div className="mt-1.5 flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-[#D9D2E0]">
-                    {t.currentValue.toLocaleString()} / {t.targetValue.toLocaleString()} · {Math.floor(t.progress)}%
-                  </span>
-                  {t.status === "active" && (
+                  {t.isActive && (
                     <button
                       type="button"
                       disabled={endingId === t.id}

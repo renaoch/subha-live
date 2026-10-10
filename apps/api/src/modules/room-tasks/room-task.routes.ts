@@ -6,6 +6,10 @@ import {
   cancelRoomTask,
   claimRoomTask,
   adminListStarTargets,
+  adminListStarTargetTemplates,
+  adminCreateStarTargetTemplate,
+  adminEndStarTargetTemplate,
+  adminSearchStarTargetHosts,
 } from "./room-task.controller";
 
 const router = Router();
@@ -28,5 +32,10 @@ router.post("/:id/task/claim", authMiddleware, claimRoomTask);
 // Admin console: all Star Targets across rooms (admin check is in the service).
 export const adminStarTargetRoutes = Router();
 adminStarTargetRoutes.get("/", authMiddleware, adminListStarTargets);
+// Global / per-host targets (the admin no longer picks a room).
+adminStarTargetRoutes.get("/templates", authMiddleware, adminListStarTargetTemplates);
+adminStarTargetRoutes.post("/templates", authMiddleware, adminCreateStarTargetTemplate);
+adminStarTargetRoutes.delete("/templates/:id", authMiddleware, adminEndStarTargetTemplate);
+adminStarTargetRoutes.get("/hosts", authMiddleware, adminSearchStarTargetHosts);
 
 export default router;

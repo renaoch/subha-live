@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../../errors/app-error";
 import { roomTaskService } from "./room-task.service";
-import { setRoomTaskSchema } from "./room-task.schema";
+import { createStarTargetTemplateSchema, setRoomTaskSchema } from "./room-task.schema";
 
 export async function getRoomTask(
   req: Request<{ id: string }>,
@@ -103,6 +103,47 @@ export async function adminListStarTargets(req: Request, res: Response, next: Ne
     }
     const data = await roomTaskService.adminList(req.user.id);
     res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+export async function adminListStarTargetTemplates(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.status(200).json({ success: true, data: await roomTaskService.adminListTemplates(req.user!.id) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function adminCreateStarTargetTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = createStarTargetTemplateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(400, "Invalid star target", {
+        code: "INVALID_STAR_TARGET",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+    const id = await roomTaskService.adminCreateTemplate(req.user!.id, parsed.data);
+    res.status(201).json({ success: true, data: { id } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function adminEndStarTargetTemplate(req: Request<{ id: string }>, res: Response, next: NextFunction) {
+  try {
+    await roomTaskService.adminEndTemplate(req.user!.id, req.params.id);
+    res.status(200).json({ success: true, data: null });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function adminSearchStarTargetHosts(req: Request, res: Response, next: NextFunction) {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q : "";
+    res.status(200).json({ success: true, data: await roomTaskService.adminSearchHosts(req.user!.id, q) });
   } catch (error) {
     next(error);
   }
