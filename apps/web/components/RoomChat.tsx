@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { Gamepad2, Gift, Mic, MicOff, Smile, Swords, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RoomChatMessage } from "@/lib/api/chat";
-import { GiftImage } from "@/components/GiftImage";
 import { LevelGem } from "@/components/room/hud/LevelGem";
+import { JoinRow } from "@/components/room/hud/JoinRow";
+import { GiftRow } from "@/components/room/hud/GiftRow";
+import { UserTags } from "@/components/room/hud/UserTags";
 
 export type MicMode = "on" | "off" | "request" | "pending";
 
@@ -14,6 +16,8 @@ interface RoomChatProps {
   selfUserId?: string | null;
   connected?: boolean;
   isHost?: boolean;
+  /** Host's user id — their own join isn't announced as a viewer joining. */
+  hostId?: string | null;
   /** Keeps the bar raised (host pre-live pill). */
   raised?: boolean;
   onSend: (text: string) => boolean;
@@ -95,6 +99,7 @@ export function RoomChat({
   selfUserId,
   connected,
   isHost,
+  hostId,
   raised,
   onSend,
   onOpenGift,
@@ -157,65 +162,32 @@ export function RoomChat({
             const mine = !!selfUserId && m.userId === selfUserId;
 
             if (kind === "join") {
+              // The host opening their own stream isn't "someone joining".
+              if (hostId && m.userId === hostId) return null;
               return (
-                <div
-                  key={m.id}
-                  className="chat-row flex items-center gap-2.5 rounded-full bg-black/55 py-1.5 pl-1.5 pr-4 backdrop-blur-md"
-                >
-                  <button type="button" onClick={() => onOpenProfile?.(m.userId)} className="shrink-0">
-                    <Avatar36 src={m.avatar} name={m.username} />
-                  </button>
-                  <span className="text-[15px] font-semibold text-white">
-                    {m.username} <span className="ml-1 font-medium text-white/90">Joined 👋</span>
-                  </span>
+                <div key={m.id} className="chat-row">
+                  <JoinRow
+                    name={m.username}
+                    avatar={m.avatar}
+                    level={m.level}
+                    tags={m.tags}
+                    onOpenProfile={() => onOpenProfile?.(m.userId)}
+                  />
                 </div>
               );
             }
 
             if (kind === "gift") {
-              const gift = m.gift;
               return (
-                <div key={m.id} className="chat-row relative">
-                  <div
-                    className="relative flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3"
-                    style={{
-                      background: "linear-gradient(90deg, rgba(255,40,110,0.42), rgba(120,10,60,0.55) 75%, rgba(20,6,16,0.6))",
-                      boxShadow:
-                        "inset 0 0 0 1.5px rgba(255,90,150,0.85), 0 0 16px rgba(255,50,120,0.45)",
-                    }}
-                  >
-                    <button type="button" onClick={() => onOpenProfile?.(m.userId)} className="shrink-0">
-                      <Avatar36 src={m.avatar} name={m.username} />
-                    </button>
-                    <span className="flex items-center gap-1.5 text-[15px] font-semibold text-white">
-                      {m.username}
-                      {m.level ? <LevelGem level={m.level} /> : null}
-                      <span className="font-semibold text-[#ffd27a]">
-                        Sent {gift?.name ?? "a gift"}
-                      </span>
-                      {gift && (
-                        <GiftImage
-                          gift={{ code: gift.code, icon: gift.icon ?? undefined }}
-                          fallbackIcon={Gift}
-                          className="flex h-6 w-6 shrink-0 items-center justify-center"
-                          imgClassName="h-6 w-6 object-contain"
-                        />
-                      )}
-                      {gift && gift.quantity > 1 && (
-                        <span key={gift.quantity} className="animate-pop-in font-bold text-white">
-                          x{gift.quantity}
-                        </span>
-                      )}
-                    </span>
-                    {gift && (
-                      <GiftImage
-                        gift={{ code: gift.code, icon: gift.icon ?? undefined }}
-                        fallbackIcon={Gift}
-                        className="pointer-events-none absolute -right-[62px] -top-6 flex h-[84px] w-[84px] items-center justify-center"
-                        imgClassName="h-[84px] w-[84px] object-contain drop-shadow-[0_6px_14px_rgba(255,40,100,0.55)]"
-                      />
-                    )}
-                  </div>
+                <div key={m.id} className="chat-row">
+                  <GiftRow
+                    username={m.username}
+                    avatar={m.avatar}
+                    level={m.level}
+                    tags={m.tags}
+                    gift={m.gift ? { name: m.gift.name, icon: m.gift.icon, code: m.gift.code, quantity: m.gift.quantity } : undefined}
+                    onOpenProfile={() => onOpenProfile?.(m.userId)}
+                  />
                 </div>
               );
             }
@@ -242,6 +214,7 @@ export function RoomChat({
                       {mine ? "You" : m.username}
                     </span>
                     {m.level ? <LevelGem level={m.level} /> : null}
+                    <UserTags tags={m.tags} />
                   </div>
                   <p className="break-words text-[15px] font-medium leading-snug text-white">{m.message}</p>
                 </div>
