@@ -4,6 +4,29 @@ import { useState } from "react";
 import { ChevronRight, Loader2, Star, X } from "lucide-react";
 import type { RoomTask } from "@/lib/api/room-tasks";
 
+/** Glossy gold star (vector, no data). */
+function GoldStar({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden>
+      <defs>
+        <linearGradient id="stc-gold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff0a8" />
+          <stop offset="0.55" stopColor="#ffc72e" />
+          <stop offset="1" stopColor="#e08a0a" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M24 3.5 L30.2 16.8 L44.6 18.6 L34 28.6 L36.8 43 L24 36 L11.2 43 L14 28.6 L3.4 18.6 L17.8 16.8 Z"
+        fill="url(#stc-gold)"
+        stroke="#ffe9a0"
+        strokeWidth="2.2"
+        strokeLinejoin="round"
+      />
+      <path d="M24 9 L28 18 L24 20 L20 18 Z" fill="#fff8d0" opacity="0.65" />
+    </svg>
+  );
+}
+
 interface StarTargetCardProps {
   task: RoomTask | null;
   claiming: boolean;
@@ -32,28 +55,42 @@ export function StarTargetCard({ task, claiming, onClaim }: StarTargetCardProps)
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-[58px] w-[148px] items-center gap-2 rounded-2xl border border-[#f5b93f]/70 bg-black/45 px-2.5 text-left backdrop-blur-xl transition active:scale-95"
-        style={{ boxShadow: "0 0 14px rgba(245,185,63,0.22), inset 0 0 18px rgba(245,185,63,0.06)" }}
+        aria-label={`Star Target ${live.currentValue} of ${live.targetValue}`}
+        className="star-card relative flex h-[80px] w-full flex-col justify-center gap-2 rounded-[20px] px-3 text-left backdrop-blur-xl transition active:scale-[0.97]"
       >
-        <Star className="h-[34px] w-[34px] shrink-0 fill-[#ffc83d] text-[#ffe08a] drop-shadow-[0_0_8px_rgba(255,200,60,0.7)]" strokeWidth={1.4} />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center justify-between">
-            <span className="truncate text-[13px] font-bold leading-tight text-white">Star Target</span>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-white/70" />
-          </span>
-          <span className="block text-[12.5px] font-semibold leading-tight text-white/90">
-            {live.currentValue}/{live.targetValue}
-          </span>
-          <span className="mt-1 block h-[5px] overflow-hidden rounded-full bg-white/15">
+        <span className="flex items-center gap-2.5">
+          <GoldStar className="h-[40px] w-[40px] shrink-0" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13.5px] font-semibold leading-tight text-white">Star Target</span>
             <span
-              className="block h-full rounded-full transition-[width] duration-700"
-              style={{
-                width: `${Math.max(live.progress, 3)}%`,
-                background: "linear-gradient(90deg,#ff4d8d,#ffb347 60%,#ffe08a)",
-              }}
-            />
+              className={`block truncate font-bold leading-tight tabular-nums text-white ${
+                `${live.currentValue}/${live.targetValue}`.length > 11 ? "text-[13px]" : "text-[16px]"
+              }`}
+            >
+              {live.currentValue}/{live.targetValue}
+            </span>
           </span>
+          <ChevronRight className="h-5 w-5 shrink-0 text-white/85" />
         </span>
+        <span className="block h-[7px] w-full overflow-hidden rounded-full bg-white/12">
+          <span
+            className="block h-full rounded-full transition-[width] duration-700"
+            style={{
+              width: `${Math.min(100, Math.max(live.progress, 4))}%`,
+              background: "linear-gradient(90deg,#ff3d8b,#ff9a3d 55%,#ffe36a)",
+              boxShadow: "0 0 8px rgba(255,170,60,0.65)",
+            }}
+          />
+        </span>
+        <style jsx>{`
+          .star-card {
+            border: 1.5px solid transparent;
+            background:
+              linear-gradient(rgba(16, 11, 6, 0.8), rgba(16, 11, 6, 0.8)) padding-box,
+              linear-gradient(135deg, #ffe9a0, #f5b93f 38%, rgba(255, 255, 255, 0.4) 70%, #f5b93f) border-box;
+            box-shadow: 0 0 18px rgba(245, 185, 63, 0.3), inset 0 0 24px rgba(245, 185, 63, 0.08);
+          }
+        `}</style>
       </button>
 
       {open && <StarTargetSheet task={live} claiming={claiming} onClose={() => setOpen(false)} onClaim={onClaim} />}

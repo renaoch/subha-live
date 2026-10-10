@@ -53,19 +53,24 @@ export function RegionalChallengeCard({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="relative flex h-[58px] w-[148px] items-center overflow-hidden rounded-2xl border border-[#b56bff]/70 px-2.5 text-left transition active:scale-95"
+        aria-label={`${c.title} ${c.subtitle}, ends in ${label}`}
+        className="relative flex h-[80px] w-full items-center gap-2 overflow-hidden rounded-[20px] border border-[#b56bff]/70 px-3 text-left transition active:scale-[0.97]"
         style={{
-          background: "linear-gradient(135deg, rgba(88,28,170,0.85), rgba(40,14,92,0.8))",
-          boxShadow: "0 0 16px rgba(160,80,255,0.35), inset 0 0 20px rgba(190,120,255,0.12)",
+          background: "linear-gradient(135deg, rgba(92,30,178,0.9), rgba(40,14,92,0.85))",
+          boxShadow: "0 0 18px rgba(160,80,255,0.38), inset 0 0 22px rgba(190,120,255,0.12)",
         }}
       >
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-bold leading-tight text-white">{c.title}</span>
-          <span className="block truncate text-[12px] font-medium leading-tight text-[#d9b8ff]">{c.subtitle}</span>
-          <span className="block text-[12px] font-semibold leading-tight tabular-nums text-white/90">{label}</span>
+        <span className="flex min-w-0 flex-1 flex-col justify-center gap-[3px]">
+          <span className="block truncate text-[13px] font-bold leading-[1.2] text-white">{c.title}</span>
+          <span className="block truncate text-[11.5px] font-medium leading-[1.2] text-[#d9b8ff]">{c.subtitle}</span>
+          <span className="mt-1 inline-flex w-fit items-center rounded-md bg-black/30 px-1.5 py-[3px] text-[11.5px] font-semibold leading-none tabular-nums text-white">
+            {label}
+          </span>
         </span>
-        <WingedStar className="h-[40px] w-[44px] shrink-0 drop-shadow-[0_0_8px_rgba(255,120,220,0.6)]" />
-        <ChevronRight className="absolute bottom-1 right-1 h-3.5 w-3.5 text-white/70" />
+        <span className="flex h-full shrink-0 flex-col items-center justify-between py-2.5">
+          <WingedStar className="h-[36px] w-[40px] drop-shadow-[0_0_8px_rgba(255,120,220,0.6)]" />
+          <ChevronRight className="h-4 w-4 text-white/80" />
+        </span>
       </button>
 
       {open && <ChallengeSheet data={data} skewMs={skewMs} myHostId={myHostId} onClose={() => setOpen(false)} />}

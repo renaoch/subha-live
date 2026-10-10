@@ -769,6 +769,7 @@ useEffect(() => {
             selfUserId={selfUserId}
             connected={chatState === 'connected'}
             isHost={isHost}
+            hostId={room.host_id}
             onSend={sendChat}
             onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
             onOpenPk={isHost ? () => setPkOpen(true) : undefined}
