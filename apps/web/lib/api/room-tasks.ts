@@ -36,7 +36,19 @@ export interface ClaimRoomTaskResult {
   claimedAt: string;
 }
 
+export interface AdminStarTarget extends RoomTask {
+  roomTitle: string | null;
+  hostName: string | null;
+}
+
 export const roomTasksApi = {
+  /** Admin console: newest Star Targets across all rooms. */
+  adminList() {
+    return apiFetch<RoomTaskEnvelope<AdminStarTarget[]>>(
+      `/api/v1/admin/star-targets`,
+    ).then((r) => r.data);
+  },
+
   getTask(roomId: string) {
     return apiFetch<RoomTaskEnvelope<RoomTask | null>>(
       `/api/v1/rooms/${roomId}/task`,

@@ -26,6 +26,10 @@ function targetLabel(t: HostTaskWithStats): string {
   return parts.join(" + ") || "—";
 }
 
+const ALL_ROOMS = "__all__";
+
+const GENDER_LABEL: Record<string, string> = { all: "All hosts", male: "Male hosts", female: "Female hosts" };
+
 const STATUS_STYLES: Record<HostTaskStatus, string> = {
   active: "bg-emerald-400/15 text-emerald-300",
   inactive: "bg-white/10 text-white/50",
@@ -61,11 +65,12 @@ export function HostTasksPanel() {
   }, [load]);
 
   const handleCreate = async (input: CreateHostTaskInput & { status?: HostTaskStatus }) => {
-    if (!newRoomId) return setError("Choose a room");
+    if (!newRoomId) return setError("Choose where this task applies");
     setSaving(true);
     setError(null);
     try {
-      await hostTasksApi.createTask(newRoomId, input);
+      if (newRoomId === ALL_ROOMS) await hostTasksApi.createGlobalTask(input);
+      else await hostTasksApi.createTask(newRoomId, input);
       toast.success("Task created");
       setCreating(false);
       setNewRoomId("");
@@ -125,7 +130,7 @@ export function HostTasksPanel() {
           <div>
             <h2 className="text-[14px] font-semibold text-[#F3ECE0]">Host tasks</h2>
             <p className="text-[11px] text-[#9088A0]">
-              Goals tied to a specific live room (stream hours, coins, viewers).
+              Missions for hosts. Shown in the host's in-room Tasks window, by tab, filtered by gender.
             </p>
           </div>
         </div>
@@ -162,7 +167,7 @@ export function HostTasksPanel() {
                 <div className="min-w-0">
                   <p className="truncate text-[14px] font-semibold text-[#F3ECE0]">{t.title}</p>
                   <p className="mt-0.5 truncate text-[11px] text-[#9088A0]">
-                    {targetLabel(t)} · +{t.rewardAmount} coins · {audienceLabel(t.audience)}
+                    {t.category} · {GENDER_LABEL[t.targetGender] ?? "All hosts"} · {targetLabel(t)} · +{t.rewardAmount} coins · {t.roomId ? "One room" : "All rooms"} · {audienceLabel(t.audience)}
                   </p>
                   <p className="mt-1 text-[10px] text-[#5E5570]">
                     {t.stats.eligibleUsers} joined · {t.stats.completedUsers} completed ·{" "}
@@ -220,14 +225,15 @@ export function HostTasksPanel() {
           {creating && (
             <div className="mb-3">
               <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-[#9088A0]">
-                Room
+                Applies to
               </label>
               <select
                 value={newRoomId}
                 onChange={(e) => setNewRoomId(e.target.value)}
                 className="w-full rounded-xl border border-[#2A2238] bg-[#17131F] px-3.5 py-2.5 text-[14px] text-[#F3ECE0] focus:border-[#CBA35C]/50 focus:outline-none"
               >
-                <option value="">Select a live/waiting room…</option>
+                <option value="">Where should it apply…</option>
+                <option value={ALL_ROOMS}>All rooms (every host)</option>
                 {rooms.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.title} — {r.host?.name ?? r.host?.handle ?? r.host_id}

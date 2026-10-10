@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { roomTasksApi, type RoomTask, type SetRoomTaskInput } from '@/lib/api/room-tasks';
-import { usersApi } from '@/lib/api/users';
+import { roomTasksApi, type RoomTask } from '@/lib/api/room-tasks';
 import { toast } from 'sonner';
 
 /**
- * Tracks the room's live task/goal for both the host and viewers.
+ * Tracks the room's live Star Target for both the host and viewers (read +
+ * claim only — Star Targets are authored in the admin console).
  *
  * Polls every 5s while the room is waiting/live (and the room page forces
  * an immediate refetch whenever a new gift lands in chat) so the progress bar in the header feels
@@ -12,32 +12,13 @@ import { toast } from 'sonner';
  */
 export function useRoomTask(roomId: string, roomStatus?: string | null) {
   const [task, setTaskState] = useState<RoomTask | null>(null);
-  const [saving, setSaving] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  // Only app owners (platform admins) may set/cancel a Star Target. This just
-  // decides whether to show the controls; the API independently enforces it.
-  const [canManage, setCanManage] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const prevStatusRef = useRef<RoomTask['status'] | null>(null);
   // Ref (not state) so a second click fired before React re-renders is
   // still blocked synchronously — belt-and-suspenders on top of the
   // server-side idempotent claim, which is the real guarantee.
   const claimInFlightRef = useRef(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    usersApi
-      .me()
-      .then((profile) => {
-        if (!cancelled) setCanManage(Boolean(profile.is_admin));
-      })
-      .catch(() => {
-        if (!cancelled) setCanManage(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const fetchTask = useCallback(async () => {
     if (!roomId) return;
@@ -78,37 +59,6 @@ export function useRoomTask(roomId: string, roomStatus?: string | null) {
     prevStatusRef.current = task?.status ?? null;
   }, [task?.status, task?.title]);
 
-  const setTask = useCallback(
-    async (input: SetRoomTaskInput) => {
-      setSaving(true);
-      try {
-        const created = await roomTasksApi.setTask(roomId, input);
-        setTaskState(created);
-        toast.success('Task is live for viewers');
-        return created;
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Failed to set task');
-        throw e;
-      } finally {
-        setSaving(false);
-      }
-    },
-    [roomId],
-  );
-
-  const cancelTask = useCallback(async () => {
-    setSaving(true);
-    try {
-      await roomTasksApi.cancelTask(roomId);
-      setTaskState(null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to cancel task');
-      throw e;
-    } finally {
-      setSaving(false);
-    }
-  }, [roomId]);
-
   const claim = useCallback(async () => {
     if (!roomId || claimInFlightRef.current) return;
     claimInFlightRef.current = true;
@@ -140,5 +90,5 @@ export function useRoomTask(roomId: string, roomStatus?: string | null) {
     }
   }, [roomId, fetchTask]);
 
-  return { task, canManage, saving, claiming, setTask, cancelTask, claim, refetch: fetchTask };
+  return { task, claiming, claim, refetch: fetchTask };
 }

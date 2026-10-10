@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { authMiddleware, optionalAuthMiddleware } from "../auth/auth.middleware";
 import {
+  adminCreateGlobalTask,
   adminListAllTasks,
+  getHostCenter,
   claimRoomTask,
   createRoomTask,
   deleteRoomTask,
@@ -18,7 +20,10 @@ const router = Router();
 // may not be logged in yet), but personalized when a token is present.
 router.get("/rooms/:id/host-task", optionalAuthMiddleware, getActiveRoomTask);
 
-// Host or admin: manage the room's tasks.
+// Host's in-room Task Center (tabs; gender-filtered server-side).
+router.get("/rooms/:id/host-center", authMiddleware, getHostCenter);
+
+// Host or admin may READ; only admins may create / edit / delete (service-enforced).
 router.get("/rooms/:id/host-tasks", authMiddleware, listRoomTasks);
 router.post("/rooms/:id/host-tasks", authMiddleware, createRoomTask);
 
@@ -33,5 +38,6 @@ router.post("/host-tasks/:taskId/claim", authMiddleware, claimRoomTask);
 
 // Global admin view across every room.
 router.get("/admin/host-tasks", authMiddleware, adminListAllTasks);
+router.post("/admin/host-tasks", authMiddleware, adminCreateGlobalTask);
 
 export default router;

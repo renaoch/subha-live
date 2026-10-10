@@ -33,6 +33,7 @@ import referralsRoutes from "./modules/referrals/referral.routes";
 import challengeRoutes from "./modules/challenges/challenge.routes";
 import liveBoxRoutes from "./modules/live-box/live-box.routes";
 import wishRoutes from "./modules/wishes/wish.routes";
+    import { adminStarTargetRoutes } from "./modules/room-tasks/room-task.routes";
     import { errorMiddleware } from "./middleware/error.middleware";
 import { requestIdMiddleware } from "./middleware/request-id.middleware";
 
@@ -69,6 +70,7 @@ import { requestIdMiddleware } from "./middleware/request-id.middleware";
     app.use("/api/v1/levels", levelRoutes);
     app.use("/api/v1/tasks", tasksRoutes);
     app.use("/api/v1/admin/tasks", adminTasksRoutes);
+    app.use("/api/v1/admin/star-targets", adminStarTargetRoutes);
     app.use("/api/v1/agency", agencyRoutes);
     app.use(
     "/api/v1/family",

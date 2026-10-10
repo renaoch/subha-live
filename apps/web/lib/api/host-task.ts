@@ -7,6 +7,8 @@ interface HostTaskEnvelope<T> {
 
 export type HostTaskAudience = "all" | "new_users" | "existing_users";
 export type HostTaskStatus = "active" | "inactive" | "ended";
+export type HostTaskCategory = "daily" | "weekly" | "special";
+export type HostTaskGender = "all" | "male" | "female";
 export type ViewerTaskState =
   | "expired"
   | "not_eligible"
@@ -17,10 +19,13 @@ export type ViewerTaskState =
 
 export interface HostTaskConfig {
   id: string;
-  roomId: string;
+  /** null = global task (every host, every room). */
+  roomId: string | null;
   createdBy: string;
   title: string;
   description: string;
+  category: HostTaskCategory;
+  targetGender: HostTaskGender;
   audience: HostTaskAudience;
   newUserWindowDays: number;
   targetHours: number | null;
@@ -58,6 +63,8 @@ export interface HostTaskWithStats extends HostTaskConfig {
 export interface CreateHostTaskInput {
   title: string;
   description?: string;
+  category?: HostTaskCategory;
+  targetGender?: HostTaskGender;
   audience?: HostTaskAudience;
   newUserWindowDays?: number;
   targetHours?: number;
@@ -71,6 +78,8 @@ export interface CreateHostTaskInput {
 export interface UpdateHostTaskInput {
   title?: string;
   description?: string;
+  category?: HostTaskCategory;
+  targetGender?: HostTaskGender;
   audience?: HostTaskAudience;
   newUserWindowDays?: number;
   targetHours?: number;
@@ -88,7 +97,28 @@ export interface ClaimHostTaskResult {
   claimedAt: string;
 }
 
+export interface HostCenterData {
+  /** The caller's own normalised gender (null = unknown / other). */
+  gender: "male" | "female" | null;
+  tasks: ViewerHostTask[];
+}
+
 export const hostTasksApi = {
+  /** Host's in-room Task Center. Gender-filtered by the server. */
+  getHostCenter(roomId: string) {
+    return apiFetch<HostTaskEnvelope<HostCenterData>>(
+      `/api/v1/rooms/${roomId}/host-center`,
+    ).then((r) => r.data);
+  },
+
+  /** Admin: create a global task that applies to every host in every room. */
+  createGlobalTask(input: CreateHostTaskInput) {
+    return apiFetch<HostTaskEnvelope<HostTaskConfig>>(`/api/v1/admin/host-tasks`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.data);
+  },
+
   getRoomTask(roomId: string) {
     return apiFetch<HostTaskEnvelope<ViewerHostTask | null>>(
       `/api/v1/rooms/${roomId}/host-task`,

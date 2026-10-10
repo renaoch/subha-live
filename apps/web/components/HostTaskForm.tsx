@@ -5,6 +5,8 @@ import { Loader2 } from "lucide-react";
 import {
   type CreateHostTaskInput,
   type HostTaskAudience,
+  type HostTaskCategory,
+  type HostTaskGender,
   type HostTaskConfig,
   type HostTaskStatus,
 } from "@/lib/api/host-task";
@@ -45,6 +47,8 @@ export function HostTaskForm({
 }: HostTaskFormProps) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [category, setCategory] = useState<HostTaskCategory>(initial?.category ?? "daily");
+  const [targetGender, setTargetGender] = useState<HostTaskGender>(initial?.targetGender ?? "all");
   const [audience, setAudience] = useState<HostTaskAudience>(initial?.audience ?? "all");
   const [newUserWindowDays, setNewUserWindowDays] = useState(
     String(initial?.newUserWindowDays ?? 7),
@@ -103,6 +107,8 @@ export function HostTaskForm({
     onSubmit({
       title: trimmedTitle,
       description: description.trim() || undefined,
+      category,
+      targetGender,
       audience,
       newUserWindowDays: windowDays,
       targetHours: hours,
@@ -139,6 +145,33 @@ export function HostTaskForm({
           maxLength={500}
           className={inputClass}
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelClass}>Tab (in host's Tasks)</label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as HostTaskCategory)}
+            className={inputClass}
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="special">Special</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Host gender</label>
+          <select
+            value={targetGender}
+            onChange={(e) => setTargetGender(e.target.value as HostTaskGender)}
+            className={inputClass}
+          >
+            <option value="all">Everyone</option>
+            <option value="male">Male hosts only</option>
+            <option value="female">Female hosts only</option>
+          </select>
+        </div>
       </div>
 
       <div>

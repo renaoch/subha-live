@@ -3,17 +3,12 @@
 import { RegionalChallengeCard } from "@/components/room/hud/RegionalChallengeCard";
 import { StarTargetCard } from "@/components/room/hud/StarTargetCard";
 import type { RoomChallenge } from "@/lib/api/challenges";
-import type { RoomTask, SetRoomTaskInput } from "@/lib/api/room-tasks";
+import type { RoomTask } from "@/lib/api/room-tasks";
 
 /** The two cards under the pill row: Star Target (left) · Regional Star Challenge (right). */
 export function TopCards(props: {
   task: RoomTask | null;
-  /** App owner (platform admin) — the only role that can set a Star Target. */
-  canManage: boolean;
-  saving: boolean;
   claiming: boolean;
-  onSetTask: (input: SetRoomTaskInput) => Promise<unknown>;
-  onCancelTask: () => Promise<unknown>;
   onClaimTask: () => Promise<unknown>;
   challenge: RoomChallenge | null;
   skewMs: number;
@@ -23,11 +18,7 @@ export function TopCards(props: {
     <div className="flex items-start justify-between">
       <StarTargetCard
         task={props.task}
-        canManage={props.canManage}
-        saving={props.saving}
         claiming={props.claiming}
-        onSet={props.onSetTask}
-        onCancel={props.onCancelTask}
         onClaim={props.onClaimTask}
       />
       <RegionalChallengeCard data={props.challenge} skewMs={props.skewMs} myHostId={props.hostId} />

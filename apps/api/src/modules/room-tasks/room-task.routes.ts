@@ -5,6 +5,7 @@ import {
   setRoomTask,
   cancelRoomTask,
   claimRoomTask,
+  adminListStarTargets,
 } from "./room-task.controller";
 
 const router = Router();
@@ -23,5 +24,9 @@ router.delete("/:id/task", authMiddleware, cancelRoomTask);
 // backend independently re-verifies completion/eligibility/idempotency
 // (see room-task.service.claimReward) rather than trusting the client.
 router.post("/:id/task/claim", authMiddleware, claimRoomTask);
+
+// Admin console: all Star Targets across rooms (admin check is in the service).
+export const adminStarTargetRoutes = Router();
+adminStarTargetRoutes.get("/", authMiddleware, adminListStarTargets);
 
 export default router;

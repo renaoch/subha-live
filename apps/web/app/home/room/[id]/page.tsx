@@ -37,6 +37,8 @@ import { RoomChat } from '@/components/RoomChat';
 import { useRoomOverview } from '@/hooks/useRoomOverview';
 
 import { useRoomTask } from '@/hooks/useRoomTask';
+import { useHostCenter } from '@/hooks/useHostCenter';
+import { HostTaskCenterModal } from '@/components/room/HostTaskCenterModal';
 
 import { useRoomChallenge } from '@/hooks/useRoomChallenge';
 
@@ -291,14 +293,10 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   // the "Top N" pill move with the stream.
   const overview = useRoomOverview(room?.id ?? '', !!room?.id && (isLive || isWaiting), sessionGiftTotals.giftCount);
 
-  // Star Target (room gift goal) + Regional Star Challenge (host ranking race).
+  // Star Target (room gift goal, set from the admin console) + Regional Star Challenge (host ranking race).
   const {
     task: starTask,
-    canManage: canManageStarTarget,
-    saving: starSaving,
     claiming: starClaiming,
-    setTask: setStarTask,
-    cancelTask: cancelStarTask,
     claim: claimStarTask,
     refetch: refetchStarTask,
   } = useRoomTask(room?.id ?? '', room?.status);
@@ -354,6 +352,9 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
   const [moreView, setMoreView] = useState<'menu' | 'levels'>('menu');
 
   const [viewersOpen, setViewersOpen] = useState(false);
+  const [hostTasksOpen, setHostTasksOpen] = useState(false);
+  // Host-only Task Center (tabs, gender-filtered by the server).
+  const hostCenter = useHostCenter(room?.id ?? '', isHost && !!room?.id && (isLive || isWaiting), hostTasksOpen);
 
   // Tapping any user (chat, header, viewer list, contributors, PK) opens
   // this in-room popup instead of navigating to /user/[id] and leaving the
@@ -657,6 +658,8 @@ useEffect(() => {
             onClaimTask={isHost ? undefined : claim}
             claimingTask={claiming}
             taskStats={stats}
+            onOpenHostTasks={isHost ? () => setHostTasksOpen(true) : undefined}
+            hostTaskBadge={hostCenter.claimable}
             onOpenViewers={() => setViewersOpen(true)}
             onOpenContributors={room.host?.id ? () => setContributorsOpen(true) : undefined}
             statusChip={
@@ -675,11 +678,7 @@ useEffect(() => {
               isLive || (isWaiting && !isHost) ? (
                 <TopCards
                   task={starTask}
-                  canManage={canManageStarTarget}
-                  saving={starSaving}
                   claiming={starClaiming}
-                  onSetTask={setStarTask}
-                  onCancelTask={cancelStarTask}
                   onClaimTask={async () => {
                     await claimStarTask().catch(() => {});
                   }}
@@ -926,6 +925,17 @@ useEffect(() => {
         )}
 
         {/* Viewer list */}
+
+        {isHost && (
+          <HostTaskCenterModal
+            open={hostTasksOpen}
+            onClose={() => setHostTasksOpen(false)}
+            data={hostCenter.data}
+            loading={hostCenter.loading}
+            claimingId={hostCenter.claimingId}
+            onClaim={(id) => void hostCenter.claim(id)}
+          />
+        )}
 
         {viewersOpen && (
           <ViewerListSheet

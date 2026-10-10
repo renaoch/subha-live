@@ -1,11 +1,15 @@
 import { z } from "zod";
 
 const audienceSchema = z.enum(["all", "new_users", "existing_users"]);
+const categorySchema = z.enum(["daily", "weekly", "special"]);
+const genderSchema = z.enum(["all", "male", "female"]);
 const statusSchema = z.enum(["active", "inactive", "ended"]);
 
 export const createHostTaskSchema = z.object({
   title: z.string().min(1).max(80),
   description: z.string().max(500).optional(),
+  category: categorySchema.default("daily"),
+  targetGender: genderSchema.default("all"),
   audience: audienceSchema.default("all"),
   // Only meaningful when audience is "new_users" / "existing_users"; kept
   // as a plain number of days rather than a duration string so the
@@ -33,6 +37,8 @@ export type CreateHostTaskInput = z.infer<typeof createHostTaskSchema>;
 export const updateHostTaskSchema = z.object({
   title: z.string().min(1).max(80).optional(),
   description: z.string().max(500).optional(),
+  category: categorySchema.optional(),
+  targetGender: genderSchema.optional(),
   audience: audienceSchema.optional(),
   newUserWindowDays: z.coerce.number().int().positive().max(365).optional(),
   targetHours: z.coerce.number().positive().max(10_000).optional(),

@@ -95,3 +95,15 @@ export async function cancelRoomTask(
     next(error);
   }
 }
+
+export async function adminListStarTargets(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) {
+      throw new AppError(401, "Authentication required", { code: "AUTHENTICATION_REQUIRED" });
+    }
+    const data = await roomTaskService.adminList(req.user.id);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}

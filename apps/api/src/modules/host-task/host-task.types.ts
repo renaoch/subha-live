@@ -6,14 +6,19 @@
 
 export type HostTaskAudience = "all" | "new_users" | "existing_users";
 export type HostTaskStatus = "active" | "inactive" | "ended";
+export type HostTaskCategory = "daily" | "weekly" | "special";
+export type HostTaskGender = "all" | "male" | "female";
 export type HostTaskProgressStatus = "in_progress" | "completed" | "claimed";
 
 export interface HostTaskRow {
   id: string;
-  room_id: string;
+  /** NULL = global task (applies to every host in every room). */
+  room_id: string | null;
   created_by: string;
   title: string;
   description: string;
+  category: HostTaskCategory;
+  target_gender: HostTaskGender;
   audience: HostTaskAudience;
   new_user_window_days: number;
   target_hours: number | null;
@@ -43,10 +48,12 @@ export interface HostTaskProgressRow {
 
 export interface HostTaskConfig {
   id: string;
-  roomId: string;
+  roomId: string | null;
   createdBy: string;
   title: string;
   description: string;
+  category: HostTaskCategory;
+  targetGender: HostTaskGender;
   audience: HostTaskAudience;
   newUserWindowDays: number;
   targetHours: number | null;
@@ -102,6 +109,8 @@ export function toHostTaskConfig(row: HostTaskRow): HostTaskConfig {
     createdBy: row.created_by,
     title: row.title,
     description: row.description,
+    category: row.category ?? "daily",
+    targetGender: row.target_gender ?? "all",
     audience: row.audience,
     newUserWindowDays: row.new_user_window_days,
     targetHours: row.target_hours,

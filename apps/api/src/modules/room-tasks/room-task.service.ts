@@ -49,6 +49,47 @@ async function assertCanManage(
 }
 
 export const roomTaskService = {
+  /** Admin console: the newest Star Targets across every room, with room + host names. */
+  async adminList(actorId: string, limit = 50): Promise<Array<RoomTask & { roomTitle: string | null; hostName: string | null }>> {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", actorId)
+      .maybeSingle();
+    if (!profile?.is_admin) {
+      throw new AppError(403, "Admin access required", { code: "ADMIN_REQUIRED" });
+    }
+
+    const { data, error } = await supabase
+      .from("room_tasks")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(Math.min(Math.max(limit, 1), 200));
+    if (error) {
+      throw new AppError(500, "Failed to list star targets", {
+        code: "ROOM_TASK_LIST_FAILED",
+        details: error.message,
+      });
+    }
+
+    const rows = (data ?? []) as RoomTaskRow[];
+    const roomIds = [...new Set(rows.map((r) => r.room_id))];
+    const hostIds = [...new Set(rows.map((r) => r.host_id))];
+
+    const [{ data: rooms }, { data: hosts }] = await Promise.all([
+      roomIds.length ? supabase.from("rooms").select("id, title").in("id", roomIds) : Promise.resolve({ data: [] as Array<{ id: string; title: string }> }),
+      hostIds.length ? supabase.from("profiles").select("id, name").in("id", hostIds) : Promise.resolve({ data: [] as Array<{ id: string; name: string | null }> }),
+    ]);
+    const roomTitle = new Map((rooms ?? []).map((r) => [r.id, r.title as string | null]));
+    const hostName = new Map((hosts ?? []).map((h) => [h.id, h.name as string | null]));
+
+    return rows.map((row) => ({
+      ...toRoomTask(row),
+      roomTitle: roomTitle.get(row.room_id) ?? null,
+      hostName: hostName.get(row.host_id) ?? null,
+    }));
+  },
+
   /**
    * Public read — viewers and the host both poll this for the live progress
    * bar. Also returns the most recently completed/cancelled task briefly so

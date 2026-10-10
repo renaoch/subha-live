@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  matchesTargetGender,
+  normalizeGender,
+  creditableSeconds,
   computeTaskPercent,
   deriveViewerState,
   isNewUser,
@@ -158,5 +161,40 @@ describe("remainingMs", () => {
 
   it("clamps to zero once expired", () => {
     expect(remainingMs(new Date(NOW - 10_000).toISOString(), NOW)).toBe(0);
+  });
+});
+
+describe("gender targeting", () => {
+  it("normalises free-text gender", () => {
+    expect(normalizeGender("Male")).toBe("male");
+    expect(normalizeGender(" FEMALE ")).toBe("female");
+    expect(normalizeGender("prefer_not_to_say")).toBeNull();
+    expect(normalizeGender(null)).toBeNull();
+  });
+  it("'all' matches everyone, including unknown gender", () => {
+    expect(matchesTargetGender("all", null)).toBe(true);
+    expect(matchesTargetGender(undefined, "other")).toBe(true);
+  });
+  it("male/female tasks only match that gender", () => {
+    expect(matchesTargetGender("female", "Female")).toBe(true);
+    expect(matchesTargetGender("female", "male")).toBe(false);
+    expect(matchesTargetGender("male", null)).toBe(false);
+    expect(matchesTargetGender("male", "other")).toBe(false);
+  });
+});
+
+describe("creditableSeconds (heartbeat clamp)", () => {
+  const t = 1_000_000;
+  it("never credits the 86400s a client might claim", () => {
+    expect(creditableSeconds(86_400, t - 30_000, t)).toBe(30);
+    expect(creditableSeconds(86_400, null, t)).toBe(30);
+  });
+  it("is bounded by the per-beat max", () => {
+    expect(creditableSeconds(600, t - 10 * 60_000, t)).toBe(120);
+  });
+  it("is bounded by the claimed value and ignores junk", () => {
+    expect(creditableSeconds(15, t - 60_000, t)).toBe(15);
+    expect(creditableSeconds(-5, t - 60_000, t)).toBe(0);
+    expect(creditableSeconds(Number.NaN, t - 60_000, t)).toBe(0);
   });
 });
