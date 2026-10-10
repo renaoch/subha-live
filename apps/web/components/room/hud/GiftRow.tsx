@@ -34,7 +34,9 @@ export function GiftRow({
 
   return (
     <div className={`gift-row gift-${tier} relative`}>
-      <div className="gift-pill relative flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3">
+      {/* Same footprint as the "joined" pill: 212px wide, two lines. The art
+          overhangs to the right, into the chat column's right padding. */}
+      <div className="gift-pill relative flex w-[212px] items-center gap-2 rounded-full py-1 pl-1 pr-3">
         <span className="gift-sweep pointer-events-none absolute inset-0 overflow-hidden rounded-full" aria-hidden>
           <span className="gift-sweep-bar absolute inset-y-0 -left-1/3 w-1/3" />
         </span>
@@ -42,47 +44,43 @@ export function GiftRow({
         <button type="button" onClick={onOpenProfile} className="relative z-10 shrink-0">
           {avatar ? (
             // eslint-disable-next-line @next/next/no-img-element -- remote user avatar
-            <img src={avatar} alt={username} className="h-9 w-9 rounded-full object-cover ring-2 ring-[#ff7aa8]" />
+            <img src={avatar} alt={username} className="h-8 w-8 rounded-full object-cover ring-2 ring-[#ff7aa8]" />
           ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#5a1a38] text-[13px] font-bold text-white ring-2 ring-[#ff7aa8]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#5a1a38] text-[12px] font-bold text-white ring-2 ring-[#ff7aa8]">
               {username.trim().slice(0, 1).toUpperCase() || "?"}
             </span>
           )}
         </button>
 
-        <span className="relative z-10 flex items-center gap-1.5 text-[15px] font-semibold text-white">
-          <span className="max-w-[88px] truncate">{username}</span>
-          {level ? <LevelGem level={level} /> : null}
-          <UserTags tags={tags} />
-          <span className="whitespace-nowrap text-[#ffd27a]">Sent {gift?.name ?? "a gift"}</span>
-          {art && (
-            <GiftImage
-              gift={art}
-              fallbackIcon={Gift}
-              className="flex h-6 w-6 shrink-0 items-center justify-center"
-              imgClassName="h-6 w-6 object-contain"
-            />
-          )}
-          {qty > 1 && (
-            <span key={qty} className="gift-count font-extrabold text-white">
-              x{qty}
-            </span>
-          )}
-        </span>
+        <div className="relative z-10 min-w-0 flex-1 pr-9">
+          <div className="flex items-center gap-1">
+            <span className="min-w-0 truncate text-[13px] font-bold leading-[1.15] text-white">{username}</span>
+            {level ? <LevelGem level={level} className="px-1 py-px text-[9.5px] [&>svg]:h-[9px] [&>svg]:w-[9px]" /> : null}
+            <UserTags tags={tags} className="px-1 py-px text-[9px]" />
+          </div>
+          <p className="flex items-center gap-1.5 leading-[1.15]">
+            <span className="min-w-0 truncate text-[11.5px] font-semibold text-[#ffd27a]">Sent {gift?.name ?? "a gift"}</span>
+            {qty > 1 && (
+              <span key={qty} className="gift-amount text-[15px] font-black italic tracking-tight">
+                x{qty}
+              </span>
+            )}
+          </p>
+        </div>
 
         {art && (
-          <span className="gift-art pointer-events-none absolute -right-[64px] -top-7 z-20 flex h-[88px] w-[88px] items-center justify-center">
-            <span key={`burst-${qty}`} className="gift-burst absolute inset-3 rounded-full" aria-hidden />
+          <span className="gift-art pointer-events-none absolute -right-[34px] -top-[13px] z-20 flex h-[66px] w-[66px] items-center justify-center">
+            <span key={`burst-${qty}`} className="gift-burst absolute inset-2 rounded-full" aria-hidden />
             <span className="gift-float flex h-full w-full items-center justify-center">
               <GiftImage
                 gift={art}
                 fallbackIcon={Gift}
-                className="flex h-full w-full items-center justify-center"
-                imgClassName="h-[88px] w-[88px] object-contain drop-shadow-[0_6px_16px_rgba(255,50,120,0.7)]"
+                className="gift-img-glow flex h-full w-full items-center justify-center"
+                imgClassName="h-[60px] w-[60px] object-contain"
               />
             </span>
             {SPARKS.map((s, i) => (
-              <span key={`${qty}-${i}`} className={`gift-spark gift-spark-${i} absolute left-1/2 top-1/2 text-[13px]`} aria-hidden>
+              <span key={`${qty}-${i}`} className={`gift-spark gift-spark-${i} absolute left-1/2 top-1/2 text-[11px]`} aria-hidden>
                 {s}
               </span>
             ))}
@@ -95,7 +93,7 @@ export function GiftRow({
           animation: gift-in 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both;
           transform-origin: left center;
           --glow: 255, 50, 120;
-          --glow-a: 0.55;
+          --glow-a: 0.5;
         }
         .gift-hot { --glow: 255, 140, 40; --glow-a: 0.7; }
         .gift-mega { --glow: 190, 90, 255; --glow-a: 0.85; }
@@ -113,7 +111,19 @@ export function GiftRow({
           transform: skewX(-20deg);
           animation: gift-sweep 2.2s ease-in-out 0.5s infinite;
         }
-        .gift-count { display: inline-block; animation: gift-count-pop 0.5s cubic-bezier(0.34, 1.8, 0.64, 1) both; }
+        /* Amount: pops on every combo tick, then keeps breathing a deep glow. */
+        .gift-amount {
+          display: inline-block;
+          flex-shrink: 0;
+          color: #fff;
+          animation:
+            gift-count-pop 0.5s cubic-bezier(0.34, 1.8, 0.64, 1) both,
+            gift-amount-glow 1.5s ease-in-out 0.5s infinite;
+        }
+        /* Gift art: same breathing glow, in the tier colour. */
+        :global(.gift-img-glow) {
+          animation: gift-img-glow 1.5s ease-in-out infinite;
+        }
         .gift-float { animation: gift-float 2s ease-in-out infinite; }
         .gift-art { animation: gift-art-in 0.7s 0.1s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
         .gift-burst {
@@ -135,6 +145,14 @@ export function GiftRow({
         @keyframes gift-glow {
           0%, 100% { box-shadow: inset 0 0 0 1.5px rgba(var(--glow), 0.95), 0 0 14px rgba(var(--glow), calc(var(--glow-a) * 0.7)); }
           50%      { box-shadow: inset 0 0 0 2px rgba(var(--glow), 1), 0 0 28px rgba(var(--glow), var(--glow-a)), 0 0 46px rgba(var(--glow), 0.25); }
+        }
+        @keyframes gift-amount-glow {
+          0%, 100% { text-shadow: 0 0 4px rgba(var(--glow), 0.9), 0 0 10px rgba(var(--glow), 0.6); }
+          50%      { text-shadow: 0 0 8px rgba(var(--glow), 1), 0 0 18px rgba(var(--glow), 0.95), 0 0 34px rgba(var(--glow), 0.7), 0 0 52px rgba(var(--glow), 0.4); }
+        }
+        @keyframes gift-img-glow {
+          0%, 100% { filter: drop-shadow(0 0 5px rgba(var(--glow), 0.85)) drop-shadow(0 0 12px rgba(var(--glow), 0.5)); }
+          50%      { filter: drop-shadow(0 0 9px rgba(var(--glow), 1)) drop-shadow(0 0 20px rgba(var(--glow), 0.9)) drop-shadow(0 0 34px rgba(var(--glow), 0.55)); }
         }
         @keyframes gift-sweep {
           0%   { left: -40%; opacity: 0; }
@@ -164,7 +182,7 @@ export function GiftRow({
           100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.2) rotate(40deg); }
         }
         @media (prefers-reduced-motion: reduce) {
-          .gift-row, .gift-pill, .gift-sweep-bar, .gift-count, .gift-float, .gift-art, .gift-burst, .gift-spark { animation: none; }
+          .gift-row, .gift-pill, .gift-sweep-bar, .gift-amount, :global(.gift-img-glow), .gift-float, .gift-art, .gift-burst, .gift-spark { animation: none; }
           .gift-spark { display: none; }
         }
       `}</style>

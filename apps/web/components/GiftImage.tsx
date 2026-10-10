@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
-import { giftImageCandidates } from "@/lib/gift-image";
+import { getCachedGiftImage, resolveGiftImage } from "@/lib/gift-image-cache";
 
 interface GiftImageProps {
   gift: { code?: string; icon?: string };
@@ -15,21 +15,28 @@ interface GiftImageProps {
 }
 
 /**
- * Renders the gift's artwork from the Supabase "gift-image" storage
- * bucket (files named gift-1.png .. gift-10.png by catalog position).
- * Tries each candidate URL in order; if all of them fail to load (e.g.
- * no image uploaded yet for that slot), falls back to the lucide icon
- * that used to be the only visual for gifts.
+ * Renders the gift's artwork from the Supabase "gift-image" storage bucket.
+ *
+ * The working URL is resolved once and cached (memory + localStorage, see
+ * lib/gift-image-cache.ts), and the whole catalog is preloaded when a room
+ * opens — so on a cache hit this renders the finished <img> on the very first
+ * paint, with no probing and no flash of the fallback icon. Only a genuine
+ * first-ever miss falls back to the lucide icon while it resolves.
  */
 export function GiftImage({ gift, fallbackIcon: Icon, position, className, imgClassName }: GiftImageProps) {
-  const [candidates] = useState(() => giftImageCandidates(gift, position));
-  const [index, setIndex] = useState(0);
+  const [src, setSrc] = useState<string | null | undefined>(() => getCachedGiftImage(gift, position));
 
   useEffect(() => {
-    setIndex(0);
-  }, [candidates]);
-
-  const src = candidates[index];
+    if (src) return;
+    let cancelled = false;
+    void resolveGiftImage(gift, position).then((url) => {
+      if (!cancelled) setSrc(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gift.code, gift.icon, position]);
 
   if (!src) {
     return (
@@ -47,7 +54,8 @@ export function GiftImage({ gift, fallbackIcon: Icon, position, className, imgCl
         alt=""
         className={imgClassName}
         draggable={false}
-        onError={() => setIndex((i) => i + 1)}
+        decoding="async"
+        onError={() => setSrc(null)}
       />
     </div>
   );

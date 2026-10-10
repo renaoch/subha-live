@@ -93,6 +93,7 @@ import { ViewerListSheet } from '@/components/ViewerListSheet';
 
 import { UserProfilePopup } from '@/components/room/UserProfilePopup';
 import { cameraFilterCss } from '@/lib/camera-filters';
+import { preloadGiftImages } from '@/lib/gift-image-cache';
 
 
 
@@ -301,6 +302,23 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
     claim: claimStarTask,
     refetch: refetchStarTask,
   } = useRoomTask(room?.id ?? '', room?.status);
+
+  // Warm every gift image as soon as the room opens, so gift rows, the picker
+  // and the send animation render their art instantly instead of downloading
+  // it after the gift lands.
+  useEffect(() => {
+    if (!room?.id) return;
+    let cancelled = false;
+    financialApi
+      .giftCatalog()
+      .then((gifts) => {
+        if (!cancelled) preloadGiftImages(gifts);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [room?.id]);
   const challenge = useRoomChallenge(room?.id ?? '', !!room?.id && isLive, sessionGiftTotals.giftCount);
   // Right rail: watch-time gift box + Wish Box (Lucky Spin reuses the Lucky game).
   const liveBox = useLiveBox(room?.id ?? '', !!room?.id && isLive && !isHost);
