@@ -42,6 +42,14 @@ import { useRoomChallenge } from '@/hooks/useRoomChallenge';
 
 import { TopCards } from '@/components/room/hud/TopCards';
 
+import { useLiveBox } from '@/hooks/useLiveBox';
+
+import { useRoomWishes } from '@/hooks/useRoomWishes';
+
+import { GiftBoxButton, LuckySpinButton, WishBoxButton } from '@/components/room/hud/RightRail';
+
+import { WishBoxSheet } from '@/components/room/hud/WishBoxSheet';
+
 import type { MicMode } from '@/components/RoomChat';
 
 import { useRoomChat } from '@/hooks/useRoomChat';
@@ -293,6 +301,10 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
     refetch: refetchStarTask,
   } = useRoomTask(room?.id ?? '', room?.status);
   const challenge = useRoomChallenge(room?.id ?? '', !!room?.id && isLive, sessionGiftTotals.giftCount);
+  // Right rail: watch-time gift box + Wish Box (Lucky Spin reuses the Lucky game).
+  const liveBox = useLiveBox(room?.id ?? '', !!room?.id && isLive && !isHost);
+  const wishes = useRoomWishes(room?.id ?? '', !!room?.id && isLive, sessionGiftTotals.giftCount);
+
   useEffect(() => {
     if (sessionGiftTotals.giftCount > 0) void refetchStarTask();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -312,6 +324,7 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
 
   const [gamesOpen, setGamesOpen] = useState(false);
   const [luckyOpen, setLuckyOpen] = useState(false);
+  const [wishOpen, setWishOpen] = useState(false);
 
   const [micEnabled, setMicEnabled] = useState(true);
 
@@ -667,7 +680,7 @@ useEffect(() => {
             dock would just duplicate it there. */}
 
         {room.media_type !== "audio" && !(isHost && isWaiting) && (
-          <SpeakerDock speakers={dockSpeakers} topOffset={330} />
+          <SpeakerDock speakers={dockSpeakers} topOffset={330} side="left" />
         )}
 
 
@@ -949,6 +962,44 @@ useEffect(() => {
           onOpenProfile={setProfileUserId}
 
         />
+
+        {/* Right rail: gift box · lucky spin · wish box */}
+        {isLive && room?.id && (
+          <div className="absolute right-3 top-[300px] z-30 flex flex-col items-center gap-3">
+            {!isHost && liveBox.status?.available && (
+              <GiftBoxButton
+                status={liveBox.status}
+                remainingMs={liveBox.remainingMs}
+                ready={liveBox.ready}
+                exhausted={liveBox.exhausted}
+                claiming={liveBox.claiming}
+                onPress={() => {
+                  if (liveBox.ready) void liveBox.claim();
+                  else if (liveBox.exhausted) toast.info("You've opened all of today's gift boxes");
+                  else toast.info('Keep watching — your gift box opens when the timer ends');
+                }}
+              />
+            )}
+            <LuckySpinButton onPress={() => setLuckyOpen(true)} />
+            {(isHost || (wishes.data?.total ?? 0) > 0) && (
+              <WishBoxButton
+                fulfilled={wishes.data?.fulfilled ?? 0}
+                total={wishes.data?.total ?? 0}
+                onPress={() => setWishOpen(true)}
+              />
+            )}
+          </div>
+        )}
+        {wishOpen && (
+          <WishBoxSheet
+            data={wishes.data}
+            isHost={isHost}
+            saving={wishes.saving}
+            onClose={() => setWishOpen(false)}
+            onSave={wishes.save}
+            onSendGift={() => setGiftSheetOpen(true)}
+          />
+        )}
 
         {/* Games launcher + Subha Lucky game */}
         <GamesSheet

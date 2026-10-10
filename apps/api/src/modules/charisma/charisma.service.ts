@@ -13,6 +13,7 @@ import type {
 import type { GiftListQuery, SendGiftInput } from "./charisma.schema";
 
 import { roomTaskService } from "../room-tasks/room-task.service";
+import { wishService } from "../wishes/wish.service";
 import { hostTaskService } from "../host-task/host-task.service";
 import { pkService } from "../pk/pk.service";
 import { getGiftCatalogItem, sendGiftTransaction } from "../financial/financial.service";
@@ -457,6 +458,9 @@ export async function sendGift(
     roomTaskService.bumpProgress(input.roomId, catalogItem.coinPrice).catch((err) => {
       console.error("[sendGift] failed to bump room task progress:", err);
     });
+
+    // Wish Box: a gift the host wished for moves that wish toward its target.
+    void wishService.applyGift(input.roomId, input.giftId);
 
     // Per-user "coins earned from this room" progress: the gift's recipient
     // (typically the host) earns coin-progress toward any active eligible

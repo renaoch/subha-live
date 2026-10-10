@@ -16,6 +16,8 @@ interface SpeakerDockProps {
   speakers: DockSpeaker[];
   /** Nudge the stack down when other floating UI (e.g. the stage button) is above it. */
   topOffset?: number;
+  /** Which edge the stack hugs. Left when the right rail is occupied by room widgets. */
+  side?: 'left' | 'right';
 }
 
 /**
@@ -25,12 +27,12 @@ interface SpeakerDockProps {
  * of whether the AudioStageModal sheet is open. Each circle shows the
  * speaker's avatar and animates a glowing ring while they're talking.
  */
-export function SpeakerDock({ speakers, topOffset = 96 }: SpeakerDockProps) {
+export function SpeakerDock({ speakers, topOffset = 96, side = 'right' }: SpeakerDockProps) {
   if (speakers.length === 0) return null;
 
   return (
     <div
-      className="absolute right-[13px] z-30 flex flex-col items-center gap-2.5"
+      className={`absolute ${side === 'left' ? 'left-[13px]' : 'right-[13px]'} z-30 flex flex-col items-center gap-2.5`}
       style={{ top: topOffset }}
     >
       {speakers.map((speaker) => (
