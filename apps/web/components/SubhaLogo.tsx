@@ -6,7 +6,7 @@ export function SubhaLogo({ className = "" }: { className?: string }) {
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        {/* The golden/cream gradient for the text */}
+        {/* The golden/ cream gradient for the text */}
         <linearGradient id="textGradient" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stopColor="#FFF8E7" />
           <stop offset="40%" stopColor="#FFE4A1" />
