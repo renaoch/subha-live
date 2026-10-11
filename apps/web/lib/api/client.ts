@@ -1,6 +1,7 @@
 // File: apps/web/lib/api/client.ts
 
 import { createClient } from "@/lib/supabase/client";
+import { reportBanFromError } from "@/lib/ban-store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -185,6 +186,11 @@ export async function apiFetch<T>(
       // Response was not JSON.
     }
 
+    // The account was banned: ANY route can say so. Raise the ban screen
+    // immediately instead of waiting for the next status poll.
+    if (response.status === 403 && code === "ACCOUNT_BANNED") {
+      reportBanFromError(details);
+    }
     throw new ApiError(message, {
       status: response.status,
       code,

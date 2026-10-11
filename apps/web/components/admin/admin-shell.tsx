@@ -13,6 +13,7 @@ import {
   Radio,
   Search,
   Trophy,
+  UsersRound,
   Star,
 } from "lucide-react";
 
@@ -37,6 +38,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin", label: "Rooms", icon: LayoutGrid },
       { href: "/admin/star-targets", label: "Star targets", icon: Star },
       { href: "/admin/manage-tasks", label: "Manage tasks", icon: Target },
+      { href: "/admin/users", label: "Users", icon: UsersRound },
       { href: "/admin/challenges", label: "Challenges", icon: Trophy },
     ],
   },
@@ -57,6 +59,7 @@ const SECTION_TITLES: Record<string, { title: string; crumb: string }> = {
   "/admin/star-targets": { title: "Star targets", crumb: "Star targets" },
   "/admin/manage-tasks": { title: "Manage tasks", crumb: "Manage tasks" },
   "/admin/challenges": { title: "Regional challenges", crumb: "Challenges" },
+  "/admin/users": { title: "Users", crumb: "Users" },
   "/admin/bd-applications": {
     title: "BD applications",
     crumb: "BD applications",

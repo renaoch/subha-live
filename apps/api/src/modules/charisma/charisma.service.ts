@@ -12,7 +12,6 @@ import type {
 
 import type { GiftListQuery, SendGiftInput } from "./charisma.schema";
 
-import { roomTaskService } from "../room-tasks/room-task.service";
 import { wishService } from "../wishes/wish.service";
 import { hostTaskService } from "../host-task/host-task.service";
 import { pkService } from "../pk/pk.service";
@@ -474,9 +473,10 @@ export async function sendGift(
   // task/goal running, count its value toward that goal. Never let a
   // task-progress hiccup fail the gift itself.
   if (input.roomId) {
-    roomTaskService.bumpProgress(input.roomId, chargedValue).catch((err) => {
-      console.error("[sendGift] failed to bump room task progress:", err);
-    });
+    // NOTE: the Star Target is NOT bumped here any more. A trigger on
+    // gift_transactions adds each gift's coins inside the payment transaction
+    // itself, so the bar always equals what the host received (see
+    // 20261010040000_*.sql). Bumping here too would double-count.
 
     // Wish Box: a gift the host wished for moves that wish toward its target.
     // (the SQL applies one gift at a time, so replay it once per unit, in order)

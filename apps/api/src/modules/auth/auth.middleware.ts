@@ -25,6 +25,7 @@ import { Request, Response, NextFunction } from "express";
 import { jwtVerify, createRemoteJWKSet } from "jose";
 import { AppError } from "../../errors/app-error";
 import { logger } from "../../lib/logger";
+import { assertNotBanned, getActiveBan } from "../moderation/ban.service";
 
 if (!process.env.SUPABASE_URL) {
   throw new Error("SUPABASE_URL must be set in environment variables.");
@@ -47,6 +48,17 @@ interface SupabaseJwtPayload {
   aud?: string | string[];
   exp?: number;
   [key: string]: unknown;
+}
+
+/**
+ * The only authenticated route a banned user may still reach: the ban-status
+ * check the app uses to render the ban screen (and notice when a temporary ban
+ * ends). Everything else is refused with 403 ACCOUNT_BANNED.
+ */
+const BAN_STATUS_PATH = "/api/v1/moderation/me/ban";
+
+function isBanStatusRequest(req: Request): boolean {
+  return req.method === "GET" && req.originalUrl.split("?")[0].replace(/\/+$/, "") === BAN_STATUS_PATH;
 }
 
 export async function authMiddleware(
@@ -115,12 +127,23 @@ export async function authMiddleware(
       role: payload.role,
     } as Request["user"];
 
+    // Single choke point: EVERY authenticated API route passes through here, so
+    // a banned account can't call anything — even with a valid token and even if
+    // it bypasses the ban screen in the app. (The realtime chat service forwards
+    // the user's token to the API, so it's refused here too.)
+    if (!isBanStatusRequest(req)) {
+      await assertNotBanned(payload.sub);
+    }
+
     next();
   } catch (error) {
-    logger.error("Authentication middleware error", {
-      requestId: req.requestId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    // A banned user hitting the API is expected, not an operator-worthy error.
+    if (!(error instanceof AppError && error.code === "ACCOUNT_BANNED")) {
+      logger.error("Authentication middleware error", {
+        requestId: req.requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     next(error);
   }
 }
@@ -152,7 +175,8 @@ export async function optionalAuthMiddleware(
   try {
     const result = await jwtVerify(token, JWKS, { audience: "authenticated" });
     const payload = result.payload as SupabaseJwtPayload;
-    if (payload.sub) {
+    if (payload.sub && !(await getActiveBan(payload.sub))) {
+      // A banned account is treated as anonymous on public routes too.
       req.user = {
         id: payload.sub,
         email: payload.email,

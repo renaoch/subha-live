@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { AuthListener } from "@/components/providers/auth-listener";
 import { NativeBridge } from "@/components/providers/native-bridge";
+import { BanGuard } from "@/components/providers/ban-guard";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -41,6 +42,7 @@ export default function RootLayout({
           <QueryProvider>
             <AuthListener />
             <NativeBridge />
+            <BanGuard />
             {children}
           </QueryProvider>
           <Toaster

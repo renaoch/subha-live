@@ -50,7 +50,8 @@ export function StarTargetCard({ task, claiming, onClaim }: StarTargetCardProps)
   const live = task && (task.status === "active" || task.status === "completed") ? task : null;
 
   if (!live) return null;
-  const countLen = `${live.currentValue}/${live.targetValue}`.length;
+  const shown = Math.min(live.currentValue, live.targetValue);
+  const countLen = `${shown}/${live.targetValue}`.length;
 
   return (
     <>
@@ -72,7 +73,7 @@ export function StarTargetCard({ task, claiming, onClaim }: StarTargetCardProps)
                 countLen > 11 ? "text-[11px]" : countLen > 9 ? "text-[12px]" : "text-[13px]"
               }`}
             >
-              {live.currentValue}/{live.targetValue}
+              {shown}/{live.targetValue}
             </span>
           </span>
         </span>
