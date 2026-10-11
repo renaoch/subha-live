@@ -5,6 +5,7 @@ import roomOverviewRoutes from "../room-overview/room-overview.routes";
 import { authMiddleware } from "../auth/auth.middleware";
 import { listRooms, createRoom, getRoom, startRoom, endRoom, authorizeRoom } from "./room.controller";
 import { joinRoom, leaveRoom } from "./room-participant.controller";
+import { reportRoom } from "./room-report.controller";
 import {
   createSpeakerRequest,
   cancelSpeakerRequest,
@@ -27,6 +28,7 @@ router.post("/:id/end", authMiddleware, endRoom);
 
 router.post("/:id/join", authMiddleware, joinRoom);
 router.post("/:id/leave", authMiddleware, leaveRoom);
+router.post("/:id/report", authMiddleware, reportRoom);
 
 router.post("/:id/speaker-request", authMiddleware, createSpeakerRequest);
 router.delete("/:id/speaker-request", authMiddleware, cancelSpeakerRequest);
