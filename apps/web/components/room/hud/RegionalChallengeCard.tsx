@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ChevronRight, Loader2, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { Portal } from "@/components/room/hud/Portal";
 import { challengesApi, type ChallengeStanding, type RoomChallenge } from "@/lib/api/challenges";
 import { useCountdown } from "@/hooks/useRoomChallenge";
 
@@ -73,7 +74,11 @@ export function RegionalChallengeCard({
         </span>
       </button>
 
-      {open && <ChallengeSheet data={data} skewMs={skewMs} myHostId={myHostId} onClose={() => setOpen(false)} />}
+      {open && (
+        <Portal>
+          <ChallengeSheet data={data} skewMs={skewMs} myHostId={myHostId} onClose={() => setOpen(false)} />
+        </Portal>
+      )}
     </>
   );
 }
@@ -106,7 +111,7 @@ function ChallengeSheet({
   }, [c.id, data.hostStanding?.hostId]);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/55 backdrop-blur-[2px]" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/55 backdrop-blur-[2px]" onClick={onClose}>
       <div
         className="max-h-[78svh] w-full max-w-[430px] overflow-y-auto rounded-t-[28px] border-t border-[#b56bff]/30 bg-[#150d26]/95 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+20px)] pt-4 backdrop-blur-2xl"
         onClick={(e) => e.stopPropagation()}

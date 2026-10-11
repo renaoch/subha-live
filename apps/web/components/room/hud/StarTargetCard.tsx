@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronRight, Loader2, Star, X } from "lucide-react";
+import { Portal } from "@/components/room/hud/Portal";
 import type { RoomTask } from "@/lib/api/room-tasks";
 
 /** Puffy, glossy 3D gold star (vector, no data) — matches the reference art. */
@@ -108,7 +109,11 @@ export function StarTargetCard({ task, claiming, onClaim }: StarTargetCardProps)
         `}</style>
       </button>
 
-      {open && <StarTargetSheet task={live} claiming={claiming} onClose={() => setOpen(false)} onClaim={onClaim} />}
+      {open && (
+        <Portal>
+          <StarTargetSheet task={live} claiming={claiming} onClose={() => setOpen(false)} onClaim={onClaim} />
+        </Portal>
+      )}
     </>
   );
 }
@@ -128,7 +133,7 @@ function StarTargetSheet({
   const claimable = completed && task.rewardCoins > 0 && task.isClaimed === false;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/55 backdrop-blur-[2px]" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/55 backdrop-blur-[2px]" onClick={onClose}>
       <div
         className="w-full max-w-[430px] rounded-t-[28px] border-t border-white/10 bg-[#120d1c]/95 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+20px)] pt-4 backdrop-blur-2xl"
         onClick={(e) => e.stopPropagation()}
