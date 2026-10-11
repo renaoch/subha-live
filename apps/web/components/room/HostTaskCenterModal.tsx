@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ClipboardList, Coins, Loader2, Lock, Timer, X } from "lucide-react";
+import { Check, Coins, Loader2, Lock, Star, Timer, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { HostCenterData, HostTaskCategory, ViewerHostTask } from "@/lib/api/host-task";
+import type { RoomTask } from "@/lib/api/room-tasks";
 
 type Gender = HostCenterData["gender"];
 
@@ -84,9 +85,75 @@ interface Props {
   loading: boolean;
   claimingId: string | null;
   onClaim: (taskId: string) => void;
+  /** Merged Star Target: the room's live gift goal shows at the top of this same sheet. */
+  starTask?: RoomTask | null;
+  starClaiming?: boolean;
+  onClaimStar?: () => Promise<unknown>;
+  /** Host-only: also show the Daily / Weekly / Special missions under the star goal. */
+  showMissions?: boolean;
 }
 
-export function HostTaskCenterModal({ open, onClose, data, loading, claimingId, onClaim }: Props) {
+/** The room's live gift goal (admin-set) — progress bar + reward claim. */
+function StarGoal({ task, claiming, onClaim }: { task: RoomTask | null; claiming: boolean; onClaim?: () => Promise<unknown> }) {
+  const live = task && (task.status === "active" || task.status === "completed") ? task : null;
+  if (!live) {
+    return (
+      <div className="rounded-2xl border border-dashed border-white/10 px-5 py-6 text-center">
+        <Star className="mx-auto h-6 w-6 text-white/25" />
+        <p className="mt-1.5 text-[13px] font-semibold text-white/50">No live target right now</p>
+      </div>
+    );
+  }
+  const completed = live.status === "completed";
+  const claimable = completed && live.rewardCoins > 0 && live.isClaimed === false;
+  return (
+    <div className="rounded-2xl border border-[#F5B93F]/25 bg-[#F5B93F]/[0.06] p-3.5">
+      <div className="flex items-center gap-2">
+        <Star className="h-5 w-5 fill-[#ffc83d] text-[#ffe08a]" />
+        <p className="min-w-0 flex-1 truncate text-[14px] font-bold text-white">{live.title}</p>
+      </div>
+      <p className="mt-1 text-[12.5px] text-white/60">
+        {Math.min(live.currentValue, live.targetValue)} / {live.targetValue} coins gifted · {Math.floor(live.progress)}%
+      </p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full transition-[width] duration-700"
+          style={{ width: `${Math.min(100, Math.max(live.progress, 2))}%`, background: "linear-gradient(90deg,#ff4d8d,#ffb347 60%,#ffe08a)" }}
+        />
+      </div>
+      {live.rewardCoins > 0 && (
+        <p className="mt-2 text-[12.5px] font-medium text-[#ffd27a]">Everyone in the room gets +{live.rewardCoins} coins when the target is reached.</p>
+      )}
+      {claimable && onClaim && (
+        <button
+          type="button"
+          disabled={claiming}
+          onClick={() => void onClaim()}
+          className="mt-3 flex h-11 w-full items-center justify-center rounded-full text-[14px] font-bold text-[#2a1a00] disabled:opacity-70"
+          style={{ background: "linear-gradient(135deg,#ffe08a,#f5b93f)" }}
+        >
+          {claiming ? <Loader2 className="h-5 w-5 animate-spin" /> : `Claim +${live.rewardCoins} coins`}
+        </button>
+      )}
+      {completed && live.isClaimed === true && live.rewardCoins > 0 && (
+        <p className="mt-2 text-center text-[12.5px] font-semibold text-white/50">Reward claimed</p>
+      )}
+    </div>
+  );
+}
+
+export function HostTaskCenterModal({
+  open,
+  onClose,
+  data,
+  loading,
+  claimingId,
+  onClaim,
+  starTask = null,
+  starClaiming = false,
+  onClaimStar,
+  showMissions = true,
+}: Props) {
   const [tab, setTab] = useState<HostTaskCategory>("daily");
   const gender: Gender = data?.gender ?? null;
   const theme = THEME[gender ?? "neutral"];
@@ -105,7 +172,7 @@ export function HostTaskCenterModal({ open, onClose, data, loading, claimingId, 
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 backdrop-blur-[2px]" onClick={onClose}>
       <div
         role="dialog"
-        aria-label={theme.title}
+        aria-label="Star Target"
         className="flex max-h-[82dvh] w-full max-w-[430px] flex-col rounded-t-[28px] border-t border-white/10 bg-[#120d1c]/97 pt-4 backdrop-blur-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -113,19 +180,21 @@ export function HostTaskCenterModal({ open, onClose, data, loading, claimingId, 
         <div className="flex items-start justify-between px-5">
           <div className="flex items-center gap-2.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl" style={{ background: theme.accentSoft }}>
-              <ClipboardList className="h-5 w-5" style={{ color: theme.accent }} />
+              <Star className="h-5 w-5 fill-current" style={{ color: theme.accent }} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-[17px] font-bold text-white">{theme.title}</h3>
-                <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                  style={{ background: theme.accentSoft, color: theme.accent }}
-                >
-                  {theme.chip}
-                </span>
+                <h3 className="text-[17px] font-bold text-white">Star Target</h3>
+                {showMissions && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                    style={{ background: theme.accentSoft, color: theme.accent }}
+                  >
+                    {theme.chip}
+                  </span>
+                )}
               </div>
-              <p className="text-[12px] text-white/50">{theme.sub}</p>
+              <p className="text-[12px] text-white/50">{showMissions ? "Room goal + your host missions" : "Live target progress"}</p>
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-white/70">
@@ -133,6 +202,13 @@ export function HostTaskCenterModal({ open, onClose, data, loading, claimingId, 
           </button>
         </div>
 
+        {/* Room star goal */}
+        <div className="mx-5 mt-4">
+          <StarGoal task={starTask} claiming={starClaiming} onClaim={onClaimStar} />
+        </div>
+
+        {showMissions && (
+          <>
         {/* Tabs */}
         <div className="mx-5 mt-4 flex gap-1 rounded-full bg-white/5 p-1" role="tablist">
           {TABS.map((t) => {
@@ -175,6 +251,9 @@ export function HostTaskCenterModal({ open, onClose, data, loading, claimingId, 
             list.map((t) => <TaskRow key={t.id} t={t} theme={theme} claiming={claimingId === t.id} onClaim={onClaim} />)
           )}
         </div>
+          </>
+        )}
+        {!showMissions && <div className="pb-[calc(env(safe-area-inset-bottom,0px)+20px)]" />}
       </div>
     </div>
   );

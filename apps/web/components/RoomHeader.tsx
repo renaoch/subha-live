@@ -2,12 +2,12 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { ClipboardList, Plus, Star, User, X } from "lucide-react";
+import { Plus, Star, User, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { usersApi } from "@/lib/api/users";
 import { HostTaskCard } from "@/components/HostTaskCard";
-import { ExplorePill, MoreDotsButton, TopRankPill } from "@/components/room/hud/RoomPills";
+import { ExplorePill, TopRankPill } from "@/components/room/hud/RoomPills";
 import type { HostTaskStats, ViewerHostTask } from "@/lib/api/host-task";
 import type { RoomOverview } from "@/lib/api/room-overview";
 
@@ -29,8 +29,6 @@ interface RoomHeaderProps {
   onLeave: () => void;
   /** Explore pill: keep this room alive in the mini player and open the room list. */
   onExplore?: () => void;
-  /** Opens the "more" sheet (share, levels, camera…). */
-  onOpenMore?: () => void;
   currentUserId?: string | null;
   /** Real header data: host public ID, today's top gifters, host rank. */
   overview?: RoomOverview | null;
@@ -39,10 +37,6 @@ interface RoomHeaderProps {
   onClaimTask?: () => void;
   claimingTask?: boolean;
   taskStats?: HostTaskStats | null;
-  /** Host only: opens the tabbed Host Task Center. */
-  onOpenHostTasks?: () => void;
-  /** Host only: number of completed-but-unclaimed tasks (red dot). */
-  hostTaskBadge?: number;
   onOpenViewers?: () => void;
   /** Tapping the top-3 avatars opens the full contributors leaderboard. */
   onOpenContributors?: () => void;
@@ -174,7 +168,6 @@ export function RoomHeader({
   isLive,
   onLeave,
   onExplore,
-  onOpenMore,
   currentUserId,
   overview,
   task,
@@ -182,8 +175,6 @@ export function RoomHeader({
   onClaimTask,
   claimingTask,
   taskStats,
-  onOpenHostTasks,
-  hostTaskBadge,
   onOpenViewers,
   onOpenContributors,
   onOpenProfile,
@@ -267,25 +258,10 @@ export function RoomHeader({
         </div>
       </div>
 
-      {/* Pill row: rank · (more) · status … explore */}
+      {/* Pill row: rank · status … explore (the "more" button now lives next to mute in the bottom bar) */}
       <div className="relative mt-2.5 flex items-center gap-2 px-3">
         <TopRankPill rank={overview?.hostRank?.rank ?? null} />
-        {onOpenMore && <MoreDotsButton onClick={onOpenMore} />}
         {statusChip}
-        {isHost && onOpenHostTasks && (
-          <button
-            type="button"
-            onClick={onOpenHostTasks}
-            aria-label="Host tasks"
-            className="relative flex items-center gap-1.5 rounded-full border border-white/10 bg-black/45 px-2.5 py-1.5 text-[11px] font-semibold tracking-wide text-white backdrop-blur-xl transition active:scale-95"
-          >
-            <ClipboardList className="h-3.5 w-3.5" />
-            Tasks
-            {!!hostTaskBadge && hostTaskBadge > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-black/60 bg-[#ff3b5c]" />
-            )}
-          </button>
-        )}
         {onExplore && (
           <div className="ml-auto">
             <ExplorePill onClick={onExplore} />

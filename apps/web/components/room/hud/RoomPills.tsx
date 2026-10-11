@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Flame, MoreHorizontal, Orbit } from "lucide-react";
+import { ChevronRight, Flame, Orbit } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** "🔥 Top 1" — the host's rank among all hosts today. Hidden with no rank. */
@@ -32,20 +32,6 @@ export function ExplorePill({ onClick }: { onClick: () => void }) {
       <Orbit className="h-[18px] w-[18px] text-[#e2a8ff]" strokeWidth={2} />
       <span className="text-[13px] font-semibold leading-none text-[#f0c9ff]">Explore</span>
       <ChevronRight className="h-4 w-4 text-white/80" />
-    </button>
-  );
-}
-
-/** Small round "more" button (share, levels, camera…) kept next to the rank pill. */
-export function MoreDotsButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="More actions"
-      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/45 text-white/80 backdrop-blur-xl transition active:scale-90"
-    >
-      <MoreHorizontal className="h-4 w-4" />
     </button>
   );
 }

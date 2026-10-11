@@ -3,15 +3,24 @@
 
 import { useEffect } from "react";
 import {
+  Ban,
   ChevronLeft,
+  Coins,
+  Flag,
+  Gift,
   Layers,
-  Link2,
   Loader2,
+  MessageSquare,
+  MessageSquareOff,
   Mic,
+  MicOff,
   PhoneOff,
+  Share2,
+  Star,
   Users,
   X,
 } from "lucide-react";
+import type { MicMode } from "@/components/RoomChat";
 import { cn } from "@/lib/utils";
 import { SeatLevelsPanel } from "@/components/audio/SeatLevelsPanel";
 
@@ -52,6 +61,21 @@ interface RoomMoreActionsProps {
   stage?: StageMenuProps;
   view?: "menu" | "levels";
   onViewChange?: (v: "menu" | "levels") => void;
+  /** Mute / Unmute (or request-to-speak for viewers) — same behaviour as the mic button. */
+  micMode?: MicMode;
+  onMicPress?: () => void;
+  /** Chat Settings: comments on/off (local to this viewer). */
+  commentsHidden?: boolean;
+  onToggleComments?: () => void;
+  onBlockUser?: () => void;
+  /** Host-only items. */
+  onGiftHistory?: () => void;
+  onGiftEarnings?: () => void;
+  onCoinBalance?: () => void;
+  /** Merged Star Target + Tasks. */
+  onStarTarget?: () => void;
+  starTargetBadge?: number;
+  onReport?: () => void;
 }
 
 /**
@@ -62,10 +86,22 @@ interface RoomMoreActionsProps {
 export function RoomMoreActions({
   open,
   onClose,
+  isHost,
   onShare,
   stage,
   view = "menu",
   onViewChange,
+  micMode,
+  onMicPress,
+  commentsHidden,
+  onToggleComments,
+  onBlockUser,
+  onGiftHistory,
+  onGiftEarnings,
+  onCoinBalance,
+  onStarTarget,
+  starTargetBadge,
+  onReport,
 }: RoomMoreActionsProps) {
   // Lock body scroll while open
   useEffect(() => {
@@ -124,12 +160,67 @@ export function RoomMoreActions({
     });
   }
 
-  actions.push({
-    key: "share",
-    label: "Share link",
-    icon: <Link2 className="h-5 w-5" />,
-    onClick: onShare,
-  });
+  // 1 · Mute / Unmute (viewers get request-to-speak instead)
+  if (onMicPress && micMode) {
+    const label =
+      micMode === "on" ? "Mute" : micMode === "off" ? "Unmute" : micMode === "pending" ? "Cancel request" : "Request mic";
+    actions.push({
+      key: "mute",
+      label,
+      icon: micMode === "off" ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />,
+      onClick: onMicPress,
+      active: micMode === "off",
+    });
+  }
+
+  // 2 · Chat settings
+  if (onToggleComments) {
+    actions.push({
+      key: "chat",
+      label: commentsHidden ? "Comments off" : "Comments on",
+      icon: commentsHidden ? <MessageSquareOff className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />,
+      onClick: onToggleComments,
+      active: !!commentsHidden,
+    });
+  }
+
+  // 3 · Block user
+  if (onBlockUser) {
+    actions.push({ key: "block", label: "Block user", icon: <Ban className="h-5 w-5" />, onClick: onBlockUser });
+  }
+
+  // 7 / 8 · Gift history + earnings (host only)
+  if (isHost && onGiftHistory) {
+    actions.push({ key: "gift-history", label: "Gift history", icon: <Gift className="h-5 w-5" />, onClick: onGiftHistory });
+  }
+  if (isHost && onGiftEarnings) {
+    actions.push({ key: "gift-earnings", label: "Gift earnings", icon: <Coins className="h-5 w-5" />, onClick: onGiftEarnings, tone: "gold" });
+  }
+
+  // 9 · Coin balance
+  if (onCoinBalance) {
+    actions.push({ key: "coins", label: "Coin balance", icon: <Coins className="h-5 w-5" />, onClick: onCoinBalance });
+  }
+
+  // 10 · Star Target (merged with Tasks)
+  if (onStarTarget) {
+    actions.push({
+      key: "star",
+      label: "Star target",
+      icon: <Star className="h-5 w-5 fill-current" />,
+      onClick: onStarTarget,
+      tone: "gold",
+      badge: starTargetBadge,
+    });
+  }
+
+  // 11 · Share live
+  actions.push({ key: "share", label: "Share live", icon: <Share2 className="h-5 w-5" />, onClick: onShare });
+
+  // 12 · Report live (not for your own room)
+  if (!isHost && onReport) {
+    actions.push({ key: "report", label: "Report live", icon: <Flag className="h-5 w-5" />, onClick: onReport, tone: "danger" });
+  }
 
   const showLevels = !!stage && view === "levels";
 
@@ -170,7 +261,7 @@ export function RoomMoreActions({
             </button>
           ) : (
             <span className="text-[15px] font-extrabold text-white">
-              {stage ? "Party controls" : "More"}
+              More Options
             </span>
           )}
           <button

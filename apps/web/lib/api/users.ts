@@ -146,6 +146,23 @@ export const usersApi = {
     emitFollowChanged(id);
     return result;
   },
+
+  /** Block a user (POST /users/:id/block). */
+  async block(id: string) {
+    return apiFetch(`/api/v1/users/${encodeURIComponent(id)}/block`, {
+      method: "POST",
+    });
+  },
+
+  async unblock(id: string) {
+    return apiFetch(`/api/v1/users/${encodeURIComponent(id)}/block`, {
+      method: "DELETE",
+    });
+  },
+
+  async getBlockStatus(id: string): Promise<{ blocked?: boolean; isBlocked?: boolean }> {
+    return apiFetch(`/api/v1/users/${encodeURIComponent(id)}/block-status`);
+  },
 };
 
 export function mutualFriends(

@@ -28,6 +28,13 @@ import { AudioStage } from '@/components/audio/AudioStage';
 
 
 import { RoomMoreActions } from '@/components/RoomMoreActions';
+import {
+  BlockUserSheet,
+  CoinBalanceSheet,
+  GiftEarningsSheet,
+  GiftHistorySheet,
+  ReportLiveSheet,
+} from '@/components/room/sheets/RoomSheets';
 
 import { GoLiveSetup } from '@/components/GoLiveSetup';
 import { ContributorsModal } from '@/components/ContributorsModal';
@@ -352,7 +359,14 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
   const [moreView, setMoreView] = useState<'menu' | 'levels'>('menu');
 
   const [viewersOpen, setViewersOpen] = useState(false);
+  // Star Target sheet (merged with the old host Tasks center) + the More Options sub-sheets.
   const [hostTasksOpen, setHostTasksOpen] = useState(false);
+  const [commentsHidden, setCommentsHidden] = useState(false);
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [giftHistoryOpen, setGiftHistoryOpen] = useState(false);
+  const [giftEarningsOpen, setGiftEarningsOpen] = useState(false);
+  const [coinBalanceOpen, setCoinBalanceOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   // Host-only Task Center (tabs, gender-filtered by the server).
   const hostCenter = useHostCenter(room?.id ?? '', isHost && !!room?.id && (isLive || isWaiting), hostTasksOpen);
 
@@ -646,10 +660,6 @@ useEffect(() => {
             isLive={isLive}
             onLeave={handleLeave}
             onExplore={handleMinimize}
-            onOpenMore={() => {
-              setMoreView('menu');
-              setMoreOpen(true);
-            }}
             currentUserId={userId}
             overview={overview}
             onOpenProfile={setProfileUserId}
@@ -658,8 +668,6 @@ useEffect(() => {
             onClaimTask={isHost ? undefined : claim}
             claimingTask={claiming}
             taskStats={stats}
-            onOpenHostTasks={isHost ? () => setHostTasksOpen(true) : undefined}
-            hostTaskBadge={hostCenter.claimable}
             onOpenViewers={() => setViewersOpen(true)}
             onOpenContributors={room.host?.id ? () => setContributorsOpen(true) : undefined}
             statusChip={
@@ -712,6 +720,20 @@ useEffect(() => {
           isAudioRoom={room.media_type === "audio"}
           view={moreView}
           onViewChange={setMoreView}
+          micMode={micMode}
+          onMicPress={handleMicPress}
+          commentsHidden={commentsHidden}
+          onToggleComments={() => {
+            setCommentsHidden((v) => !v);
+            toast.success(commentsHidden ? 'Comments on' : 'Comments off');
+          }}
+          onBlockUser={() => setBlockOpen(true)}
+          onGiftHistory={() => setGiftHistoryOpen(true)}
+          onGiftEarnings={() => setGiftEarningsOpen(true)}
+          onCoinBalance={() => setCoinBalanceOpen(true)}
+          onStarTarget={() => setHostTasksOpen(true)}
+          starTargetBadge={isHost ? hostCenter.claimable : 0}
+          onReport={() => setReportOpen(true)}
           stage={
             isAudioRoom && isLive
               ? {
@@ -779,6 +801,11 @@ useEffect(() => {
             micMode={micMode}
             onMicPress={handleMicPress}
             onOpenProfile={setProfileUserId}
+            commentsHidden={commentsHidden}
+            onOpenMore={() => {
+              setMoreView('menu');
+              setMoreOpen(true);
+            }}
           />
         )}
 
@@ -927,16 +954,34 @@ useEffect(() => {
 
         {/* Viewer list */}
 
-        {isHost && (
-          <HostTaskCenterModal
-            open={hostTasksOpen}
-            onClose={() => setHostTasksOpen(false)}
-            data={hostCenter.data}
-            loading={hostCenter.loading}
-            claimingId={hostCenter.claimingId}
-            onClaim={(id) => void hostCenter.claim(id)}
+        {/* Star Target — one merged sheet: the room's live gift goal for everyone,
+            plus Daily / Weekly / Special host missions when you're the host. */}
+        <HostTaskCenterModal
+          open={hostTasksOpen}
+          onClose={() => setHostTasksOpen(false)}
+          data={hostCenter.data}
+          loading={hostCenter.loading}
+          claimingId={hostCenter.claimingId}
+          onClaim={(id) => void hostCenter.claim(id)}
+          starTask={starTask}
+          starClaiming={starClaiming}
+          onClaimStar={async () => {
+            await claimStarTask().catch(() => {});
+          }}
+          showMissions={isHost}
+        />
+
+        {blockOpen && <BlockUserSheet viewerIds={[...viewerIds, ...activeSpeakers.map((sp) => sp.userId).filter((id) => id !== room?.host_id)]} selfId={userId} onClose={() => setBlockOpen(false)} />}
+        {giftHistoryOpen && <GiftHistorySheet messages={chatMessages} onClose={() => setGiftHistoryOpen(false)} />}
+        {giftEarningsOpen && (
+          <GiftEarningsSheet
+            sessionDiamonds={sessionGiftTotals.totalDiamonds}
+            giftCount={sessionGiftTotals.giftCount}
+            onClose={() => setGiftEarningsOpen(false)}
           />
         )}
+        {coinBalanceOpen && <CoinBalanceSheet onClose={() => setCoinBalanceOpen(false)} />}
+        {reportOpen && room?.id && <ReportLiveSheet roomId={room.id} onClose={() => setReportOpen(false)} />}
 
         {viewersOpen && (
           <ViewerListSheet

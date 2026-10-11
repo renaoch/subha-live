@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Gamepad2, Gift, Mic, MicOff, Smile, Swords, UsersRound } from "lucide-react";
+import { Gamepad2, Gift, MoreHorizontal, Mic, MicOff, Smile, Swords, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { RoomChatMessage } from "@/lib/api/chat";
 import { LevelGem } from "@/components/room/hud/LevelGem";
@@ -33,6 +33,10 @@ interface RoomChatProps {
   micMode?: MicMode;
   onMicPress?: () => void;
   onOpenProfile?: (userId: string) => void;
+  /** 3-dot "More options" button, rendered right after the mute/mic button. */
+  onOpenMore?: () => void;
+  /** Chat Settings → comments off: hides typed messages (gifts + joins still show). */
+  commentsHidden?: boolean;
 }
 
 const EMOJIS = [
@@ -110,6 +114,8 @@ export function RoomChat({
   micMode,
   onMicPress,
   onOpenProfile,
+  onOpenMore,
+  commentsHidden = false,
 }: RoomChatProps) {
   const [draft, setDraft] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -152,7 +158,11 @@ export function RoomChat({
         className="pointer-events-auto relative z-10 mb-3 flex max-h-[34svh] flex-col items-start gap-2.5 overflow-y-auto overscroll-contain pl-3 pr-[88px] pt-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         style={{ maskImage: "linear-gradient(to bottom, transparent, black 36px)" }}
       >
-        {messages.length === 0 ? (
+        {commentsHidden && messages.every((m) => (m.kind ?? "message") === "message") ? (
+          <p className="rounded-full bg-black/40 px-3 py-1.5 text-[13px] font-medium text-white/60 backdrop-blur-md">
+            Comments are turned off
+          </p>
+        ) : messages.length === 0 ? (
           <p className="rounded-full bg-black/40 px-3 py-1.5 text-[13px] font-medium text-white/60 backdrop-blur-md">
             Say hi to the room 👋
           </p>
@@ -160,6 +170,7 @@ export function RoomChat({
           messages.map((m) => {
             const kind = m.kind ?? "message";
             const mine = !!selfUserId && m.userId === selfUserId;
+            if (commentsHidden && kind === "message") return null;
 
             if (kind === "join") {
               // The host opening their own stream isn't "someone joining".
@@ -332,6 +343,12 @@ export function RoomChat({
             ) : (
               <Mic className="h-[22px] w-[22px]" strokeWidth={1.9} />
             )}
+          </BarButton>
+        )}
+
+        {onOpenMore && (
+          <BarButton label="More options" onClick={onOpenMore} className="border-white/20 bg-black/45 text-white">
+            <MoreHorizontal className="h-[22px] w-[22px]" strokeWidth={2} />
           </BarButton>
         )}
       </div>

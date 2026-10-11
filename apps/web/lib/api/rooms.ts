@@ -289,6 +289,13 @@ export const roomsApi = {
     ).then((r) => r.data);
   },
 
+  reportRoom(id: string, input: { reason: string; details?: string }) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/report`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.data);
+  },
+
   reportStage(id: string, input: { speaking?: boolean; muted?: boolean }) {
     return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/stage/report`, {
       method: "POST",
