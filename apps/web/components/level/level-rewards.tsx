@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Coins, Crown, Gem, Lock, Sparkles, X } from "lucide-react";
 import type { LevelReward } from "@/lib/api/levels";
+import { LEVEL_TIERS, getLevelTier, getLevelTierIndex } from "@/lib/level-tiers";
 
 interface LevelRewardsProps {
   rewards: LevelReward[];
@@ -12,32 +13,11 @@ interface LevelRewardsProps {
 const TIER_SIZE = 10;
 const MAX_LEVEL = 100;
 
-/**
- * One consistent color per 10-level tier. Every item inside a tier — reward
- * or not — shares this hue. This replaces the old per-level `getLevelTheme`
- * lookup, which was assigning a near-random color to each individual reward
- * and made a single tier look like a handful of unrelated items instead of
- * one cohesive rank.
- */
-const TIER_PALETTE = [
-  { name: "Bronze", primary: "#D98F4E", accent: "#FFCF9E", glow: "rgba(217,143,78,0.4)" },
-  { name: "Silver", primary: "#AEB9C7", accent: "#EAF0F6", glow: "rgba(174,185,199,0.4)" },
-  { name: "Gold", primary: "#F5B93F", accent: "#FFE29E", glow: "rgba(245,185,63,0.42)" },
-  { name: "Platinum", primary: "#5FD9C4", accent: "#B4F5E7", glow: "rgba(95,217,196,0.4)" },
-  { name: "Diamond", primary: "#57C2FF", accent: "#B3E6FF", glow: "rgba(87,194,255,0.4)" },
-  { name: "Master", primary: "#A86CFF", accent: "#DCC2FF", glow: "rgba(168,108,255,0.42)" },
-  { name: "Grandmaster", primary: "#FF6CA8", accent: "#FFC0DA", glow: "rgba(255,108,168,0.4)" },
-  { name: "Elite", primary: "#FF8A5C", accent: "#FFCBAE", glow: "rgba(255,138,92,0.4)" },
-  { name: "Legend", primary: "#FFD24C", accent: "#FFF0B8", glow: "rgba(255,210,76,0.42)" },
-  { name: "Mythic", primary: "#F8B84E", accent: "#F8F1E6", glow: "rgba(248,184,78,0.5)" },
-] as const;
-
-function tierIndexForLevel(level: number) {
-  return Math.min(TIER_PALETTE.length - 1, Math.floor((level - 1) / TIER_SIZE));
-}
+/** Shared "Jewel King" tiers: 1–9, 10–19 … 90–99, 100. */
+const TIER_PALETTE = LEVEL_TIERS;
 
 function tierForLevel(level: number) {
-  return TIER_PALETTE[tierIndexForLevel(level)];
+  return getLevelTier(Math.max(1, level));
 }
 
 function rewardLabel(rewardType: string) {
@@ -191,10 +171,15 @@ function AllRewardsModal({
 }) {
   const tiers = useMemo(() => {
     const groups: { index: number; start: number; end: number; rungs: LadderRung[] }[] = [];
-    for (let i = 0; i < ladder.length; i += TIER_SIZE) {
-      const chunk = ladder.slice(i, i + TIER_SIZE);
-      if (chunk.length === 0) continue;
-      groups.push({ index: groups.length, start: chunk[0].level, end: chunk[chunk.length - 1].level, rungs: chunk });
+    for (const rung of ladder) {
+      const idx = getLevelTierIndex(rung.level);
+      const last = groups[groups.length - 1];
+      if (last && last.index === idx) {
+        last.rungs.push(rung);
+        last.end = rung.level;
+      } else {
+        groups.push({ index: idx, start: rung.level, end: rung.level, rungs: [rung] });
+      }
     }
     return groups;
   }, [ladder]);

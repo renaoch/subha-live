@@ -1,5 +1,6 @@
 "use client";
 
+import { getLevelTier } from "@/lib/level-tiers";
 import { useState, useRef } from "react";
 import Link from "next/link";
 import {
@@ -23,72 +24,11 @@ interface ProfileHeroProps {
   profile: PrivateProfile;
 }
 
-const TIER_PALETTE = [
-  {
-    name: "Bronze",
-    primary: "#D98F4E",
-    accent: "#FFCF9E",
-  },
-  {
-    name: "Silver",
-    primary: "#AEB9C7",
-    accent: "#EAF0F6",
-  },
-  {
-    name: "Gold",
-    primary: "#F5B93F",
-    accent: "#FFE29E",
-  },
-  {
-    name: "Platinum",
-    primary: "#5FD9C4",
-    accent: "#B4F5E7",
-  },
-  {
-    name: "Diamond",
-    primary: "#57C2FF",
-    accent: "#B3E6FF",
-  },
-  {
-    name: "Master",
-    primary: "#A86CFF",
-    accent: "#DCC2FF",
-  },
-  {
-    name: "Grandmaster",
-    primary: "#FF6CA8",
-    accent: "#FFC0DA",
-  },
-  {
-    name: "Elite",
-    primary: "#FF8A5C",
-    accent: "#FFCBAE",
-  },
-  {
-    name: "Legend",
-    primary: "#FFD24C",
-    accent: "#FFF0B8",
-  },
-  {
-    name: "Mythic",
-    primary: "#F5B93F",
-    accent: "#F8F1E6",
-  },
-] as const;
-
-const TIER_SIZE = 10;
 const MAX_LEVEL = 100;
 
+/** Shared "Jewel King" tier for a level (see lib/level-tiers.ts). */
 function tierForLevel(level: number) {
-  const index = Math.min(
-    TIER_PALETTE.length - 1,
-    Math.floor(
-      (Math.max(1, level) - 1) /
-        TIER_SIZE,
-    ),
-  );
-
-  return TIER_PALETTE[index];
+  return getLevelTier(Math.max(1, level));
 }
 
 type RoleBadge = {

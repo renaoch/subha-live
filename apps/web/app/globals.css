@@ -404,3 +404,63 @@
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
+
+/* ===== Level badges — "Jewel King" ===================================== */
+.lvl-badge {
+  --lv-from: #CDB68C; --lv-to: #F7EEDA; --lv-fg: #4A3410; --lv-glow: rgba(233,216,180,.45);
+  position: relative; isolation: isolate; overflow: hidden;
+  display: inline-flex; flex-shrink: 0; align-items: center; gap: 3px;
+  border-radius: 9999px; vertical-align: middle; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--lv-fg);
+  /* gold metallic rim (border-box gradient) around a gem body (padding-box) */
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(135deg, var(--lv-from), var(--lv-to)) padding-box,
+    linear-gradient(135deg, #FFF1B8 0%, #E8B13A 38%, #9A6A12 62%, #FFDF7A 100%) border-box;
+  box-shadow: 0 0 9px var(--lv-glow), inset 0 1px 0 rgba(255,255,255,.35);
+  text-shadow: 0 1px 1px rgba(0,0,0,.25);
+}
+.lvl-badge > * { position: relative; z-index: 1; }
+.lvl-badge svg { filter: drop-shadow(0 0 2px rgba(255,255,255,.55)); }
+.lvl-badge.lvl-fx-shine::after, .lvl-badge.lvl-fx-spark::after,
+.lvl-badge.lvl-fx-flame::after, .lvl-badge.lvl-fx-crown::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,.65) 50%, transparent 65%);
+  transform: translateX(-120%); animation: lvl-sweep 2.8s ease-in-out infinite;
+}
+.lvl-badge.lvl-fx-pulse, .lvl-badge.lvl-fx-spark { animation: lvl-pulse 2.4s ease-in-out infinite; }
+.lvl-badge.lvl-fx-prism {
+  background:
+    linear-gradient(120deg, #FF8FCB, #8FE6FF, #FFEBA8, #C9A7FF, #FF8FCB) padding-box,
+    linear-gradient(135deg, #FFF1B8 0%, #E8B13A 38%, #9A6A12 62%, #FFDF7A 100%) border-box;
+  background-size: 300% 300%, 100% 100%; animation: lvl-prism 5s linear infinite;
+}
+.lvl-badge.lvl-fx-flame {
+  background:
+    linear-gradient(135deg, var(--lv-from), var(--lv-to)) padding-box,
+    linear-gradient(120deg, #FFF1B8, #FF9E1F, #FFE27A, #B8680A, #FFF1B8) border-box;
+  background-size: 100% 100%, 300% 300%; animation: lvl-prism 3.2s linear infinite, lvl-pulse 2s ease-in-out infinite;
+}
+/* Level 100 — Crown Jewel */
+.lvl-badge.lvl-fx-crown {
+  border-width: 2px; padding-inline: 8px !important;
+  background:
+    conic-gradient(from 0deg, #3B0A6B, #FF2E93, #FFB400, #2EF2FF, #7B2CFF, #FF2E93, #3B0A6B) padding-box,
+    conic-gradient(from 0deg, #FFF6C8, #FFC400, #FFFFFF, #FFB300, #FFF6C8) border-box;
+  animation: lvl-spin-bg 4s linear infinite, lvl-crown-glow 1.8s ease-in-out infinite;
+  text-shadow: 0 0 6px rgba(255,214,90,.9), 0 1px 2px rgba(0,0,0,.6);
+}
+.lvl-badge .lvl-spark {
+  position: absolute; z-index: 3; width: 4px; height: 4px; border-radius: 9999px; background: #fff;
+  box-shadow: 0 0 6px 2px rgba(255,255,255,.9); opacity: 0; animation: lvl-twinkle 1.8s ease-in-out infinite;
+}
+.lvl-badge .lvl-spark.s1 { top: 12%; left: 14%; }
+.lvl-badge .lvl-spark.s2 { bottom: 14%; right: 12%; animation-delay: .6s; }
+.lvl-badge .lvl-spark.s3 { top: 16%; right: 28%; animation-delay: 1.1s; }
+@keyframes lvl-sweep { 0% { transform: translateX(-120%); } 55%,100% { transform: translateX(120%); } }
+@keyframes lvl-pulse { 0%,100% { box-shadow: 0 0 7px var(--lv-glow), inset 0 1px 0 rgba(255,255,255,.35); } 50% { box-shadow: 0 0 15px 2px var(--lv-glow), inset 0 1px 0 rgba(255,255,255,.45); } }
+@keyframes lvl-prism { 0% { background-position: 0% 50%, 0% 50%; } 100% { background-position: 300% 50%, 300% 50%; } }
+@keyframes lvl-spin-bg { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+@keyframes lvl-crown-glow { 0%,100% { box-shadow: 0 0 12px 2px rgba(255,210,74,.75), 0 0 26px 4px rgba(255,46,147,.45); } 50% { box-shadow: 0 0 20px 5px rgba(255,210,74,.95), 0 0 38px 8px rgba(46,242,255,.55); } }
+@keyframes lvl-twinkle { 0%,100% { opacity: 0; transform: scale(.4); } 50% { opacity: 1; transform: scale(1.2); } }
+@media (prefers-reduced-motion: reduce) { .lvl-badge, .lvl-badge::after, .lvl-badge .lvl-spark { animation: none !important; } }

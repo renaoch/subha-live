@@ -1,6 +1,7 @@
 // components/ContributorsModal.tsx
 "use client";
 
+import { LevelBadge } from "@/components/level/LevelBadge";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Coins, Loader2, RotateCcw, Trophy, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
@@ -445,14 +446,7 @@ function CoinAmount({ value, small = false }: { value: number; small?: boolean }
 }
 
 function LevelChip({ level }: { level: number }) {
-  return (
-    <span
-      className="mt-0.5 inline-flex items-center rounded-[4px] bg-white/10 px-1 py-[1px] text-[9.5px] font-bold leading-none text-[#FFD24B]"
-      style={{ boxShadow: "inset 0 0 0 1px rgba(255,210,75,0.35)" }}
-    >
-      Lv.{level}
-    </span>
-  );
+  return <LevelBadge level={level} prefix="Lv." className="mt-0.5 px-1 py-[1px] text-[9.5px] [&>svg]:h-[9px] [&>svg]:w-[9px]" />;
 }
 
 function EmptyBoard({ period }: { period: ContributorPeriod }) {

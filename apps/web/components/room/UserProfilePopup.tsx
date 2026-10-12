@@ -1,5 +1,6 @@
 "use client";
 
+import { LevelBadge } from "@/components/level/LevelBadge";
 import { useEffect, useState } from "react";
 import { ArrowLeft, BadgeCheck, Loader2, Lock, MessageCircle, SendHorizonal, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
@@ -213,9 +214,7 @@ function ProfileView({
           {profile.handle && <p className="mt-0.5 text-[13px] text-white/50">@{profile.handle}</p>}
 
           <div className="mt-3 flex items-center gap-2">
-            <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-bold text-[#FFD24B]">
-              Lv.{profile.level}
-            </span>
+            <LevelBadge level={profile.level} prefix="Lv." className="px-2.5 py-1 text-[11px]" />
             {profile.country_flag && (
               <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px]">
                 {profile.country_flag} {profile.country}
