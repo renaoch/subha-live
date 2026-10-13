@@ -9,33 +9,18 @@ import { messagesApi, type Friendship } from "@/lib/api/messages";
 import { useDmThread } from "@/hooks/useDmThread";
 import type { PublicProfile } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-// Same level-tier palette as the /home/me profile hero (profile-hero.tsx),
-// kept here as a small standalone copy so the in-room popup can match its
-// look without the hero's full animated-ring CSS. Keep these two in sync if
-// the tier colors ever change.
-const TIER_PALETTE = [
-  { primary: "#D98F4E", accent: "#FFCF9E" }, // Bronze
-  { primary: "#AEB9C7", accent: "#EAF0F6" }, // Silver
-  { primary: "#F5B93F", accent: "#FFE29E" }, // Gold
-  { primary: "#5FD9C4", accent: "#B4F5E7" }, // Platinum
-  { primary: "#57C2FF", accent: "#B3E6FF" }, // Diamond
-  { primary: "#A86CFF", accent: "#DCC2FF" }, // Master
-  { primary: "#FF6CA8", accent: "#FFC0DA" }, // Grandmaster
-  { primary: "#FF8A5C", accent: "#FFCBAE" }, // Elite
-  { primary: "#FFD24C", accent: "#FFF0B8" }, // Legend
-  { primary: "#F5B93F", accent: "#F8F1E6" }, // Mythic
-] as const;
-const TIER_SIZE = 10;
-
-function tierForLevel(level: number) {
-  const index = Math.min(TIER_PALETTE.length - 1, Math.floor((Math.max(1, level) - 1) / TIER_SIZE));
-  return TIER_PALETTE[index];
-}
+import { getLevelTier } from "@/lib/level-tiers";
+import { HostModerationBar } from "@/components/room/HostModerationBar";
 
 interface UserProfilePopupProps {
   userId: string;
   currentUserId?: string | null;
+  /** Room context: lets the host mute / remove / block from here. */
+  roomId?: string | null;
+  isHost?: boolean;
+  hostId?: string | null;
+  /** True when the tapped user is currently speaking on stage. */
+  isSpeaker?: boolean;
   onClose: () => void;
 }
 
@@ -45,7 +30,7 @@ interface UserProfilePopupProps {
  * from the room. From here, tapping "Chat" swaps to an inline DM thread
  * without leaving the room either.
  */
-export function UserProfilePopup({ userId, currentUserId, onClose }: UserProfilePopupProps) {
+export function UserProfilePopup({ userId, currentUserId, roomId, isHost, hostId, isSpeaker, onClose }: UserProfilePopupProps) {
   const [view, setView] = useState<"profile" | "chat">("profile");
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +38,7 @@ export function UserProfilePopup({ userId, currentUserId, onClose }: UserProfile
   const [followBusy, setFollowBusy] = useState(false);
 
   const isSelf = !!currentUserId && currentUserId === userId;
+  const showHostControls = !!isHost && !!roomId && !isSelf && userId !== hostId;
 
   useEffect(() => {
     let cancelled = false;
@@ -119,6 +105,8 @@ export function UserProfilePopup({ userId, currentUserId, onClose }: UserProfile
         <div className="absolute left-1/2 top-2.5 z-10 h-1 w-10 -translate-x-1/2 rounded-full bg-white/20" />
 
         {view === "profile" ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-hidden">
           <ProfileView
             loading={loading}
             profile={profile}
@@ -129,6 +117,11 @@ export function UserProfilePopup({ userId, currentUserId, onClose }: UserProfile
             onClose={onClose}
             onOpenChat={() => setView("chat")}
           />
+          </div>
+          {showHostControls && roomId ? (
+            <HostModerationBar roomId={roomId} targetId={userId} isSpeaker={!!isSpeaker} onDone={onClose} />
+          ) : null}
+          </div>
         ) : (
           <ChatView
             userId={userId}
@@ -144,7 +137,7 @@ export function UserProfilePopup({ userId, currentUserId, onClose }: UserProfile
 }
 
 function TieredAvatar({ src, name, level }: { src: string | null; name: string; level: number }) {
-  const theme = tierForLevel(level);
+  const theme = getLevelTier(level);
   return (
     <div className="relative h-20 w-20 shrink-0">
       <div

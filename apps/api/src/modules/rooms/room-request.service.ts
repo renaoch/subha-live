@@ -2,6 +2,7 @@ import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { createCoalescer } from "../../lib/coalesce";
 import { roomState } from "./room-state.service";
+import { roomModerationState } from "./room-moderation.state";
 import { roomStageService } from "./room-stage.service";
 import { resolveMaxGuestSlots } from "./room-media.service";
 import type {
@@ -53,6 +54,8 @@ const baseService = {
     input: CreateSpeakerRequestInput,
   ): Promise<RoomJoinRequest> {
     const room = await getRoom(input.roomId);
+
+    await roomModerationState.assertNotBlocked(input.roomId, input.targetUserId);
 
     const requesterIsHost = room.host_id === input.requesterId;
     const selfRequest = input.requesterId === input.targetUserId;

@@ -206,15 +206,18 @@ export function RoomChat({
             return (
               <div
                 key={m.id}
+                onClick={() => {
+                  if (!mine) onOpenProfile?.(m.userId);
+                }}
                 className={cn(
                   "chat-row flex items-center gap-2.5 rounded-[26px] bg-black/55 py-1.5 pl-1.5 pr-4 backdrop-blur-md transition-opacity",
+                  !mine && "cursor-pointer active:bg-black/70",
                   m.pending && "opacity-50",
                 )}
               >
                 <button
                   type="button"
                   disabled={mine}
-                  onClick={() => onOpenProfile?.(m.userId)}
                   className="shrink-0 self-start disabled:cursor-default"
                 >
                   <Avatar36 src={m.avatar} name={m.username} />

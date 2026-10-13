@@ -21,6 +21,7 @@
 
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
+import { roomModerationState } from "./room-moderation.state";
 import { roomState } from "./room-state.service";
 import type { Tables, TablesInsert } from "../../types/database.types";
 
@@ -57,6 +58,8 @@ export const roomParticipantService = {
         code: "ROOM_NOT_LIVE",
       });
     }
+
+    await roomModerationState.assertNotBlocked(input.room_id, input.user_id);
 
     // Single round trip: insert a fresh row, or if (room_id, user_id)
     // already exists, update it back to "joined" in the same statement.

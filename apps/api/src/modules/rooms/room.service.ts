@@ -1,3 +1,4 @@
+import { roomModerationState } from "./room-moderation.state";
 import { supabase } from "../../lib/supabase";
 import { AppError } from "../../errors/app-error";
 import { pkService } from "../pk/pk.service";
@@ -99,19 +100,28 @@ export const roomService = {
     // is still how an individual gets shut out of chat.)
     const canChat = true;
 
+    // Host moderation (see room-moderation.*): blocked users are shut out of
+    // the room entirely, muted users can read but not send chat.
+    const [isBanned, isMuted] = isHost
+      ? [false, false]
+      : await Promise.all([
+          roomModerationState.isBlocked(roomId, userId),
+          roomModerationState.isMuted(roomId, userId),
+        ]);
+
     return {
       // Chat is available in waiting + live rooms; an ended room closes chat.
-      canAccess: room.status !== "ended",
+      canAccess: room.status !== "ended" && !isBanned,
       isHost,
       isMember,
       isModerator,
-      isMuted: false,
-      isBanned: false,
+      isMuted,
+      isBanned,
       canChat,
     };
   },
 
-  async listRooms(): Promise<Room[]> {
+  async listRooms(viewerId?: string): Promise<Room[]> {
     // Same host join as getRoomById, so list cards can show the host's
     // avatar/name/badges without a second request per room. Excludes
     // "ended" rooms — the frontend splits what's left into "live" vs
@@ -137,7 +147,13 @@ export const roomService = {
       );
     }
 
-    const rooms = (data ?? []) as unknown as Array<Room & { viewerCount?: number }>;
+    let rooms = (data ?? []) as unknown as Array<Room & { viewerCount?: number }>;
+
+    // A user blocked by a host must not see that host's room anywhere.
+    if (viewerId) {
+      const blocked = await roomModerationState.blockedRoomIdsFor(viewerId).catch(() => new Set<string>());
+      if (blocked.size) rooms = rooms.filter((r) => !blocked.has(r.id));
+    }
 
     // Home-feed cards show a live viewer count. It lives in Redis (not in
     // Postgres), so attach it here. Use the SAME source as the in-room header

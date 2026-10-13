@@ -1,5 +1,6 @@
 "use client";
 
+import { LevelBadge } from "./LevelBadge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Coins, Crown, Gem, Lock, Sparkles, X } from "lucide-react";
 import type { LevelReward } from "@/lib/api/levels";
@@ -355,7 +356,7 @@ function AllRewardsModal({
                                 >
                                   {unlocked ? <span className="text-xs font-black">✓</span> : <Lock className="h-3 w-3" />}
                                 </div>
-                                <span className="text-[9px] font-bold text-white/35">Lv {rung.level}</span>
+                                <LevelBadge level={rung.level} className="px-1 py-[1px] text-[8.5px] [&>svg]:h-[8px] [&>svg]:w-[8px]" />
                               </div>
                             );
                           }

@@ -1,15 +1,16 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../../errors/app-error";
+import { roomModerationState } from "./room-moderation.state";
 import { roomService } from "./room.service";
 
  
 export async function listRooms(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const rooms = await roomService.listRooms();
+    const rooms = await roomService.listRooms(req.user?.id);
 
     res.status(200).json({
       success: true,
@@ -52,6 +53,10 @@ export async function getRoom(
   next: NextFunction,
 ) {
   try {
+    if (req.user && (await roomModerationState.isBlocked(req.params.id, req.user.id))) {
+      throw new AppError(404, "Room not found", { code: "ROOM_NOT_FOUND" });
+    }
+
     const room = await roomService.getRoomById(req.params.id);
 
     res.status(200).json({

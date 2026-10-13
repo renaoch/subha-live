@@ -55,6 +55,13 @@ interface RoomSessionRuntime {
   cameraFilterBaked: boolean;
   setCameraFilter: (name: string) => void;
 
+  /** Mic ON/OFF for the host or an on-stage speaker (applies to the live audio track). */
+  setMicEnabled: (on: boolean) => void;
+  /** The host has muted this user (chat + mic). */
+  mutedByHost: boolean;
+  /** The host blocked this user: the room must be left. */
+  blocked: boolean;
+
   handleStart: () => Promise<void>;
   handleJoin: () => Promise<void>;
   handleLeave: () => Promise<void>;
@@ -235,6 +242,9 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
         cameraFilter: webrtc.cameraFilter,
         cameraFilterBaked: webrtc.cameraFilterBaked,
         setCameraFilter: webrtc.setCameraFilter,
+        setMicEnabled: webrtc.setMicEnabled,
+        mutedByHost: webrtc.mutedByHost,
+        blocked: webrtc.blocked,
         handleStart,
         handleJoin,
         handleLeave,

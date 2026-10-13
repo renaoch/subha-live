@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 
 import { toast } from 'sonner';
 
-import { Loader2, Mic, MicOff } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 import { useRoomSession } from '@/lib/room-session-context';
 
@@ -158,6 +158,9 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const localStreamRef = runtime?.localStreamRef ?? { current: null };
   const remoteStreamRef = runtime?.remoteStreamRef ?? { current: null };
   const publishGuestAudio = runtime?.publishGuestAudio ?? (async () => {});
+  const setRuntimeMic = runtime?.setMicEnabled;
+  const mutedByHost = runtime?.mutedByHost ?? false;
+  const blockedByHost = runtime?.blocked ?? false;
   const cameraFilter = runtime?.cameraFilter ?? 'Natural';
   const cameraFilterBaked = runtime?.cameraFilterBaked ?? false;
   const setCameraFilter = runtime?.setCameraFilter ?? (() => {});
@@ -375,16 +378,23 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
   // live stream.
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
 
-  const [guestMicEnabled, setGuestMicEnabled] = useState(true);
 
   // Audio room stage controls: mute (host or seated guest) + leave seat.
   // `micEnabled` / `guestMicEnabled` are "mic is ON"; the server wants "muted".
-  const stageMicOn = isHost ? micEnabled : guestMicEnabled;
-  const onStage = isHost || (stageSnapshot?.me.seat ?? null) !== null;
+  // A video-room speaker is on stage too (live mic session, but no audio-room
+  // seat). Without counting them, their mic button tried to *request* a seat
+  // and the server answered "already a speaker".
+  const isVideoSpeaker = speakerPublishing || (!!userId && !!mediaState?.speakers?.[userId]);
+  // The host muting you overrides your own toggle.
+  const stageMicOn = micEnabled && !mutedByHost;
+  const onStage = isHost || (stageSnapshot?.me.seat ?? null) !== null || isVideoSpeaker;
   const handleStageToggleMute = () => {
     // Currently on -> the toggle mutes, so report muted: true (and vice versa).
-    if (isHost) setMicEnabled((v) => !v);
-    else setGuestMicEnabled((v) => !v);
+    if (mutedByHost && !isHost) {
+      toast.error('The host has muted you');
+      return;
+    }
+    setMicEnabled((v) => !v);
     void reportStage({ muted: stageMicOn });
   };
   const handleStageLeaveSeat = async () => {
@@ -476,18 +486,31 @@ useEffect(() => {
   // notification dot on the audio-stage button.
   const pendingRequestCount = isHost ? requests.length : 0;
 
+  // Apply the mute to the live audio track (host stream or speaker stream).
+  useEffect(() => {
+    setRuntimeMic?.(micEnabled);
+  }, [micEnabled, setRuntimeMic, hostPublishing, speakerPublishing]);
+
+  // The host blocked me: leave straight away.
+  useEffect(() => {
+    if (!blockedByHost) return;
+    toast.error('The host removed you from this room');
+    void handleLeave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockedByHost]);
+
   // Bottom-bar mic: mute toggle for anyone on stage; otherwise a viewer taps
   // it to request (or cancel a request for) a speaking seat.
   const micMode: MicMode | undefined = isAudioRoom || isHost || onStage
     ? onStage
-      ? (isAudioRoom ? stageMicOn : micEnabled) ? 'on' : 'off'
+      ? stageMicOn ? 'on' : 'off'
       : viewerRequestPending ? 'pending' : 'request'
     : viewerRequestPending ? 'pending' : 'request';
   const handleMicPress = () => {
     if (onStage) {
-      if (isAudioRoom) handleStageToggleMute();
-      else if (isHost) setMicEnabled((v) => !v);
-      else setGuestMicEnabled((v) => !v);
+      // Anyone on stage (host, audio-room seat, video-room speaker) taps the
+      // mic to mute / unmute — never to "request" again.
+      handleStageToggleMute();
       return;
     }
     if (isAudioRoom) {
@@ -706,7 +729,7 @@ useEffect(() => {
             dock would just duplicate it there. */}
 
         {room.media_type !== "audio" && !(isHost && isWaiting) && (
-          <SpeakerDock speakers={dockSpeakers} topOffset={330} side="left" />
+          <SpeakerDock speakers={dockSpeakers} topOffset={330} side="left" onSelect={isHost ? setProfileUserId : undefined} />
         )}
 
 
@@ -888,46 +911,6 @@ useEffect(() => {
 
 
 
-        {/* Guest speaker controls */}
-
-        {speakerPublishing && !isHost && (
-
-          <div className="absolute right-[15px] bottom-[86px] z-40 flex items-center gap-2">
-
-            <div className="flex items-center rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[8px] font-semibold backdrop-blur-xl">
-
-              <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-
-              You are speaking
-
-            </div>
-
-            <button
-
-              type="button"
-
-              onClick={() => setGuestMicEnabled((v) => !v)}
-
-              className={`flex h-[26px] w-[26px] items-center justify-center rounded-full border border-white/10 backdrop-blur-xl transition ${
-
-                guestMicEnabled ? 'bg-black/45 text-white hover:bg-white/10' : 'bg-white text-black'
-
-              }`}
-
-              aria-label={guestMicEnabled ? 'Mute microphone' : 'Unmute microphone'}
-
-            >
-
-              {guestMicEnabled ? <Mic className="h-[13px] w-[13px]" /> : <MicOff className="h-[13px] w-[13px]" />}
-
-            </button>
-
-          </div>
-
-        )}
-
-
-
         {/* Speaker error */}
 
         {mediaError && !isHost && (
@@ -971,7 +954,7 @@ useEffect(() => {
           showMissions={isHost}
         />
 
-        {blockOpen && <BlockUserSheet viewerIds={[...viewerIds, ...activeSpeakers.map((sp) => sp.userId).filter((id) => id !== room?.host_id)]} selfId={userId} onClose={() => setBlockOpen(false)} />}
+        {blockOpen && <BlockUserSheet roomId={room?.id ?? ''} viewerIds={[...viewerIds, ...activeSpeakers.map((sp) => sp.userId).filter((id) => id !== room?.host_id)]} selfId={userId} onClose={() => setBlockOpen(false)} />}
         {giftHistoryOpen && <GiftHistorySheet messages={chatMessages} onClose={() => setGiftHistoryOpen(false)} />}
         {giftEarningsOpen && (
           <GiftEarningsSheet
@@ -1112,6 +1095,10 @@ useEffect(() => {
           <UserProfilePopup
             userId={profileUserId}
             currentUserId={userId}
+            roomId={room?.id ?? null}
+            isHost={isHost}
+            hostId={room?.host_id ?? null}
+            isSpeaker={!!mediaState?.speakers?.[profileUserId]}
             onClose={() => setProfileUserId(null)}
           />
         )}

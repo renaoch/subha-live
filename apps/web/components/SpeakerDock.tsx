@@ -18,6 +18,8 @@ interface SpeakerDockProps {
   topOffset?: number;
   /** Which edge the stack hugs. Left when the right rail is occupied by room widgets. */
   side?: 'left' | 'right';
+  /** Tap a speaker (host uses this to open mute / remove / block). */
+  onSelect?: (userId: string) => void;
 }
 
 /**
@@ -27,7 +29,7 @@ interface SpeakerDockProps {
  * of whether the AudioStageModal sheet is open. Each circle shows the
  * speaker's avatar and animates a glowing ring while they're talking.
  */
-export function SpeakerDock({ speakers, topOffset = 96, side = 'right' }: SpeakerDockProps) {
+export function SpeakerDock({ speakers, topOffset = 96, side = 'right', onSelect }: SpeakerDockProps) {
   if (speakers.length === 0) return null;
 
   return (
@@ -36,7 +38,12 @@ export function SpeakerDock({ speakers, topOffset = 96, side = 'right' }: Speake
       style={{ top: topOffset }}
     >
       {speakers.map((speaker) => (
-        <div key={speaker.userId} className="group relative flex flex-col items-center">
+        <div
+          key={speaker.userId}
+          className={`group relative flex flex-col items-center ${onSelect ? 'cursor-pointer' : ''}`}
+          onClick={onSelect ? () => onSelect(speaker.userId) : undefined}
+          role={onSelect ? 'button' : undefined}
+        >
           {/* Animated speaking ring */}
           <div
             className={`absolute inset-0 rounded-full transition-opacity duration-200 ${

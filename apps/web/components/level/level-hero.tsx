@@ -1,5 +1,6 @@
 "use client";
 
+import { LevelBadge } from "./LevelBadge";
 import { useEffect, useId, useMemo, useState, type CSSProperties } from "react";
 
 import type { LevelProgress } from "@/lib/api/levels";
@@ -328,6 +329,7 @@ export function LevelHero({ progress }: LevelHeroProps) {
           <div>
             <p className="text-[13px] font-medium text-white/45">Your rank</p>
             <h2 className="text-xl font-extrabold tracking-tight text-white">{theme.tierName}</h2>
+            <LevelBadge level={progress.currentLevel} className="mt-1.5 px-3 py-1 text-[15px] [&>svg]:h-[15px] [&>svg]:w-[15px]" />
           </div>
           <span
             className="rounded-full border px-3 py-1.5 text-xs font-semibold"

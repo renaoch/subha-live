@@ -375,6 +375,33 @@ export function useWebRTC(
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const guestStreamRef = useRef<MediaStream | null>(null);
 
+  // ---- Mic mute + host moderation ------------------------------------------
+  // `micOnRef` is the user's own mute toggle; `mutedByHostRef` is the host
+  // force-muting them. The audio track is live only when both allow it, and
+  // the same rule is applied to the host's stream AND a speaker's stream.
+  const micOnRef = useRef(true);
+  const mutedByHostRef = useRef(false);
+  const guestSeenInStateRef = useRef(false);
+  const [mutedByHost, setMutedByHost] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+
+  const applyMicState = useCallback(() => {
+    const enabled = micOnRef.current && !mutedByHostRef.current;
+    for (const stream of [localStreamRef.current, guestStreamRef.current]) {
+      if (!stream) continue;
+      for (const track of stream.getAudioTracks()) track.enabled = enabled;
+    }
+  }, []);
+
+  /** Mic ON/OFF for whoever is publishing (host or speaker). */
+  const setMicEnabled = useCallback(
+    (on: boolean) => {
+      micOnRef.current = on;
+      applyMicState();
+    },
+    [applyMicState],
+  );
+
   /**
    * trackId -> the hidden <audio> element playing it back.
    * See playRemoteAudioTrack() for why this exists instead of one shared
@@ -572,6 +599,7 @@ export function useWebRTC(
       }
 
       localStreamRef.current = stream;
+      applyMicState();
 
       if (mountedRef.current) {
         setLocalStream(stream);
@@ -596,7 +624,7 @@ export function useWebRTC(
     );
 
     return pending;
-  }, [isAudioRoom]);
+  }, [isAudioRoom, applyMicState]);
 
   const setCameraFilter = useCallback((name: string) => {
     cameraFilterRef.current = name;
@@ -663,6 +691,7 @@ export function useWebRTC(
     }
 
     guestStreamRef.current = null;
+    guestSeenInStateRef.current = false;
 
     if (mountedRef.current) {
       setSpeakerPublishing(false);
@@ -1223,6 +1252,7 @@ export function useWebRTC(
       }
 
       guestStreamRef.current = stream;
+      applyMicState();
 
       const peer = new RTCPeerConnection({
         iceServers: await getIceServers(),
@@ -1373,6 +1403,7 @@ export function useWebRTC(
       guestPublishInFlightRef.current = false;
     }
   }, [
+    applyMicState,
     closeGuestPeer,
     createOfferAndWaitForIce,
     getIceServers,
@@ -1884,21 +1915,8 @@ if (signalingState !== "stable") {
     }
   }, [cameraEnabled]);
 
-  // ---------------------------------------------------------------------------
-  // Microphone toggle
-  // ---------------------------------------------------------------------------
-
-  useEffect(() => {
-    const stream = localStreamRef.current;
-
-    if (!stream) {
-      return;
-    }
-
-    for (const track of stream.getAudioTracks()) {
-      track.enabled = micEnabled;
-    }
-  }, [micEnabled]);
+  // Microphone mute is handled by applyMicState()/setMicEnabled() above, which
+  // covers both the host stream and a speaker's stream.
 
   // ---------------------------------------------------------------------------
   // MEDIA STATE POLLER
@@ -1954,6 +1972,29 @@ if (signalingState !== "stable") {
 
         mediaStateRef.current = state;
         setMediaState(state);
+
+        // ---------------------------------------------------------------
+        // HOST MODERATION (viewer / speaker side)
+        // ---------------------------------------------------------------
+        if (!currentIsHost && currentUserId) {
+          // Host muted me -> my mic goes silent and stays silent until the
+          // host lifts it (the toggle can't override this).
+          const mutedNow = state.mutedUserIds?.includes(currentUserId) ?? false;
+          if (mutedNow !== mutedByHostRef.current) {
+            mutedByHostRef.current = mutedNow;
+            setMutedByHost(mutedNow);
+            applyMicState();
+          }
+
+          // Host removed me from the stage -> stop publishing immediately.
+          if (state.speakers[currentUserId]) {
+            guestSeenInStateRef.current = true;
+          } else if (guestSeenInStateRef.current && guestPeerRef.current) {
+            guestSeenInStateRef.current = false;
+            roomsApi.unpublishGuest(roomId).catch(() => {});
+            closeGuestPeer();
+          }
+        }
 
         // ---------------------------------------------------------------
         // HOST
@@ -2033,6 +2074,11 @@ if (signalingState !== "stable") {
           );
         }
       } catch (error) {
+        // Host blocked me: the server now refuses everything for this room.
+        if (active && (error as { code?: string } | null)?.code === "ROOM_BLOCKED") {
+          setBlocked(true);
+          return;
+        }
         if (active) {
           console.warn(
             "[WebRTC] media-state poll failed",
@@ -2065,6 +2111,8 @@ if (signalingState !== "stable") {
     publishGuestAudio,
     syncHostGuestAudio,
     syncViewerSpeakerAudio,
+    applyMicState,
+    closeGuestPeer,
   ]);
 
   // ---------------------------------------------------------------------------
@@ -2414,6 +2462,9 @@ if (signalingState !== "stable") {
     cameraFilter,
     cameraFilterBaked,
     setCameraFilter,
+    setMicEnabled,
+    mutedByHost,
+    blocked,
 
     localStreamRef,
     remoteStreamRef,

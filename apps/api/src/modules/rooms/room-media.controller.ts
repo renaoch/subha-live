@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../../errors/app-error";
 import { roomMediaService } from "./room-media.service";
+import { roomModerationState } from "./room-moderation.state";
 import { roomStageService } from "./room-stage.service";
 
 function getTracks(value: unknown) {
@@ -42,7 +43,16 @@ export async function getMediaState(
   next: NextFunction,
 ) {
   try {
-    const data = await roomMediaService.getState(req.params.id);
+    if (req.user) {
+      await roomModerationState.assertNotBlocked(req.params.id, req.user.id);
+    }
+    const [state, mutedUserIds] = await Promise.all([
+      roomMediaService.getState(req.params.id),
+      roomModerationState.getMutedIds(req.params.id).catch(() => [] as string[]),
+    ]);
+    // `mutedUserIds`: people the host has muted. A muted speaker's client
+    // silences its own mic and can't unmute until the host lifts the mute.
+    const data = { ...state, mutedUserIds };
     res.json({ success: true, data });
   } catch (error) {
     next(error);

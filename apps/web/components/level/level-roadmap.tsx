@@ -1,5 +1,6 @@
 "use client";
 
+import { LevelBadge } from "./LevelBadge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Coins, Gem, Lock, Zap } from "lucide-react";
 
@@ -106,7 +107,10 @@ export function LevelRoadmap({ progress, definitions, rewards }: Props) {
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-white">{next.title ?? `Level ${next.level}`}</p>
+              <p className="flex items-center gap-2 text-sm font-bold text-white">
+                {next.title ?? `Level ${next.level}`}
+                <LevelBadge level={next.level} />
+              </p>
               <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/60">
                 <Zap className="h-3.5 w-3.5" style={{ color: theme.primary }} />
                 <span className="font-bold tabular-nums text-white">{fmt(xpToNext)} XP</span> away
@@ -206,8 +210,9 @@ export function LevelRoadmap({ progress, definitions, rewards }: Props) {
                       {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : d.level}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-white">
+                      <p className="flex items-center gap-1.5 truncate text-sm font-bold text-white">
                         {done ? `Level ${d.level}` : d.title ?? `Level ${d.level}`}
+                        <LevelBadge level={d.level} className="px-1 py-[1px] text-[9.5px] [&>svg]:h-[9px] [&>svg]:w-[9px]" />
                       </p>
                       <p className="text-[11px] text-white/40">
                         {isCurrent ? "You are here" : isNext ? "Next up" : done ? "Cleared" : `Level ${d.level}`}

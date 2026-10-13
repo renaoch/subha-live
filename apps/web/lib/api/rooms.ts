@@ -55,7 +55,21 @@ export interface CreateRoomInput {
   media_type?: RoomMediaType;
 }
 
+export interface RoomModerationPerson {
+  id: string;
+  name: string | null;
+  avatar: string | null;
+  handle: string | null;
+}
+
+export interface RoomModerationList {
+  blocked: RoomModerationPerson[];
+  muted: RoomModerationPerson[];
+}
+
 export interface RoomMediaState {
+  /** Users the host has muted (chat + mic). */
+  mutedUserIds?: string[];
   roomId: string;
   status: string;
   generation: number;
@@ -293,6 +307,50 @@ export const roomsApi = {
     return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/report`, {
       method: "POST",
       body: JSON.stringify(input),
+    }).then((r) => r.data);
+  },
+
+  // ---- Host moderation (block / mute / kick from stage) ----
+  moderationList(id: string) {
+    return apiFetch<RoomEnvelope<RoomModerationList>>(`/api/v1/rooms/${id}/moderation`).then((r) => r.data);
+  },
+
+  moderationMe(id: string) {
+    return apiFetch<RoomEnvelope<{ blocked: boolean; muted: boolean }>>(
+      `/api/v1/rooms/${id}/moderation/me`,
+    ).then((r) => r.data);
+  },
+
+  blockUser(id: string, userId: string) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/moderation/block`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    }).then((r) => r.data);
+  },
+
+  unblockUser(id: string, userId: string) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/moderation/block/${userId}`, {
+      method: "DELETE",
+    }).then((r) => r.data);
+  },
+
+  muteUser(id: string, userId: string) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/moderation/mute`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    }).then((r) => r.data);
+  },
+
+  unmuteUser(id: string, userId: string) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/moderation/mute/${userId}`, {
+      method: "DELETE",
+    }).then((r) => r.data);
+  },
+
+  kickSpeaker(id: string, userId: string) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/moderation/kick-speaker`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
     }).then((r) => r.data);
   },
 

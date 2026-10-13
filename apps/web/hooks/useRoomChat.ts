@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchChatHistory, type RoomChatMessage } from "@/lib/api/chat";
 import { chatWsUrl, getAccessToken } from "@/lib/api/realtime";
@@ -84,6 +85,7 @@ export function useRoomChat(roomId: string, roomStatus?: string | null) {
         }
         if (msg && msg.type === "error") {
           console.warn("[useRoomChat] server error:", msg.code, msg.message);
+          if (msg.code === "CHAT_MUTED") toast.error("The host has muted you in this room");
           return;
         }
         // "User X joined the stream" system row, broadcast by the realtime

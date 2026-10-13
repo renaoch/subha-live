@@ -8,6 +8,7 @@ import { CloudflareRealtimeError } from "../../lib/media/cloudflare/cloudflare.e
 import { redis } from "../../lib/redis";
 import { mediaKeys } from "../media/media.state";
 import { roomStageService } from "./room-stage.service";
+import { roomModerationState } from "./room-moderation.state";
 import type {
   MediaSession,
   MediaTrack,
@@ -654,6 +655,8 @@ async subscribeHostToGuests(
       trackKinds: tracks.map((t) => t.kind),
     });
 
+    await roomModerationState.assertNotBlocked(roomId, userId);
+
     const room = await getRoom(roomId);
 
     if (room.host_id === userId) {
@@ -886,6 +889,9 @@ async subscribeHostToGuests(
     preview = false,
     mode: "listener" | "stage" = "listener",
   ) {
+    // Host-blocked users can never open a viewer session.
+    await roomModerationState.assertNotBlocked(roomId, userId);
+
     /*
      * Audio party rooms have their own, much lighter join path (no video
      * track, no per-viewer state scan, single mixed track for listeners).
@@ -1526,6 +1532,10 @@ async subscribeHostToGuests(
     sessionId: string,
     generation: number,
   ) {
+    if (role !== "host") {
+      await roomModerationState.assertNotBlocked(roomId, userId);
+    }
+
     const room =
       await getRoom(roomId);
 

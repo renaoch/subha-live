@@ -39,7 +39,7 @@ function Sheet({ title, icon, onClose, children }: { title: string; icon: ReactN
 
 interface Person { id: string; name: string; avatar: string | null; handle: string | null }
 
-export function BlockUserSheet({ viewerIds, selfId, onClose }: { viewerIds: string[]; selfId?: string | null; onClose: () => void }) {
+export function BlockUserSheet({ roomId, viewerIds, selfId, onClose }: { roomId: string; viewerIds: string[]; selfId?: string | null; onClose: () => void }) {
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -47,8 +47,12 @@ export function BlockUserSheet({ viewerIds, selfId, onClose }: { viewerIds: stri
 
   useEffect(() => {
     let cancelled = false;
-    const ids = viewerIds.filter((id) => id !== selfId);
+    // People in the room now + people this host already blocked (so they can be unblocked).
     (async () => {
+      const list = await roomsApi.moderationList(roomId).catch(() => ({ blocked: [], muted: [] }));
+      const already = new Set(list.blocked.map((b) => b.id));
+      if (!cancelled) setBlocked(already);
+      const ids = [...new Set([...viewerIds, ...already])].filter((id) => id !== selfId);
       const rows = await Promise.all(
         ids.map((id) =>
           usersApi
@@ -73,8 +77,9 @@ export function BlockUserSheet({ viewerIds, selfId, onClose }: { viewerIds: stri
     setBusy(p.id);
     const isBlocked = blocked.has(p.id);
     try {
-      if (isBlocked) await usersApi.unblock(p.id);
-      else await usersApi.block(p.id);
+      // Room-level block: removed from the stream, can't rejoin, room hidden from them.
+      if (isBlocked) await roomsApi.unblockUser(roomId, p.id);
+      else await roomsApi.blockUser(roomId, p.id);
       setBlocked((prev) => {
         const next = new Set(prev);
         if (isBlocked) next.delete(p.id);

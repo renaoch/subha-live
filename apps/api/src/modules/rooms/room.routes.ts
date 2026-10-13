@@ -1,3 +1,13 @@
+import {
+  blockUser,
+  unblockUser,
+  muteUser,
+  unmuteUser,
+  kickSpeaker,
+  kickSpeakerParam,
+  listModeration,
+  myModeration,
+} from "./room-moderation.controller";
 import { Router } from "express";
 import roomMediaRoutes from "./room-media.routes";
 import roomTaskRoutes from "../room-tasks/room-task.routes";
@@ -52,8 +62,18 @@ router.post(
 router.delete(
   "/:id/speakers/:userId",
   authMiddleware,
-  removeSpeaker,
+  // Full teardown (SFU session + stage state + role), not just a Redis flag.
+  (req, res, next) => kickSpeakerParam(req as never, res, next),
 );
+
+// Host moderation: block / mute / kick-from-stage (see room-moderation.*).
+router.get("/:id/moderation", authMiddleware, listModeration);
+router.get("/:id/moderation/me", authMiddleware, myModeration);
+router.post("/:id/moderation/block", authMiddleware, blockUser);
+router.delete("/:id/moderation/block/:userId", authMiddleware, unblockUser);
+router.post("/:id/moderation/mute", authMiddleware, muteUser);
+router.delete("/:id/moderation/mute/:userId", authMiddleware, unmuteUser);
+router.post("/:id/moderation/kick-speaker", authMiddleware, kickSpeaker);
 
 router.use("/", roomMediaRoutes);
 router.use("/", roomTaskRoutes);
