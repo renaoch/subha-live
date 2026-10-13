@@ -409,7 +409,8 @@
 .lvl-badge {
   --lv-from: #CDB68C; --lv-to: #F7EEDA; --lv-fg: #4A3410; --lv-glow: rgba(233,216,180,.45);
   position: relative; isolation: isolate; overflow: hidden;
-  display: inline-flex; flex-shrink: 0; align-items: center; gap: 3px;
+  display: inline-flex; flex: none; min-width: max-content; white-space: nowrap;
+  align-items: center; gap: 3px;
   border-radius: 9999px; vertical-align: middle; font-weight: 800; line-height: 1;
   font-variant-numeric: tabular-nums; color: var(--lv-fg);
   /* gold metallic rim (border-box gradient) around a gem body (padding-box) */

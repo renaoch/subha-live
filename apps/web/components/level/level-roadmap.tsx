@@ -107,9 +107,9 @@ export function LevelRoadmap({ progress, definitions, rewards }: Props) {
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 text-sm font-bold text-white">
-                {next.title ?? `Level ${next.level}`}
-                <LevelBadge level={next.level} />
+              <p className="flex min-w-0 items-center gap-2 text-sm font-bold text-white">
+                <span className="min-w-0 truncate">{next.title ?? `Level ${next.level}`}</span>
+                <LevelBadge level={next.level} className="shrink-0" />
               </p>
               <p className="mt-1 flex items-center gap-1.5 text-[13px] text-white/60">
                 <Zap className="h-3.5 w-3.5" style={{ color: theme.primary }} />
@@ -209,10 +209,12 @@ export function LevelRoadmap({ progress, definitions, rewards }: Props) {
                     >
                       {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : d.level}
                     </span>
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 truncate text-sm font-bold text-white">
-                        {done ? `Level ${d.level}` : d.title ?? `Level ${d.level}`}
-                        <LevelBadge level={d.level} className="px-1 py-[1px] text-[9.5px] [&>svg]:h-[9px] [&>svg]:w-[9px]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-white">
+                        <span className="min-w-0 truncate">
+                          {done ? `Level ${d.level}` : d.title ?? `Level ${d.level}`}
+                        </span>
+                        <LevelBadge level={d.level} className="shrink-0 px-1 py-[1px] text-[9.5px] [&>svg]:h-[9px] [&>svg]:w-[9px]" />
                       </p>
                       <p className="text-[11px] text-white/40">
                         {isCurrent ? "You are here" : isNext ? "Next up" : done ? "Cleared" : `Level ${d.level}`}
