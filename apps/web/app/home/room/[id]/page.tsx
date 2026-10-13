@@ -161,6 +161,7 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const setRuntimeMic = runtime?.setMicEnabled;
   const mutedByHost = runtime?.mutedByHost ?? false;
   const blockedByHost = runtime?.blocked ?? false;
+  const kickedByHost = runtime?.kicked ?? false;
   const cameraFilter = runtime?.cameraFilter ?? 'Natural';
   const cameraFilterBaked = runtime?.cameraFilterBaked ?? false;
   const setCameraFilter = runtime?.setCameraFilter ?? (() => {});
@@ -225,6 +226,10 @@ export default function RoomStagePage({ params }: { params: Promise<{ id: string
   const { messages: chatMessages, state: chatState, selfUserId, send: sendChat } =
     useRoomChat(room?.id ?? '', room?.status);
   const [giftSheetOpen, setGiftSheetOpen] = useState(false);
+  // Party Voice: a specific stage speaker being gifted (null = the host, as before).
+  const [giftRecipient, setGiftRecipient] = useState<{ id: string; name: string; avatar: string | null } | null>(null);
+  // Host or moderator — resolved by the server, never guessed from the UI.
+  const [isModerator, setIsModerator] = useState(false);
 
   // Audio party-room stage (authoritative seats / host / listeners via
   // GET /rooms/:id/stage). Only active for live audio rooms.
@@ -384,6 +389,12 @@ const { isPending: viewerRequestPending, isAccepted: viewerRequestAccepted } =
   // A video-room speaker is on stage too (live mic session, but no audio-room
   // seat). Without counting them, their mic button tried to *request* a seat
   // and the server answered "already a speaker".
+  const isUserOnStage = (uid: string | null | undefined) => {
+    if (!uid) return false;
+    if (isAudioRoom) return !!stageSnapshot?.seats?.some((s) => s?.userId === uid);
+    return !!mediaState?.speakers?.[uid];
+  };
+  const canModerate = isHost || isModerator;
   const isVideoSpeaker = speakerPublishing || (!!userId && !!mediaState?.speakers?.[userId]);
   // The host muting you overrides your own toggle.
   const stageMicOn = micEnabled && !mutedByHost;
@@ -485,6 +496,29 @@ useEffect(() => {
   // Only the host sees pending requests, so only the host gets the
   // notification dot on the audio-stage button.
   const pendingRequestCount = isHost ? requests.length : 0;
+
+  // Ask the server whether I can moderate (host/moderator) whenever a profile opens.
+  useEffect(() => {
+    if (!profileUserId || !room?.id || isHost) return;
+    let cancelled = false;
+    roomsApi
+      .moderationMe(room.id)
+      .then((m) => {
+        if (!cancelled) setIsModerator(m.canModerate);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [profileUserId, room?.id, isHost]);
+
+  // Kicked (not blocked): leave now; they may rejoin by the normal rules.
+  useEffect(() => {
+    if (!kickedByHost) return;
+    toast.error('You were removed from this room by the host');
+    void handleLeave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kickedByHost]);
 
   // Apply the mute to the live audio track (host stream or speaker stream).
   useEffect(() => {
@@ -729,7 +763,7 @@ useEffect(() => {
             dock would just duplicate it there. */}
 
         {room.media_type !== "audio" && !(isHost && isWaiting) && (
-          <SpeakerDock speakers={dockSpeakers} topOffset={330} side="left" onSelect={isHost ? setProfileUserId : undefined} />
+          <SpeakerDock speakers={dockSpeakers} topOffset={330} side="left" onSelect={setProfileUserId} />
         )}
 
 
@@ -816,7 +850,7 @@ useEffect(() => {
             isHost={isHost}
             hostId={room.host_id}
             onSend={sendChat}
-            onOpenGift={!isHost ? () => setGiftSheetOpen(true) : undefined}
+            onOpenGift={!isHost ? () => { setGiftRecipient(null); setGiftSheetOpen(true); } : undefined}
             onOpenPk={isHost ? () => setPkOpen(true) : undefined}
             onOpenGames={() => setGamesOpen(true)}
             onOpenGuests={() => setSpeakerPanelOpen(true)}
@@ -861,7 +895,9 @@ useEffect(() => {
 
             hostId={room.host.id}
 
-            onClose={() => setGiftSheetOpen(false)}
+            recipient={giftRecipient}
+
+            onClose={() => { setGiftSheetOpen(false); setGiftRecipient(null); }}
 
             onSent={(gift, position, quantity) => {
               setSentGift({
@@ -954,7 +990,7 @@ useEffect(() => {
           showMissions={isHost}
         />
 
-        {blockOpen && <BlockUserSheet roomId={room?.id ?? ''} viewerIds={[...viewerIds, ...activeSpeakers.map((sp) => sp.userId).filter((id) => id !== room?.host_id)]} selfId={userId} onClose={() => setBlockOpen(false)} />}
+        {blockOpen && <BlockUserSheet roomId={room?.id ?? ''} onOpenProfile={setProfileUserId} viewerIds={[...viewerIds, ...activeSpeakers.map((sp) => sp.userId).filter((id) => id !== room?.host_id)]} selfId={userId} onClose={() => setBlockOpen(false)} />}
         {giftHistoryOpen && <GiftHistorySheet messages={chatMessages} onClose={() => setGiftHistoryOpen(false)} />}
         {giftEarningsOpen && (
           <GiftEarningsSheet
@@ -1063,7 +1099,7 @@ useEffect(() => {
             saving={wishes.saving}
             onClose={() => setWishOpen(false)}
             onSave={wishes.save}
-            onSendGift={() => setGiftSheetOpen(true)}
+            onSendGift={() => { setGiftRecipient(null); setGiftSheetOpen(true); }}
           />
         )}
 
@@ -1096,9 +1132,18 @@ useEffect(() => {
             userId={profileUserId}
             currentUserId={userId}
             roomId={room?.id ?? null}
-            isHost={isHost}
+            canModerate={canModerate}
             hostId={room?.host_id ?? null}
-            isSpeaker={!!mediaState?.speakers?.[profileUserId]}
+            isSpeaker={isUserOnStage(profileUserId)}
+            canGift={
+              isAudioRoom && !isHost && !!userId && profileUserId !== userId && isUserOnStage(profileUserId)
+            }
+            onGift={(u) => {
+              // Keep the exact user id the viewer tapped for the whole gift flow.
+              setGiftRecipient(u);
+              setProfileUserId(null);
+              setGiftSheetOpen(true);
+            }}
             onClose={() => setProfileUserId(null)}
           />
         )}

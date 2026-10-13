@@ -1,3 +1,4 @@
+import { assertGiftRecipientAllowed } from "../rooms/room-gift-guard";
 import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../../errors/app-error";
 import {
@@ -46,6 +47,12 @@ export async function sendGiftController(req: Request, res: Response, next: Next
         details: parsed.error.flatten().fieldErrors,
       });
     }
+
+    await assertGiftRecipientAllowed({
+      senderId: user.id,
+      recipientId: parsed.data.recipientId,
+      roomId: parsed.data.roomId ?? null,
+    });
 
     const result = await sendGiftTransaction({
       senderId: user.id,

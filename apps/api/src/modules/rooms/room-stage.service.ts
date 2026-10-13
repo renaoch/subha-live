@@ -455,6 +455,12 @@ async function bumpRev(roomId: string): Promise<void> {
 }
 
 export const roomStageService = {
+  /** True when the user currently occupies a stage seat in this audio room. */
+  async isSeated(roomId: string, userId: string): Promise<boolean> {
+    const seat = await redis.hget(k(roomId, "seats"), userId);
+    return seat !== null && seat !== undefined;
+  },
+
   /** Cached room row; throws 404 / 409 (not live) like the media getRoom(). */
   async getRoomLive(roomId: string): Promise<RoomRow> {
     const room = await getRoomCached(roomId);

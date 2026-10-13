@@ -56,6 +56,9 @@ export const unblockUser = paramAction(roomModerationService.unblock);
 export const muteUser = bodyAction(roomModerationService.mute);
 export const unmuteUser = paramAction(roomModerationService.unmute);
 export const kickSpeaker = bodyAction(roomModerationService.kickSpeaker);
+export const kickFromRoom = bodyAction(roomModerationService.kick);
+export const muteMic = bodyAction(roomModerationService.muteMic);
+export const unmuteMic = paramAction(roomModerationService.unmuteMic);
 
 export async function listModeration(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {

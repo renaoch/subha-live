@@ -5,6 +5,9 @@ import {
   unmuteUser,
   kickSpeaker,
   kickSpeakerParam,
+  kickFromRoom,
+  muteMic,
+  unmuteMic,
   listModeration,
   myModeration,
 } from "./room-moderation.controller";
@@ -74,6 +77,9 @@ router.delete("/:id/moderation/block/:userId", authMiddleware, unblockUser);
 router.post("/:id/moderation/mute", authMiddleware, muteUser);
 router.delete("/:id/moderation/mute/:userId", authMiddleware, unmuteUser);
 router.post("/:id/moderation/kick-speaker", authMiddleware, kickSpeaker);
+router.post("/:id/moderation/kick", authMiddleware, kickFromRoom);
+router.post("/:id/moderation/mic", authMiddleware, muteMic);
+router.delete("/:id/moderation/mic/:userId", authMiddleware, unmuteMic);
 
 router.use("/", roomMediaRoutes);
 router.use("/", roomTaskRoutes);

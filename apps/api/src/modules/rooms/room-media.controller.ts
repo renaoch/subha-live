@@ -45,10 +45,15 @@ export async function getMediaState(
   try {
     if (req.user) {
       await roomModerationState.assertNotBlocked(req.params.id, req.user.id);
+      // Kicked (not blocked): tell their client to leave once; they may rejoin.
+      if (await roomModerationState.isKicked(req.params.id, req.user.id)) {
+        await roomModerationState.clearKicked(req.params.id, req.user.id);
+        throw new AppError(403, "You were removed from this room by the host", { code: "ROOM_KICKED" });
+      }
     }
     const [state, mutedUserIds] = await Promise.all([
       roomMediaService.getState(req.params.id),
-      roomModerationState.getMutedIds(req.params.id).catch(() => [] as string[]),
+      roomModerationState.getMicMutedIds(req.params.id).catch(() => [] as string[]),
     ]);
     // `mutedUserIds`: people the host has muted. A muted speaker's client
     // silences its own mic and can't unmute until the host lifts the mute.

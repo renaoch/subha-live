@@ -13,7 +13,7 @@ import { AppError } from "../../errors/app-error";
  * This file must NOT import the media services (they import this file).
  */
 
-export type ModerationKind = "block" | "mute";
+export type ModerationKind = "block" | "mute" | "mic";
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24;
 const setKey = (roomId: string, kind: ModerationKind) => `room:${roomId}:mod:${kind}`;
@@ -62,12 +62,15 @@ export const roomModerationState = {
     }
   },
 
-  async getMutedIds(roomId: string): Promise<string[]> {
+  isMicMuted: (roomId: string, userId: string) => has(roomId, userId, "mic"),
+
+  /** Speakers whose microphone the host/moderator has muted. */
+  async getMicMutedIds(roomId: string): Promise<string[]> {
     try {
       await hydrate(roomId);
-      return ((await redis.smembers(setKey(roomId, "mute"))) ?? []) as string[];
+      return ((await redis.smembers(setKey(roomId, "mic"))) ?? []) as string[];
     } catch {
-      const { data } = await table().select("user_id").eq("room_id", roomId).eq("kind", "mute");
+      const { data } = await table().select("user_id").eq("room_id", roomId).eq("kind", "mic");
       return ((data ?? []) as { user_id: string }[]).map((r) => r.user_id);
     }
   },
@@ -107,15 +110,46 @@ export const roomModerationState = {
     return new Set(((data ?? []) as { room_id: string }[]).map((r) => r.room_id));
   },
 
-  async list(roomId: string): Promise<{ user_id: string; kind: ModerationKind }[]> {
-    const { data, error } = await table().select("user_id, kind").eq("room_id", roomId);
+  /** Who created a restriction (null when it does not exist). */
+  async creatorOf(roomId: string, userId: string, kind: ModerationKind): Promise<string | null> {
+    const { data } = await table()
+      .select("created_by")
+      .eq("room_id", roomId)
+      .eq("user_id", userId)
+      .eq("kind", kind)
+      .maybeSingle();
+    return (data?.created_by as string | undefined) ?? null;
+  },
+
+  /**
+   * "Kick" (remove from the room WITHOUT blocking): a short-lived marker the
+   * kicked user's client picks up on its next poll so it actually leaves. It is
+   * cleared when they open a new viewer session, so rejoining follows the
+   * normal room-access rules.
+   */
+  async markKicked(roomId: string, userId: string): Promise<void> {
+    await redis.set(`room:${roomId}:mod:kicked:${userId}`, "1", { EX: 120, ex: 120 }).catch(() => {});
+  },
+  async isKicked(roomId: string, userId: string): Promise<boolean> {
+    try {
+      return !!(await redis.get(`room:${roomId}:mod:kicked:${userId}`));
+    } catch {
+      return false;
+    }
+  },
+  async clearKicked(roomId: string, userId: string): Promise<void> {
+    await redis.del(`room:${roomId}:mod:kicked:${userId}`).catch(() => {});
+  },
+
+  async list(roomId: string): Promise<{ user_id: string; kind: ModerationKind; created_by: string }[]> {
+    const { data, error } = await table().select("user_id, kind, created_by").eq("room_id", roomId);
     if (error) {
       throw new AppError(500, "Failed to load moderation list", {
         code: "ROOM_MODERATION_LIST_FAILED",
         details: error.message,
       });
     }
-    return (data ?? []) as { user_id: string; kind: ModerationKind }[];
+    return (data ?? []) as { user_id: string; kind: ModerationKind; created_by: string }[];
   },
 
   /**

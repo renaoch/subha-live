@@ -384,6 +384,7 @@ export function useWebRTC(
   const guestSeenInStateRef = useRef(false);
   const [mutedByHost, setMutedByHost] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [kicked, setKicked] = useState(false);
 
   const applyMicState = useCallback(() => {
     const enabled = micOnRef.current && !mutedByHostRef.current;
@@ -2075,8 +2076,14 @@ if (signalingState !== "stable") {
         }
       } catch (error) {
         // Host blocked me: the server now refuses everything for this room.
-        if (active && (error as { code?: string } | null)?.code === "ROOM_BLOCKED") {
+        const code = (error as { code?: string } | null)?.code;
+        if (active && code === "ROOM_BLOCKED") {
           setBlocked(true);
+          return;
+        }
+        // Kicked (not blocked): leave now; rejoining follows normal rules.
+        if (active && code === "ROOM_KICKED") {
+          setKicked(true);
           return;
         }
         if (active) {
@@ -2465,6 +2472,7 @@ if (signalingState !== "stable") {
     setMicEnabled,
     mutedByHost,
     blocked,
+    kicked,
 
     localStreamRef,
     remoteStreamRef,

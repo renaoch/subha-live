@@ -1,3 +1,4 @@
+import { assertGiftRecipientAllowed } from "../rooms/room-gift-guard";
 import { supabase } from "../../lib/supabase";
 
 import { AppError } from "../../errors/app-error";
@@ -285,6 +286,12 @@ export async function sendGift(
       code: "INVALID_GIFT_RECIPIENT",
     });
   }
+
+  await assertGiftRecipientAllowed({
+    senderId,
+    recipientId: input.recipientId,
+    roomId: input.roomId ?? null,
+  });
 
   const catalogItem = await getGiftCatalogItem(input.giftId);
   if (!catalogItem || !catalogItem.isActive) {

@@ -60,11 +60,28 @@ export interface RoomModerationPerson {
   name: string | null;
   avatar: string | null;
   handle: string | null;
+  /** Who applied the restriction. */
+  createdBy?: string;
+  /** Whether the current user may reverse it (host: always; moderator: own only). */
+  canReverse?: boolean;
 }
 
 export interface RoomModerationList {
+  /** Blocked from the room. */
   blocked: RoomModerationPerson[];
+  /** Chat restricted. */
   muted: RoomModerationPerson[];
+  /** Microphone muted. */
+  micMuted: RoomModerationPerson[];
+}
+
+export interface RoomModerationMe {
+  blocked: boolean;
+  muted: boolean;
+  micMuted: boolean;
+  isHost: boolean;
+  /** Host or moderator: may open moderation controls. */
+  canModerate: boolean;
 }
 
 export interface RoomMediaState {
@@ -316,9 +333,7 @@ export const roomsApi = {
   },
 
   moderationMe(id: string) {
-    return apiFetch<RoomEnvelope<{ blocked: boolean; muted: boolean }>>(
-      `/api/v1/rooms/${id}/moderation/me`,
-    ).then((r) => r.data);
+    return apiFetch<RoomEnvelope<RoomModerationMe>>(`/api/v1/rooms/${id}/moderation/me`).then((r) => r.data);
   },
 
   blockUser(id: string, userId: string) {
@@ -344,6 +359,27 @@ export const roomsApi = {
   unmuteUser(id: string, userId: string) {
     return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/moderation/mute/${userId}`, {
       method: "DELETE",
+    }).then((r) => r.data);
+  },
+
+  muteMic(id: string, userId: string) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/moderation/mic`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    }).then((r) => r.data);
+  },
+
+  unmuteMic(id: string, userId: string) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/moderation/mic/${userId}`, {
+      method: "DELETE",
+    }).then((r) => r.data);
+  },
+
+  /** Kick from the room (not a block — they may rejoin). */
+  kickFromRoom(id: string, userId: string) {
+    return apiFetch<RoomEnvelope<null>>(`/api/v1/rooms/${id}/moderation/kick`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
     }).then((r) => r.data);
   },
 

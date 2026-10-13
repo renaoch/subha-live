@@ -18,6 +18,12 @@ function formatCoins(n: number) {
 interface GiftPickerSheetProps {
   roomId: string;
   hostId: string;
+  /**
+   * Party Voice only: gift a specific stage speaker instead of the host. The
+   * target is identified by user id and sent as-is — the server re-validates
+   * that they are still on stage when the gift is submitted.
+   */
+  recipient?: { id: string; name: string; avatar: string | null } | null;
   onClose: () => void;
   /**
    * Called right after a gift is successfully sent, before the sheet
@@ -63,7 +69,7 @@ function iconFor(icon: string) {
  * which performs the atomic coin-deduct/diamond-credit transaction AND
  * the room-task/host-task/PK/charisma side effects together.
  */
-export function GiftPickerSheet({ roomId, hostId, onClose, onSent }: GiftPickerSheetProps) {
+export function GiftPickerSheet({ roomId, hostId, recipient, onClose, onSent }: GiftPickerSheetProps) {
   const [gifts, setGifts] = useState<GiftCatalogItem[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sendingGiftId, setSendingGiftId] = useState<string | null>(null);
@@ -155,7 +161,7 @@ export function GiftPickerSheet({ roomId, hostId, onClose, onSent }: GiftPickerS
     setSendingGiftId(selected.id);
     try {
       const result = await charismaApi.send({
-        recipientId: hostId,
+        recipientId: recipient?.id ?? hostId,
         giftId: selected.id,
         roomId,
         quantity,
@@ -191,7 +197,20 @@ export function GiftPickerSheet({ roomId, hostId, onClose, onSent }: GiftPickerS
     <div className="absolute inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-[430px] rounded-t-3xl border-t border-white/10 bg-[#111214] p-5 pb-8 shadow-2xl">
         <div className="mb-4 flex items-center justify-between gap-2">
-          <h2 className="text-[15px] font-semibold text-white">Send a gift</h2>
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold text-white">Send a gift</h2>
+            {recipient && (
+              <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-white/60">
+                {recipient.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={recipient.avatar} alt="" className="h-4 w-4 shrink-0 rounded-full object-cover" />
+                ) : null}
+                <span className="truncate">
+                  To <span className="font-bold text-[#F5B93F]">{recipient.name}</span>
+                </span>
+              </p>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             {/* Viewer's coin balance — always visible in the gifting

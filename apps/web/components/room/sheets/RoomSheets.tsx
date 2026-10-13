@@ -1,5 +1,6 @@
 "use client";
 
+import { useRoomModeration, runModeration } from "@/lib/room-moderation-store";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Ban, Coins, Flag, Gift, Loader2, X } from "lucide-react";
@@ -39,20 +40,35 @@ function Sheet({ title, icon, onClose, children }: { title: string; icon: ReactN
 
 interface Person { id: string; name: string; avatar: string | null; handle: string | null }
 
-export function BlockUserSheet({ roomId, viewerIds, selfId, onClose }: { roomId: string; viewerIds: string[]; selfId?: string | null; onClose: () => void }) {
-  const [people, setPeople] = useState<Person[]>([]);
-  const [loading, setLoading] = useState(true);
+/**
+ * Blocked Users management. Reads the same shared moderation state as the
+ * participant profile, so Unblock here and Unblock in a profile always agree.
+ */
+export function BlockUserSheet({
+  roomId,
+  viewerIds,
+  selfId,
+  onOpenProfile,
+  onClose,
+}: {
+  roomId: string;
+  viewerIds: string[];
+  selfId?: string | null;
+  /** Open a participant's profile (identity + profile access). */
+  onOpenProfile?: (userId: string) => void;
+  onClose: () => void;
+}) {
+  const { data, loaded, error, reload } = useRoomModeration(roomId);
+  const [viewers, setViewers] = useState<Person[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
-  const [blocked, setBlocked] = useState<Set<string>>(new Set());
 
+  const blockedIds = new Set(data.blocked.map((b) => b.id));
+
+  // People currently in the room who can still be blocked.
   useEffect(() => {
     let cancelled = false;
-    // People in the room now + people this host already blocked (so they can be unblocked).
+    const ids = [...new Set(viewerIds)].filter((id) => id !== selfId && !blockedIds.has(id));
     (async () => {
-      const list = await roomsApi.moderationList(roomId).catch(() => ({ blocked: [], muted: [] }));
-      const already = new Set(list.blocked.map((b) => b.id));
-      if (!cancelled) setBlocked(already);
-      const ids = [...new Set([...viewerIds, ...already])].filter((id) => id !== selfId);
       const rows = await Promise.all(
         ids.map((id) =>
           usersApi
@@ -61,71 +77,106 @@ export function BlockUserSheet({ roomId, viewerIds, selfId, onClose }: { roomId:
             .catch(() => null),
         ),
       );
-      if (!cancelled) {
-        setPeople(rows.filter((r): r is Person => !!r));
-        setLoading(false);
-      }
+      if (!cancelled) setViewers(rows.filter((r): r is Person => !!r));
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewerIds.join(",")]);
+  }, [viewerIds.join(","), data.blocked.length]);
 
-  const toggle = async (p: Person) => {
+  const act = async (id: string, name: string, block: boolean) => {
     if (busy) return;
-    setBusy(p.id);
-    const isBlocked = blocked.has(p.id);
+    setBusy(id);
     try {
-      // Room-level block: removed from the stream, can't rejoin, room hidden from them.
-      if (isBlocked) await roomsApi.unblockUser(roomId, p.id);
-      else await roomsApi.blockUser(roomId, p.id);
-      setBlocked((prev) => {
-        const next = new Set(prev);
-        if (isBlocked) next.delete(p.id);
-        else next.add(p.id);
-        return next;
-      });
-      toast.success(isBlocked ? `Unblocked ${p.name}` : `Blocked ${p.name}`);
+      await runModeration(roomId, () => (block ? roomsApi.blockUser(roomId, id) : roomsApi.unblockUser(roomId, id)));
+      toast.success(block ? `Blocked ${name}` : `Unblocked ${name}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not update block");
+      // State is NOT changed on failure; the user can retry.
+      toast.error(e instanceof Error ? e.message : block ? "Could not block" : "Could not unblock");
     } finally {
       setBusy(null);
     }
   };
 
+  const Row = ({ p, blocked, canReverse = true }: { p: Person; blocked: boolean; canReverse?: boolean }) => (
+    <li className="flex items-center gap-3 rounded-2xl bg-white/[0.05] p-2.5">
+      <button
+        type="button"
+        onClick={() => onOpenProfile?.(p.id)}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      >
+        <Avatar name={p.name} src={p.avatar ?? undefined} size="sm" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[14px] font-semibold text-white">{p.name}</p>
+          {p.handle && <p className="truncate text-[12px] text-white/45">@{p.handle}</p>}
+        </div>
+      </button>
+      <button
+        type="button"
+        disabled={busy === p.id || (blocked && !canReverse)}
+        onClick={() => void act(p.id, p.name, !blocked)}
+        title={blocked && !canReverse ? "Blocked by another moderator" : undefined}
+        className={cn(
+          "flex h-8 min-w-[76px] shrink-0 items-center justify-center rounded-full px-3 text-[12px] font-bold transition active:scale-95 disabled:opacity-50",
+          blocked ? "bg-white/10 text-white" : "bg-[#ff3b5c] text-white",
+        )}
+      >
+        {busy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : blocked ? "Unblock" : "Block"}
+      </button>
+    </li>
+  );
+
   return (
-    <Sheet title="Block User" icon={<Ban className="h-5 w-5 text-[#ff6fa8]" />} onClose={onClose}>
-      {loading ? (
+    <Sheet title="Blocked Users" icon={<Ban className="h-5 w-5 text-[#ff6fa8]" />} onClose={onClose}>
+      {!loaded && !error ? (
         <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-white/50" /></div>
-      ) : people.length === 0 ? (
-        <p className="py-10 text-center text-[13px] text-white/50">No one else is in the room right now.</p>
+      ) : error ? (
+        <div className="py-8 text-center">
+          <p className="text-[13px] text-red-300">{error}</p>
+          <button type="button" onClick={() => void reload()} className="mt-3 rounded-full bg-white/10 px-4 py-1.5 text-[12px] font-bold text-white">
+            Retry
+          </button>
+        </div>
       ) : (
-        <ul className="space-y-2">
-          {people.map((p) => {
-            const isBlocked = blocked.has(p.id);
-            return (
-              <li key={p.id} className="flex items-center gap-3 rounded-2xl bg-white/[0.05] p-2.5">
-                <Avatar name={p.name} src={p.avatar ?? undefined} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold text-white">{p.name}</p>
-                  {p.handle && <p className="truncate text-[12px] text-white/45">@{p.handle}</p>}
-                </div>
-                <button
-                  type="button"
-                  disabled={busy === p.id}
-                  onClick={() => void toggle(p)}
-                  className={cn(
-                    "flex h-8 min-w-[76px] items-center justify-center rounded-full px-3 text-[12px] font-bold transition active:scale-95 disabled:opacity-60",
-                    isBlocked ? "bg-white/10 text-white" : "bg-[#ff3b5c] text-white",
-                  )}
-                >
-                  {busy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : isBlocked ? "Unblock" : "Block"}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="space-y-5">
+          <section>
+            <p className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.2em] text-white/40">
+              Blocked ({data.blocked.length})
+            </p>
+            {data.blocked.length === 0 ? (
+              <p className="rounded-2xl bg-white/[0.03] py-5 text-center text-[13px] text-white/45">
+                You haven&apos;t blocked anyone from this room.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {data.blocked.map((b) => (
+                  <Row
+                    key={b.id}
+                    p={{ id: b.id, name: b.name ?? "User", avatar: b.avatar, handle: b.handle }}
+                    blocked
+                    canReverse={b.canReverse !== false}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section>
+            <p className="mb-2 px-1 text-[11px] font-black uppercase tracking-[0.2em] text-white/40">In the room</p>
+            {viewers.length === 0 ? (
+              <p className="rounded-2xl bg-white/[0.03] py-5 text-center text-[13px] text-white/45">
+                No one else is in the room right now.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {viewers.map((p) => (
+                  <Row key={p.id} p={p} blocked={false} />
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       )}
     </Sheet>
   );

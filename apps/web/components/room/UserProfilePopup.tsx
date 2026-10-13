@@ -2,7 +2,7 @@
 
 import { LevelBadge } from "@/components/level/LevelBadge";
 import { useEffect, useState } from "react";
-import { ArrowLeft, BadgeCheck, Loader2, Lock, MessageCircle, SendHorizonal, X } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Gift, Loader2, Lock, MessageCircle, SendHorizonal, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { usersApi } from "@/lib/api/users";
 import { messagesApi, type Friendship } from "@/lib/api/messages";
@@ -17,8 +17,12 @@ interface UserProfilePopupProps {
   currentUserId?: string | null;
   /** Room context: lets the host mute / remove / block from here. */
   roomId?: string | null;
-  isHost?: boolean;
+  /** Host or moderator (server re-checks every action). Never inferred from opening a profile. */
+  canModerate?: boolean;
   hostId?: string | null;
+  /** Party Voice: this person is on stage and the current user may gift them. */
+  canGift?: boolean;
+  onGift?: (user: { id: string; name: string; avatar: string | null }) => void;
   /** True when the tapped user is currently speaking on stage. */
   isSpeaker?: boolean;
   onClose: () => void;
@@ -30,7 +34,7 @@ interface UserProfilePopupProps {
  * from the room. From here, tapping "Chat" swaps to an inline DM thread
  * without leaving the room either.
  */
-export function UserProfilePopup({ userId, currentUserId, roomId, isHost, hostId, isSpeaker, onClose }: UserProfilePopupProps) {
+export function UserProfilePopup({ userId, currentUserId, roomId, canModerate, hostId, canGift, onGift, isSpeaker, onClose }: UserProfilePopupProps) {
   const [view, setView] = useState<"profile" | "chat">("profile");
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,7 +42,8 @@ export function UserProfilePopup({ userId, currentUserId, roomId, isHost, hostId
   const [followBusy, setFollowBusy] = useState(false);
 
   const isSelf = !!currentUserId && currentUserId === userId;
-  const showHostControls = !!isHost && !!roomId && !isSelf && userId !== hostId;
+  const showHostControls = !!canModerate && !!roomId && !isSelf && userId !== hostId;
+  const showGift = !!canGift && !!onGift && !isSelf;
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +123,17 @@ export function UserProfilePopup({ userId, currentUserId, roomId, isHost, hostId
             onOpenChat={() => setView("chat")}
           />
           </div>
+          {showGift ? (
+            <div className="shrink-0 border-t border-white/10 bg-[#100a1e] px-3 pt-3">
+              <button
+                type="button"
+                onClick={() => onGift?.({ id: userId, name: profile?.name ?? "Speaker", avatar: profile?.avatar ?? null })}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F5B93F] to-[#E39B1F] text-[14px] font-extrabold text-[#2a1800] shadow-[0_8px_24px_-10px_rgba(245,185,63,0.8)] transition active:scale-[0.98]"
+              >
+                <Gift className="h-4 w-4" /> Send gift
+              </button>
+            </div>
+          ) : null}
           {showHostControls && roomId ? (
             <HostModerationBar roomId={roomId} targetId={userId} isSpeaker={!!isSpeaker} onDone={onClose} />
           ) : null}

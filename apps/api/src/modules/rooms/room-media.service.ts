@@ -891,6 +891,8 @@ async subscribeHostToGuests(
   ) {
     // Host-blocked users can never open a viewer session.
     await roomModerationState.assertNotBlocked(roomId, userId);
+    // A fresh join ends any pending "kicked" marker: rejoin follows normal rules.
+    await roomModerationState.clearKicked(roomId, userId);
 
     /*
      * Audio party rooms have their own, much lighter join path (no video
@@ -1534,6 +1536,9 @@ async subscribeHostToGuests(
   ) {
     if (role !== "host") {
       await roomModerationState.assertNotBlocked(roomId, userId);
+      if (await roomModerationState.isKicked(roomId, userId)) {
+        throw new AppError(403, "You were removed from this room by the host", { code: "ROOM_KICKED" });
+      }
     }
 
     const room =

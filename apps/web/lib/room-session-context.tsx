@@ -61,6 +61,8 @@ interface RoomSessionRuntime {
   mutedByHost: boolean;
   /** The host blocked this user: the room must be left. */
   blocked: boolean;
+  /** The host kicked this user (not blocked): leave; rejoin allowed. */
+  kicked: boolean;
 
   handleStart: () => Promise<void>;
   handleJoin: () => Promise<void>;
@@ -245,6 +247,7 @@ export function RoomSessionProvider({ children }: { children: ReactNode }) {
         setMicEnabled: webrtc.setMicEnabled,
         mutedByHost: webrtc.mutedByHost,
         blocked: webrtc.blocked,
+        kicked: webrtc.kicked,
         handleStart,
         handleJoin,
         handleLeave,
