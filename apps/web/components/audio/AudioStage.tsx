@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Coins, Crown, Lock, MicOff, Plus, Sparkles } from "lucide-react";
+import { Coins, Crown, Gift, Lock, MicOff, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
@@ -38,6 +38,8 @@ interface AudioStageProps {
   onOpenSeats: () => void;
   onOpenLevels?: () => void;
   onOpenProfile: (userId: string) => void;
+  /** Party Voice: gift this person (shown as a small gift button on their seat). */
+  onGiftUser?: (userId: string) => void;
 }
 
 const SPEAKING_FALLBACK_MS = 3500;
@@ -60,6 +62,7 @@ export function AudioStage({
   onOpenSeats,
   onOpenLevels,
   onOpenProfile,
+  onGiftUser,
 }: AudioStageProps) {
   const seatCount = stage.seatCount;
   const unlocked = unlockedSeatCount(roomCoins, seatCount);
@@ -105,6 +108,7 @@ export function AudioStage({
           muted={stage.host.muted}
           isMe={stage.host.userId === currentUserId}
           onOpenProfile={() => onOpenProfile(stage.host.userId)}
+          onGift={onGiftUser ? () => onGiftUser(stage.host.userId) : undefined}
         />
 
         {/* Unlock progress */}
@@ -130,6 +134,7 @@ export function AudioStage({
                       status={seat.status}
                       isMe={seat.userId === currentUserId}
                       onOpenProfile={() => onOpenProfile(seat.userId)}
+                      onGift={onGiftUser ? () => onGiftUser(seat.userId) : undefined}
                     />
                   );
                 }
@@ -319,12 +324,14 @@ function HostSeat({
   muted,
   isMe,
   onOpenProfile,
+  onGift,
 }: {
   profile?: StageProfile;
   speaking: boolean;
   muted: boolean;
   isMe: boolean;
   onOpenProfile: () => void;
+  onGift?: () => void;
 }) {
   const name = profile?.name ?? "Host";
   return (
@@ -357,6 +364,17 @@ function HostSeat({
 
         <div className="absolute left-1/2 -translate-x-1/2" style={{ top: "calc(var(--hav) * 0.18)", width: HOST_AV, height: HOST_AV }}>
           {speaking && <SpeakRing tone="host" />}
+          {onGift && !isMe && (<button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onGift();
+            }}
+            aria-label="Send gift"
+            className="absolute -bottom-1 -right-1 z-20 flex h-[22px] w-[22px] items-center justify-center rounded-full border border-[#2a1800]/30 bg-gradient-to-br from-[#FFD36B] to-[#E39B1F] text-[#2a1800] shadow-[0_2px_10px_rgba(245,185,63,0.7)] transition active:scale-90"
+          >
+            <Gift className="h-3 w-3" strokeWidth={2.6} />
+          </button>)}
           <button type="button" onClick={onOpenProfile} className="relative z-10 h-full w-full" aria-label={`${name} host`}>
             <Avatar
               name={name}
@@ -474,6 +492,7 @@ function Seat({
   status,
   isMe,
   onOpenProfile,
+  onGift,
 }: {
   userId: string;
   seatIndex: number;
@@ -484,6 +503,7 @@ function Seat({
   status: string;
   isMe: boolean;
   onOpenProfile: () => void;
+  onGift?: () => void;
 }) {
   const name = profile?.name ?? `Guest ${seatIndex + 1}`;
   const reconnecting = status === "reconnecting" || status === "connecting";
@@ -498,6 +518,17 @@ function Seat({
     >
       <ChairSlot index={seatIndex} tone={tone} speaking={speaking}>
         {speaking && <SpeakRing tone="guest" />}
+        {onGift && !isMe && (<button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onGift();
+            }}
+            aria-label="Send gift"
+            className="absolute -bottom-1 -right-1 z-20 flex h-[22px] w-[22px] items-center justify-center rounded-full border border-[#2a1800]/30 bg-gradient-to-br from-[#FFD36B] to-[#E39B1F] text-[#2a1800] shadow-[0_2px_10px_rgba(245,185,63,0.7)] transition active:scale-90"
+          >
+            <Gift className="h-3 w-3" strokeWidth={2.6} />
+          </button>)}
         <button type="button" onClick={onOpenProfile} className="relative z-10 h-full w-full" aria-label={name}>
           <Avatar
             name={name}

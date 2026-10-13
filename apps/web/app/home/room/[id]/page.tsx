@@ -664,6 +664,16 @@ useEffect(() => {
               setMoreOpen(true);
             }}
             onOpenProfile={setProfileUserId}
+            onGiftUser={
+              // Party Voice only; the host gifts nobody from here.
+              !isHost
+                ? (uid) => {
+                    const p = stageProfiles?.[uid];
+                    setGiftRecipient({ id: uid, name: p?.name ?? 'Speaker', avatar: p?.avatar ?? null });
+                    setGiftSheetOpen(true);
+                  }
+                : undefined
+            }
           />
         ) : (
           <LiveVideo
@@ -1136,7 +1146,13 @@ useEffect(() => {
             hostId={room?.host_id ?? null}
             isSpeaker={isUserOnStage(profileUserId)}
             canGift={
-              isAudioRoom && !isHost && !!userId && profileUserId !== userId && isUserOnStage(profileUserId)
+              // The host is on the party stage too, so their profile can be gifted
+              // exactly like a speaker's.
+              isAudioRoom &&
+              !isHost &&
+              !!userId &&
+              profileUserId !== userId &&
+              (isUserOnStage(profileUserId) || profileUserId === room?.host_id)
             }
             onGift={(u) => {
               // Keep the exact user id the viewer tapped for the whole gift flow.
