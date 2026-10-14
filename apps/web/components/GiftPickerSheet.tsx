@@ -2,12 +2,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Heart, Star, Crown, Sparkles, Gift as GiftIcon, Car, Ship, Rocket, X, Loader2, Coins, Minus, Plus } from "lucide-react";
+import { Heart, Star, Crown, Sparkles, Gift as GiftIcon, Car, Ship, Rocket, X, Loader2, Coins, Minus, Plus, Mic, Check } from "lucide-react";
 import { toast } from "sonner";
 import { charismaApi } from "@/lib/api/charisma";
 import { financialApi, newClientRequestId, type GiftCatalogItem } from "@/lib/api/financial";
 import { usersApi } from "@/lib/api/users";
 import { GiftImage } from "@/components/GiftImage";
+import { Avatar } from "@/components/ui/avatar";
 
 function formatCoins(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -15,9 +16,25 @@ function formatCoins(n: number) {
   return `${n}`;
 }
 
+/** Someone on the Party Voice stage who can receive a gift. */
+export interface PartyRecipient {
+  id: string;
+  name: string;
+  avatar: string | null;
+  role: "host" | "speaker";
+  speaking?: boolean;
+}
+
 interface GiftPickerSheetProps {
   roomId: string;
   hostId: string;
+  /**
+   * Party Voice only: everyone currently on stage (host + speakers, excluding
+   * the sender). Shows a "Send to" picker. The list is LIVE — if the selected
+   * person leaves the stage the sheet says so and asks for a new pick instead
+   * of sending to someone else. Omit for normal rooms (host-only gifting).
+   */
+  recipients?: PartyRecipient[];
   /**
    * Party Voice only: gift a specific stage speaker instead of the host. The
    * target is identified by user id and sent as-is — the server re-validates
@@ -69,7 +86,7 @@ function iconFor(icon: string) {
  * which performs the atomic coin-deduct/diamond-credit transaction AND
  * the room-task/host-task/PK/charisma side effects together.
  */
-export function GiftPickerSheet({ roomId, hostId, recipient, onClose, onSent }: GiftPickerSheetProps) {
+export function GiftPickerSheet({ roomId, hostId, recipients, recipient, onClose, onSent }: GiftPickerSheetProps) {
   const [gifts, setGifts] = useState<GiftCatalogItem[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sendingGiftId, setSendingGiftId] = useState<string | null>(null);
@@ -81,6 +98,23 @@ export function GiftPickerSheet({ roomId, hostId, recipient, onClose, onSent }: 
   // the client, and re-fetched after every send so it's never stale.
   const [coins, setCoins] = useState<number | null>(null);
   const [balanceError, setBalanceError] = useState(false);
+
+  // ---- Party Voice recipient picking (by user id, never by slot) ----
+  const partyMode = !!recipients;
+  const [recipientId, setRecipientId] = useState<string | null>(recipient?.id ?? null);
+  const activeRecipient = partyMode ? (recipients!.find((r) => r.id === recipientId) ?? null) : null;
+  // Picked someone who has since left the stage.
+  const recipientGone = partyMode && !!recipientId && !activeRecipient;
+
+  // Default to the host once the stage list is known and nothing is picked yet.
+  useEffect(() => {
+    if (!partyMode || recipientId) return;
+    const first = recipients!.find((r) => r.role === "host") ?? recipients![0];
+    if (first) setRecipientId(first.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partyMode, recipients?.length]);
+
+  const canSendTo = partyMode ? !!activeRecipient : true;
 
   const refreshBalance = () => {
     usersApi
@@ -155,13 +189,13 @@ export function GiftPickerSheet({ roomId, hostId, recipient, onClose, onSent }: 
   }, [maxQty]);
 
   const handleSend = async () => {
-    if (!selected || sendingGiftId !== null || !canAffordOne) return;
+    if (!selected || sendingGiftId !== null || !canAffordOne || !canSendTo) return;
     const quantity = effectiveQty;
 
     setSendingGiftId(selected.id);
     try {
       const result = await charismaApi.send({
-        recipientId: recipient?.id ?? hostId,
+        recipientId: partyMode ? activeRecipient!.id : (recipient?.id ?? hostId),
         giftId: selected.id,
         roomId,
         quantity,
@@ -195,20 +229,32 @@ export function GiftPickerSheet({ roomId, hostId, recipient, onClose, onSent }: 
 
   return (
     <div className="absolute inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-[430px] rounded-t-3xl border-t border-white/10 bg-[#111214] p-5 pb-8 shadow-2xl">
+      <div className="max-h-[94dvh] w-full max-w-[430px] overflow-y-auto overscroll-contain rounded-t-3xl border-t border-white/10 bg-[#111214] p-5 pb-8 shadow-2xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="mb-4 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-[15px] font-semibold text-white">Send a gift</h2>
-            {recipient && (
-              <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-white/60">
-                {recipient.avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={recipient.avatar} alt="" className="h-4 w-4 shrink-0 rounded-full object-cover" />
-                ) : null}
-                <span className="truncate">
-                  To <span className="font-bold text-[#F5B93F]">{recipient.name}</span>
-                </span>
+            {partyMode ? (
+              <p className="mt-0.5 truncate text-[12px] text-white/50">
+                {activeRecipient ? (
+                  <>
+                    To <span className="font-bold text-[#F5B93F]">{activeRecipient.name}</span>
+                  </>
+                ) : (
+                  "Choose who to send to"
+                )}
               </p>
+            ) : (
+              recipient && (
+                <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-white/60">
+                  {recipient.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={recipient.avatar} alt="" className="h-4 w-4 shrink-0 rounded-full object-cover" />
+                  ) : null}
+                  <span className="truncate">
+                    To <span className="font-bold text-[#F5B93F]">{recipient.name}</span>
+                  </span>
+                </p>
+              )
             )}
           </div>
 
@@ -247,8 +293,18 @@ export function GiftPickerSheet({ roomId, hostId, recipient, onClose, onSent }: 
           </div>
         )}
 
+        {partyMode && (
+          <RecipientStrip
+            recipients={recipients!}
+            selectedId={activeRecipient?.id ?? null}
+            gone={recipientGone}
+            disabled={sendingGiftId !== null}
+            onSelect={setRecipientId}
+          />
+        )}
+
         {gifts && (
-          <div className="grid max-h-[38vh] grid-cols-4 gap-2.5 overflow-y-auto overscroll-contain pb-1 pr-0.5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className={`grid grid-cols-4 gap-2.5 overflow-y-auto overscroll-contain pb-1 pr-0.5 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${partyMode ? "max-h-[28vh]" : "max-h-[38vh]"}`}>
             {gifts.map((gift, position) => {
               const Icon = iconFor(gift.icon);
               const isSelected = selectedId === gift.id;
@@ -352,11 +408,13 @@ export function GiftPickerSheet({ roomId, hostId, recipient, onClose, onSent }: 
             <button
               type="button"
               onClick={handleSend}
-              disabled={!selected || sendingGiftId !== null || !canAffordOne}
+              disabled={!selected || sendingGiftId !== null || !canAffordOne || !canSendTo}
               className="mt-4 flex h-[52px] w-full items-center justify-center gap-2 rounded-full bg-white text-[16px] font-bold text-neutral-950 transition active:scale-[0.98] disabled:bg-white/20 disabled:text-white/50"
             >
               {sendingGiftId !== null ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
+              ) : !canSendTo ? (
+                "Pick who to send to"
               ) : !selected ? (
                 "Pick a gift"
               ) : !canAffordOne ? (
@@ -364,6 +422,7 @@ export function GiftPickerSheet({ roomId, hostId, recipient, onClose, onSent }: 
               ) : (
                 <>
                   Send{effectiveQty > 1 ? ` x${effectiveQty}` : ""}
+                  {activeRecipient ? <span className="max-w-[110px] truncate">to {activeRecipient.name}</span> : null}
                   <span className="flex items-center gap-1 rounded-full bg-black/10 px-2 py-0.5 text-[13px]">
                     <Coins className="h-3.5 w-3.5" />
                     {total.toLocaleString()}
@@ -374,6 +433,106 @@ export function GiftPickerSheet({ roomId, hostId, recipient, onClose, onSent }: 
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * "Send to" picker for Party Voice: the host and every speaker on stage as
+ * avatars with their names. Tap one to choose; the choice is the person's user
+ * id, so it stays correct if seats shuffle while the sheet is open.
+ */
+function RecipientStrip({
+  recipients,
+  selectedId,
+  gone,
+  disabled,
+  onSelect,
+}: {
+  recipients: PartyRecipient[];
+  selectedId: string | null;
+  gone: boolean;
+  disabled: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="mb-4">
+      <div className="mb-2 flex items-center justify-between px-0.5">
+        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Send to</p>
+        <p className="text-[11px] text-white/35">{recipients.length} on stage</p>
+      </div>
+
+      {recipients.length === 0 ? (
+        <p className="rounded-2xl bg-white/[0.04] py-4 text-center text-[13px] text-white/45">
+          No one else is on stage right now.
+        </p>
+      ) : (
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-1 pt-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {recipients.map((r) => {
+            const on = r.id === selectedId;
+            const isHostRole = r.role === "host";
+            return (
+              <button
+                key={r.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => onSelect(r.id)}
+                aria-pressed={on}
+                aria-label={`Send to ${r.name}`}
+                className="group flex w-[62px] shrink-0 flex-col items-center gap-1.5 disabled:opacity-60"
+              >
+                <span className="relative">
+                  {/* gold ring + glow when picked */}
+                  <span
+                    className={`absolute -inset-[3px] rounded-full transition ${
+                      on
+                        ? "bg-gradient-to-br from-[#FFE29A] via-[#F5B93F] to-[#C9831A] opacity-100 shadow-[0_0_18px_rgba(245,185,63,0.75)]"
+                        : r.speaking
+                          ? "bg-emerald-400/70 opacity-100"
+                          : "bg-white/10 opacity-100"
+                    }`}
+                  />
+                  <Avatar
+                    name={r.name}
+                    src={r.avatar ?? undefined}
+                    size="md"
+                    className={`relative !h-[50px] !w-[50px] border-2 border-[#111214] transition ${on ? "scale-100" : "scale-[0.96] opacity-80 group-hover:opacity-100"}`}
+                  />
+                  {/* role badge */}
+                  <span
+                    className={`absolute -bottom-1 -right-1 flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 border-[#111214] ${
+                      isHostRole ? "bg-[#F5B93F] text-[#2a1800]" : "bg-[#2a2c33] text-white/80"
+                    }`}
+                  >
+                    {isHostRole ? <Crown className="h-2.5 w-2.5" strokeWidth={2.6} /> : <Mic className="h-2.5 w-2.5" strokeWidth={2.6} />}
+                  </span>
+                  {on && (
+                    <span className="absolute -left-1 -top-1 flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 border-[#111214] bg-emerald-400 text-[#06281a]">
+                      <Check className="h-2.5 w-2.5" strokeWidth={3.4} />
+                    </span>
+                  )}
+                </span>
+                <span
+                  className={`w-full truncate text-center text-[11px] font-semibold leading-tight ${
+                    on ? "text-[#F5B93F]" : "text-white/70"
+                  }`}
+                >
+                  {r.name}
+                </span>
+                <span className="-mt-1 text-[9px] font-bold uppercase tracking-wider text-white/30">
+                  {isHostRole ? "Host" : "Speaker"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {gone && (
+        <p className="mt-2 rounded-xl bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
+          That person left the stage. Pick someone else to send to.
+        </p>
+      )}
     </div>
   );
 }
